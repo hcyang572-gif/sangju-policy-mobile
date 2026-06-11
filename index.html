@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#E66B3A" />
+  <title>상주시 정책 플랫폼</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <button id="backBtn" class="back-btn" hidden aria-label="뒤로">‹</button>
+    <h1 id="topTitle">🍊 상주시 정책 플랫폼</h1>
+  </header>
+
+  <main id="app">
+    <!-- 홈 -->
+    <section id="view-home" class="view">
+      <p class="lead">상주시 지원사업을 쉽게 찾아보세요</p>
+      <div class="search-box">
+        <input id="homeSearch" type="search" placeholder="🔍 사업명·내용으로 검색" />
+      </div>
+      <div class="big-actions">
+        <button class="big-btn" data-go="all">📋<span>전체 사업 보기</span></button>
+        <button class="big-btn primary" data-go="recommend">🙋<span>나에게 맞는 사업 찾기</span></button>
+      </div>
+      <h2 class="section-title">분야별로 찾기</h2>
+      <div id="categoryChips" class="chips"></div>
+    </section>
+
+    <!-- 목록 -->
+    <section id="view-list" class="view" hidden>
+      <div class="search-box sticky">
+        <input id="listSearch" type="search" placeholder="🔍 결과 안에서 검색" />
+      </div>
+      <p id="listMeta" class="list-meta"></p>
+      <div id="listResults" class="cards"></div>
+    </section>
+
+    <!-- 맞춤 추천 -->
+    <section id="view-recommend" class="view" hidden>
+      <p class="lead">나이와 상황을 알려주시면 맞는 분야를 찾아드려요</p>
+      <label class="field-label">① 나이 (선택)</label>
+      <div class="age-row">
+        <input id="ageInput" type="number" inputmode="numeric" min="0" max="120" placeholder="예: 46" />
+        <span>세</span>
+      </div>
+      <label class="field-label">② 해당하는 상황을 모두 선택</label>
+      <div id="situationList" class="situations"></div>
+      <button id="recommendRun" class="big-btn primary full">맞는 사업 찾기 →</button>
+    </section>
+
+    <!-- 상세 -->
+    <section id="view-detail" class="view" hidden>
+      <div id="detailContent"></div>
+    </section>
+
+    <!-- 신청 -->
+    <section id="view-apply" class="view" hidden>
+      <h2 id="applyTitle" class="apply-title"></h2>
+      <p class="apply-hint">아래 내용을 작성하면 담당 부서로 보낼 이메일이 자동으로 만들어집니다.</p>
+      <label class="field-label">신청자 이름</label>
+      <input id="applyName" class="text-input" type="text" placeholder="홍길동" />
+      <label class="field-label">연락처</label>
+      <input id="applyPhone" class="text-input" type="tel" inputmode="numeric" placeholder="010-0000-0000" />
+      <label class="field-label">문의사항 (선택)</label>
+      <textarea id="applyMemo" class="text-input" rows="4" placeholder="궁금한 점이나 추가로 전달할 내용"></textarea>
+      <button id="applySend" class="big-btn primary full">📧 신청 메일 작성하기</button>
+      <p class="apply-note">※ 메일 앱이 열리면 내용을 확인 후 '보내기'를 눌러주세요.</p>
+    </section>
+  </main>
+
+  <footer class="foot">미래상주 희망연구팀 · 수요자 기반 정책 플랫폼</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
