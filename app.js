@@ -4,7 +4,7 @@
 "use strict";
 
 let DATA = null;
-const state = { selectedCats: new Set(), situations: new Set(), navStack: [] };
+const state = { selectedCats: new Set(), situations: new Set(), navStack: [], fwdStack: [] };
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
@@ -17,15 +17,31 @@ const SUPPORT_EMAIL = "hcyang572@korea.kr";
 
 function showView(name, push = true) {
   VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
-  if (push && state.navStack[state.navStack.length - 1] !== name) state.navStack.push(name);
-  $("backBtn").hidden = state.navStack.length <= 1;
+  if (push && state.navStack[state.navStack.length - 1] !== name) {
+    state.navStack.push(name);
+    state.fwdStack = [];   // 새 이동 → 앞으로(이후) 기록 초기화
+  }
+  _updateNavButtons();
   window.scrollTo(0, 0);
+}
+
+function _updateNavButtons() {
+  const canBack = state.navStack.length > 1;
+  $("backBtn").hidden = !canBack;
+  $("fabBack").hidden = !canBack;
 }
 
 function goBack() {
   if (state.navStack.length <= 1) return;
-  state.navStack.pop();
+  state.fwdStack.push(state.navStack.pop());     // 현재 화면을 '이후'로 보관
   showView(state.navStack[state.navStack.length - 1], false);
+}
+
+function goForward() {
+  if (state.fwdStack.length === 0) return;
+  const next = state.fwdStack.pop();
+  state.navStack.push(next);
+  showView(next, false);
 }
 
 // ---------- 데이터 로딩 ----------
@@ -38,6 +54,7 @@ async function init() {
     return;
   }
   state.navStack = ["home"];
+  state.fwdStack = [];
   renderCategoryChips();
   renderSituations();
   bindEvents();
@@ -285,6 +302,7 @@ async function sendInquiry() {
     document.querySelector("#view-done .done-desc").innerHTML =
       "담당자에게 문의 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
     state.navStack = ["home", "done"];
+    state.fwdStack = [];
     showView("done", false);
   } catch (e) {
     alert("전송에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + e.message + ")");
@@ -303,12 +321,15 @@ function showDone(p) {
   $("doneProgram").textContent = p.사업명;
   // 완료 화면 이후 뒤로가기는 홈으로 가도록 스택 정리
   state.navStack = ["home", "done"];
+  state.fwdStack = [];
   showView("done", false);
 }
 
 // ---------- 이벤트 ----------
 function bindEvents() {
   $("backBtn").addEventListener("click", goBack);
+  $("fabBack").addEventListener("click", goBack);
+  _bindSwipe();
   document.querySelectorAll("[data-go]").forEach((el) => {
     el.addEventListener("click", () => {
       const go = el.dataset.go;
@@ -330,9 +351,41 @@ function bindEvents() {
   $("doneHome").addEventListener("click", () => {
     state.selectedCats = new Set();
     state.navStack = ["home"];
+    state.fwdStack = [];
     $("topTitle").textContent = "🍊 상주시 정책 플랫폼";
     showView("home", false);
   });
+}
+
+// 좌우 스와이프로 이전/이후 전환 (오른쪽으로 밀기 = 뒤로, 왼쪽으로 밀기 = 이후)
+function _bindSwipe() {
+  let x0 = 0, y0 = 0, t0 = 0, tracking = false;
+  const MIN_DIST = 60;     // 최소 이동 거리(px)
+  const MAX_OFF = 60;      // 세로 흔들림 허용치(px)
+  const MAX_TIME = 600;    // 최대 시간(ms) — 너무 느린 동작은 무시
+
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    // 입력창에서 시작한 제스처는 텍스트 선택과 충돌하므로 제외
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") { tracking = false; return; }
+    const t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); tracking = true;
+  }, { passive: true });
+
+  document.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0;
+    const dy = t.clientY - y0;
+    const dt = Date.now() - t0;
+    if (dt > MAX_TIME) return;
+    if (Math.abs(dx) < MIN_DIST) return;
+    if (Math.abs(dy) > MAX_OFF || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 가로 우세일 때만
+    if (dx > 0) goBack();      // → 오른쪽: 뒤로(이전)
+    else goForward();          // ← 왼쪽: 이후
+  }, { passive: true });
 }
 
 init();
