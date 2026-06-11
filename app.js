@@ -6,14 +6,11 @@
 let DATA = null;
 const state = { selectedCats: new Set(), situations: new Set(), navStack: [] };
 
-// 신청 메일 기본 수신처(담당자 이메일이 비어있는 사업의 대체 수신처). 운영 시 실제 주소로 교체.
-const FALLBACK_EMAIL = "sangju.platform@example.com";
-
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-const VIEWS = ["home", "list", "recommend", "detail", "apply"];
+const VIEWS = ["home", "list", "recommend", "detail", "apply", "done"];
 
 function showView(name, push = true) {
   VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
@@ -182,7 +179,7 @@ function openApply(idx) {
   showView("apply");
 }
 
-function sendApply() {
+async function sendApply() {
   const p = DATA.programs[currentIdx];
   const name = $("applyName").value.trim();
   const phone = $("applyPhone").value.trim();
@@ -191,21 +188,58 @@ function sendApply() {
     alert("이름과 연락처를 입력해 주세요.");
     return;
   }
-  const to = p.담당자이메일 && p.담당자이메일.includes("@") ? p.담당자이메일 : FALLBACK_EMAIL;
-  const subject = `[지원사업 신청] ${p.사업명} - ${name}`;
-  const body =
-`상주시 지원사업 신청서
+  const key = window.WEB3FORMS_KEY || "";
+  if (!key || key.indexOf("여기에") !== -1) {
+    alert("신청 접수 설정이 아직 완료되지 않았습니다.\n관리자에게 문의해 주세요.");
+    return;
+  }
 
-■ 사업명: ${p.사업명}
-■ 담당: ${[p.기관명, p.팀명].filter(Boolean).join(" / ")}
+  // 기계 판독용 페이로드(공무원 PC 자동접수가 파싱) — 마커로 감싼다
+  const payload = {
+    사업명: p.사업명, 신청자: name, 연락처: phone, 문의사항: memo,
+    담당팀: p.팀명, 담당자이메일: p.담당자이메일, 기관명: p.기관명,
+  };
+  const form = {
+    access_key: key,
+    subject: `[모바일신청] ${p.사업명} - ${name}`,
+    from_name: "상주시 정책 플랫폼(모바일)",
+    "사업명": p.사업명,
+    "신청자": name,
+    "연락처": phone,
+    "문의사항": memo || "(없음)",
+    "담당팀": p.팀명 || "-",
+    "담당자이메일": p.담당자이메일 || "-",
+    payload: "@@SJSTART@@" + JSON.stringify(payload) + "@@SJEND@@",
+    botcheck: "",
+  };
 
-■ 신청자: ${name}
-■ 연락처: ${phone}
-■ 문의사항: ${memo || "(없음)"}
+  const btn = $("applySend");
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "제출 중...";
+  try {
+    const res = await fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(form),
+    });
+    const j = await res.json();
+    if (!j.success) throw new Error(j.message || "전송 실패");
+    showDone(p);
+  } catch (e) {
+    alert("전송에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + e.message + ")");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
 
-(상주시 정책 플랫폼 모바일에서 전송)`;
-  window.location.href =
-    `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+function showDone(p) {
+  $("topTitle").textContent = "접수 완료";
+  $("doneProgram").textContent = p.사업명;
+  // 완료 화면 이후 뒤로가기는 홈으로 가도록 스택 정리
+  state.navStack = ["home", "done"];
+  showView("done", false);
 }
 
 // ---------- 이벤트 ----------
@@ -227,6 +261,12 @@ function bindEvents() {
   $("listSearch").addEventListener("input", renderList);
   $("recommendRun").addEventListener("click", runRecommend);
   $("applySend").addEventListener("click", sendApply);
+  $("doneHome").addEventListener("click", () => {
+    state.selectedCats = new Set();
+    state.navStack = ["home"];
+    $("topTitle").textContent = "🍊 상주시 정책 플랫폼";
+    showView("home", false);
+  });
 }
 
 init();

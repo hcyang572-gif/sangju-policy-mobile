@@ -160,4 +160,11 @@ main { padding: 16px; }
 .text-input:focus { border-color: var(--primary); }
 .apply-note { font-size: 13px; color: var(--muted); margin-top: 12px; text-align: center; }
 
+/* 신청 완료 */
+.done-box { text-align: center; padding: 40px 16px; }
+.done-check { font-size: 64px; line-height: 1; margin-bottom: 16px; }
+.done-box h2 { font-size: 23px; margin: 0 0 12px; }
+.done-program { font-size: 17px; font-weight: 700; color: var(--primary); background: var(--header); display: inline-block; padding: 8px 16px; border-radius: 10px; margin: 0 0 18px; }
+.done-desc { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 0 0 28px; }
+
 .foot { text-align: center; font-size: 12px; color: var(--muted); padding: 20px 16px; }
