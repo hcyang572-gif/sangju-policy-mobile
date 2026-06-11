@@ -77,6 +77,18 @@
       <p class="apply-note">※ 제출하면 담당 부서로 바로 접수됩니다. (메일 앱이 열리지 않습니다)</p>
     </section>
 
+    <!-- 오류 문의 -->
+    <section id="view-inquiry" class="view" hidden>
+      <h2 class="apply-title">오류 문의</h2>
+      <p class="apply-hint">이용 중 불편하거나 오류가 있으면 알려주세요. 담당자에게 전달됩니다.</p>
+      <label class="field-label">문의 내용</label>
+      <textarea id="inquiryMemo" class="text-input" rows="6" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
+      <label class="field-label">연락처 (선택)</label>
+      <input id="inquiryContact" class="text-input" type="text" placeholder="회신받을 연락처나 이메일" />
+      <button id="inquirySend" class="big-btn primary full">📨 문의 보내기</button>
+      <p class="apply-note">※ 보내면 hcyang572@korea.kr 로 전달됩니다.</p>
+    </section>
+
     <!-- 신청 완료 -->
     <section id="view-done" class="view" hidden>
       <div class="done-box">
@@ -89,7 +101,11 @@
     </section>
   </main>
 
-  <footer class="foot">미래상주 희망연구팀 · 수요자 기반 정책 플랫폼</footer>
+  <footer class="foot">
+    <div class="foot-team"><span class="gear">톱니바퀴</span> 제6기 미래상주 희망연구팀</div>
+    <div>수요자 기반 정책 플랫폼</div>
+    <div class="foot-inquiry">오류 문의 <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
+  </footer>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

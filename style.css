@@ -167,4 +167,8 @@ main { padding: 16px; }
 .done-program { font-size: 17px; font-weight: 700; color: var(--primary); background: var(--header); display: inline-block; padding: 8px 16px; border-radius: 10px; margin: 0 0 18px; }
 .done-desc { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 0 0 28px; }
 
-.foot { text-align: center; font-size: 12px; color: var(--muted); padding: 20px 16px; }
+.foot { text-align: center; font-size: 12px; color: var(--muted); padding: 20px 16px; line-height: 1.9; }
+.foot-team { font-size: 13px; font-weight: 700; color: var(--text); }
+.foot-team .gear { color: var(--primary); }
+.foot-inquiry { margin-top: 6px; }
+.foot-inquiry a { color: var(--primary); font-weight: 700; text-decoration: underline; }

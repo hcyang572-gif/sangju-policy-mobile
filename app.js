@@ -10,7 +10,10 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-const VIEWS = ["home", "list", "recommend", "detail", "apply", "done"];
+const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done"];
+
+// 오류 문의가 전달될 주소(표시용). 실제 발송은 폼메일→Gmail→자동접수가 이 주소로 전달.
+const SUPPORT_EMAIL = "hcyang572@korea.kr";
 
 function showView(name, push = true) {
   VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
@@ -234,8 +237,69 @@ async function sendApply() {
   }
 }
 
+// ---------- 오류 문의 ----------
+function openInquiry() {
+  $("topTitle").textContent = "오류 문의";
+  $("inquiryMemo").value = "";
+  $("inquiryContact").value = "";
+  showView("inquiry");
+}
+
+async function sendInquiry() {
+  const memo = $("inquiryMemo").value.trim();
+  const contact = $("inquiryContact").value.trim();
+  if (!memo) {
+    alert("문의 내용을 입력해 주세요.");
+    return;
+  }
+  const key = window.WEB3FORMS_KEY || "";
+  if (!key || key.indexOf("여기에") !== -1) {
+    alert("문의 전송 설정이 아직 완료되지 않았습니다.\n관리자에게 문의해 주세요.");
+    return;
+  }
+  const payload = { type: "inquiry", 문의내용: memo, 연락처: contact, 전달주소: SUPPORT_EMAIL };
+  const form = {
+    access_key: key,
+    subject: "[오류문의] 상주시 정책 플랫폼(모바일)",
+    from_name: "상주시 정책 플랫폼(모바일)",
+    "문의내용": memo,
+    "연락처": contact || "(없음)",
+    payload: "@@SJSTART@@" + JSON.stringify(payload) + "@@SJEND@@",
+    botcheck: "",
+  };
+  const btn = $("inquirySend");
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "보내는 중...";
+  try {
+    const res = await fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(form),
+    });
+    const j = await res.json();
+    if (!j.success) throw new Error(j.message || "전송 실패");
+    $("topTitle").textContent = "문의 완료";
+    $("doneProgram").textContent = "문의가 접수되었습니다";
+    document.querySelector("#view-done h2").textContent = "문의해 주셔서 감사합니다";
+    document.querySelector("#view-done .done-desc").innerHTML =
+      "담당자에게 문의 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
+    state.navStack = ["home", "done"];
+    showView("done", false);
+  } catch (e) {
+    alert("전송에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + e.message + ")");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
 function showDone(p) {
   $("topTitle").textContent = "접수 완료";
+  // 문의 완료로 바뀌었던 문구를 신청 완료용으로 복원
+  document.querySelector("#view-done h2").textContent = "신청이 접수되었습니다";
+  document.querySelector("#view-done .done-desc").innerHTML =
+    "담당 부서로 신청 내용이 전달되었습니다.<br>처리 결과는 담당자가 연락처로 안내드립니다.";
   $("doneProgram").textContent = p.사업명;
   // 완료 화면 이후 뒤로가기는 홈으로 가도록 스택 정리
   state.navStack = ["home", "done"];
@@ -261,6 +325,8 @@ function bindEvents() {
   $("listSearch").addEventListener("input", renderList);
   $("recommendRun").addEventListener("click", runRecommend);
   $("applySend").addEventListener("click", sendApply);
+  $("inquiryLink").addEventListener("click", (e) => { e.preventDefault(); openInquiry(); });
+  $("inquirySend").addEventListener("click", sendInquiry);
   $("doneHome").addEventListener("click", () => {
     state.selectedCats = new Set();
     state.navStack = ["home"];

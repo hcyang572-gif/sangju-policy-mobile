@@ -67,7 +67,7 @@ def make_share_card():
     d.text((lx, 430), "검색 · 맞춤추천 · 간편신청", font=font(FONT_R, 30), fill=MUTED)
 
     # 하단 안내
-    d.text((lx, 540), "설치 없이 링크 한 번으로 — 미래상주 희망연구팀",
+    d.text((lx, 540), "설치 없이 링크 한 번으로 — 톱니바퀴 제6기 미래상주 희망연구팀",
            font=font(FONT_R, 24), fill=MUTED)
 
     # 오른쪽 QR 카드(흰 패널 + 그림자 느낌 테두리)
