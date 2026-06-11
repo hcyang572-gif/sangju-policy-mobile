@@ -23,8 +23,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXCEL = os.path.join(os.path.dirname(HERE), "상주시 지원사업 목록.xlsx")
+APP_ROOT = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "data.json")
+
+
+def _excel_path():
+    """PC 앱이 마지막으로 연동한 DB(last_excel_path.txt) 우선, 없으면 기본 파일.
+    → PC가 다른 엑셀을 연동해도 모바일이 같은 DB로 빌드되도록 한다."""
+    try:
+        cfg = os.path.join(APP_ROOT, "last_excel_path.txt")
+        if os.path.exists(cfg):
+            with open(cfg, encoding="utf-8") as f:
+                p = f.read().strip()
+            if p and os.path.exists(p) and p.lower().endswith((".xlsx", ".xls", ".csv")):
+                return p
+    except Exception:
+        pass
+    return os.path.join(APP_ROOT, "상주시 지원사업 목록.xlsx")
+
+
+EXCEL = _excel_path()
 
 
 def _norm_name(s):
@@ -85,7 +103,13 @@ def main():
         print("[오류] 엑셀을 찾을 수 없습니다:", EXCEL)
         sys.exit(1)
 
-    df = pd.read_excel(EXCEL).fillna("")
+    if EXCEL.lower().endswith(".csv"):
+        try:
+            df = pd.read_csv(EXCEL, encoding="utf-8-sig").fillna("")
+        except Exception:
+            df = pd.read_csv(EXCEL, encoding="cp949").fillna("")
+    else:
+        df = pd.read_excel(EXCEL).fillna("")
     records = dedupe_keep_latest(df.to_dict("records"))
 
     programs = []
@@ -123,7 +147,7 @@ def main():
     situation_map = [
         ["임신 중이거나 출산 예정", "👶 임신·출산"],
         ["영유아·미취학 아동 자녀가 있음", "🧸 영유아·보육"],
-        ["초·중·고 학생 자녀가 있음", "🎒 청소년·교육"],
+        ["초·중·고 학생 자녀가 있음", "📚 청소년·교육"],
         ["자녀가 2명 이상(다자녀 가구)", "👨‍👩‍👧‍👦 다자녀·가족"],
         ["한부모·조손 가정", "👩‍👦 한부모·조손"],
         ["1인 가구", "👤 1인가구"],

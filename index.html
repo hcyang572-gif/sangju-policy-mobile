@@ -27,6 +27,13 @@
   <main id="app">
     <!-- 홈 -->
     <section id="view-home" class="view">
+      <div id="newBanner" class="new-banner" hidden>
+        <span id="newBannerText"></span>
+        <span class="new-banner-actions">
+          <button id="newBannerView" type="button">보기</button>
+          <button id="newBannerClose" type="button" aria-label="닫기">✕</button>
+        </span>
+      </div>
       <p class="lead">상주시 지원사업을 쉽게 찾아보세요</p>
       <div class="search-box">
         <input id="homeSearch" type="search" placeholder="🔍 사업명·내용으로 검색" />
@@ -73,16 +80,16 @@
       <label class="field-label">신청자 이름</label>
       <input id="applyName" class="text-input" type="text" placeholder="홍길동" />
       <label class="field-label">연락처</label>
-      <input id="applyPhone" class="text-input" type="tel" inputmode="numeric" placeholder="010-0000-0000" />
+      <input id="applyPhone" class="text-input" type="tel" inputmode="numeric" maxlength="11" placeholder="01000000000 (- 없이 숫자만)" />
       <label class="field-label">문의사항 (선택)</label>
       <textarea id="applyMemo" class="text-input" rows="4" placeholder="궁금한 점이나 추가로 전달할 내용"></textarea>
       <button id="applySend" class="big-btn primary full">✋ 신청서 제출하기</button>
-      <p class="apply-note">※ 제출하면 담당 부서로 바로 접수됩니다. (메일 앱이 열리지 않습니다)</p>
+      <p class="apply-note">※ 제출하면 담당 부서로 바로 접수됩니다.</p>
     </section>
 
     <!-- 오류 문의 -->
     <section id="view-inquiry" class="view" hidden>
-      <h2 class="apply-title">오류 문의</h2>
+      <h2 class="apply-title">오류 · 문의(개발자)</h2>
       <p class="apply-hint">이용 중 불편하거나 오류가 있으면 알려주세요. 담당자에게 전달됩니다.</p>
       <label class="field-label">문의 내용</label>
       <textarea id="inquiryMemo" class="text-input" rows="6" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
@@ -109,7 +116,7 @@
 
   <footer class="foot">
     <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
-    <div class="foot-inquiry">오류 문의 <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
+    <div class="foot-inquiry">오류 · 문의(개발자) <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
   </footer>
 
   <!-- 팀원 소개 모달 -->

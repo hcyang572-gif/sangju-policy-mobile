@@ -57,6 +57,24 @@ main { padding: 16px; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 .lead { font-size: 17px; color: var(--muted); margin: 4px 0 16px; }
+
+/* 신규 사업 알림 배너 */
+.new-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--header);
+  border: 1.5px solid var(--primary);
+  border-radius: 12px;
+  padding: 11px 12px;
+  margin-bottom: 14px;
+  font-size: 14.5px; font-weight: 700; color: var(--text);
+}
+.new-banner-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+.new-banner-actions button {
+  border: none; cursor: pointer; font-weight: 700;
+  border-radius: 8px; padding: 7px 12px; font-size: 14px;
+}
+#newBannerView { background: var(--primary); color: #fff; }
+#newBannerClose { background: transparent; color: var(--muted); padding: 7px 8px; }
 .section-title { font-size: 16px; margin: 22px 0 10px; }
 
 /* 검색 */

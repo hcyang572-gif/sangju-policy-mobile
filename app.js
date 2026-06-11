@@ -69,6 +69,26 @@ async function init() {
   renderSituations();
   bindEvents();
   showView("home", false);
+  checkNewPrograms();
+}
+
+// 지난 방문 이후 새로 추가된 사업을 감지해 홈에 알림 배너를 띄운다(localStorage 기반).
+const SEEN_KEY = "sangju_seen_programs";
+let newProgramNames = [];
+function checkNewPrograms() {
+  const names = DATA.programs.map((p) => p.사업명);
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]"); } catch (e) { seen = []; }
+  if (Array.isArray(seen) && seen.length) {
+    const seenSet = new Set(seen);
+    newProgramNames = names.filter((n) => !seenSet.has(n));
+    if (newProgramNames.length) {
+      $("newBannerText").textContent = `🆕 새로 추가된 지원사업 ${newProgramNames.length}건이 있어요!`;
+      $("newBanner").hidden = false;
+    }
+  }
+  // 이번 방문 기준으로 현재 목록을 '본 것'으로 저장(다음 추가분만 알림)
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify(names)); } catch (e) {}
 }
 
 // ---------- 홈: 카테고리 칩 ----------
@@ -140,7 +160,9 @@ function filterPrograms(catSet, query) {
   });
 }
 
-function openList({ title }) {
+let listOnlyNames = null;   // 특정 사업명만 보여줄 때(예: 신규 사업) 사용
+function openList({ title, onlyNames }) {
+  listOnlyNames = onlyNames || null;
   $("topTitle").textContent = title || "사업 목록";
   $("listSearch").value = "";
   showView("list");
@@ -149,8 +171,12 @@ function openList({ title }) {
 
 function renderList() {
   const q = $("listSearch").value;
-  const cats = state.selectedCats.size ? state.selectedCats : null;
-  const results = filterPrograms(cats, q);
+  const cats = (!listOnlyNames && state.selectedCats.size) ? state.selectedCats : null;
+  let results = filterPrograms(cats, q);
+  if (listOnlyNames) {
+    const set = new Set(listOnlyNames);
+    results = results.filter((p) => set.has(p.사업명));
+  }
   $("listMeta").textContent = `${results.length}개 사업`;
   const box = $("listResults");
   if (results.length === 0) {
@@ -276,7 +302,7 @@ async function sendApply() {
 
 // ---------- 오류 문의 ----------
 function openInquiry() {
-  $("topTitle").textContent = "오류 문의";
+  $("topTitle").textContent = "오류 · 문의(개발자)";
   $("inquiryMemo").value = "";
   $("inquiryContact").value = "";
   showView("inquiry");
@@ -365,6 +391,10 @@ function bindEvents() {
   });
   $("listSearch").addEventListener("input", renderList);
   $("recommendRun").addEventListener("click", runRecommend);
+  // 연락처는 '-' 없이 숫자만 입력
+  $("applyPhone").addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/[^0-9]/g, "");
+  });
   $("applySend").addEventListener("click", sendApply);
   $("inquiryLink").addEventListener("click", (e) => { e.preventDefault(); openInquiry(); });
   $("inquirySend").addEventListener("click", sendInquiry);
@@ -375,6 +405,12 @@ function bindEvents() {
     $("topTitle").textContent = HOME_TITLE;
     showView("home", false);
   });
+  // 신규 사업 알림 배너
+  $("newBannerView").addEventListener("click", () => {
+    state.selectedCats = new Set();
+    openList({ title: "새로 추가된 사업", onlyNames: newProgramNames });
+  });
+  $("newBannerClose").addEventListener("click", () => { $("newBanner").hidden = true; });
   // 팀원 소개 모달
   $("teamBtn").addEventListener("click", () => { $("teamModal").hidden = false; });
   $("teamClose").addEventListener("click", () => { $("teamModal").hidden = true; });
