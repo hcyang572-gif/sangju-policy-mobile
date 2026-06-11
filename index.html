@@ -18,7 +18,10 @@
 <body>
   <header class="topbar">
     <button id="backBtn" class="back-btn" hidden aria-label="뒤로">‹</button>
-    <h1 id="topTitle">🍊 상주시 정책 플랫폼</h1>
+    <div class="topbar-titles">
+      <h1 id="topTitle">🍊 상주시 정책 플랫폼</h1>
+      <span id="topSub" class="topsub">수요자 기반 정책 플랫폼</span>
+    </div>
   </header>
 
   <main id="app">
@@ -105,10 +108,31 @@
   <button id="fabBack" class="fab-back" hidden aria-label="뒤로가기">‹ 뒤로</button>
 
   <footer class="foot">
-    <div class="foot-team"><span class="gear">톱니바퀴</span> 제6기 미래상주 희망연구팀</div>
-    <div>수요자 기반 정책 플랫폼</div>
+    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
     <div class="foot-inquiry">오류 문의 <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
   </footer>
+
+  <!-- 팀원 소개 모달 -->
+  <div id="teamModal" class="modal-backdrop" hidden>
+    <div class="team-card" role="dialog" aria-modal="true">
+      <div class="team-card-head">
+        <span class="team-gear">⚙</span>
+        <div>
+          <div class="team-card-title">톱니바퀴</div>
+          <div class="team-card-sub">제6기 미래상주 희망연구팀</div>
+        </div>
+      </div>
+      <ul class="team-list">
+        <li><span class="role role-lead">팀장</span><span class="m-name">김광석</span><span class="m-dept">공업6</span></li>
+        <li><span class="role role-mgr">총무</span><span class="m-name">박성덕</span><span class="m-dept">공업7</span></li>
+        <li><span class="role">팀원</span><span class="m-name">김범식</span><span class="m-dept">녹지6</span></li>
+        <li><span class="role">팀원</span><span class="m-name">이동희</span><span class="m-dept">시설6</span></li>
+        <li><span class="role">팀원</span><span class="m-name">함영식</span><span class="m-dept">공업7</span></li>
+        <li><span class="role">팀원</span><span class="m-name">양호창</span><span class="m-dept">공업8</span></li>
+      </ul>
+      <button id="teamClose" class="big-btn primary full">닫기</button>
+    </div>
+  </div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

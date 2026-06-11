@@ -91,15 +91,16 @@ def main():
     programs = []
     found = set()
     for r in records:
-        cats = categorize(r)
+        # 카테고리: 공유 보정 규칙(보정맵→명시→키워드) 사용
+        cats = config.categories_for_record(r)
         for c in cats:
             found.add(c)
         programs.append({
             "사업명": str(r.get("사업명", "")).strip(),
-            "내용": str(r.get("내용", "")).strip(),
-            "대상자상세기준": str(r.get("대상자 상세기준", "")).strip(),
-            "이용방법": str(r.get("이용방법", "")).strip(),
-            "필요서류": str(r.get("필요서류", "")).strip(),
+            "내용": config.clean_text(r.get("내용", "")),
+            "대상자상세기준": config.clean_text(r.get("대상자 상세기준", "")),
+            "이용방법": config.clean_text(r.get("이용방법", "")),
+            "필요서류": config.clean_text(r.get("필요서류", "")),
             "기관명": str(r.get("기관명", "")).strip(),
             "팀명": str(r.get("팀명", "")).strip(),
             "연락처": str(r.get("연락처", "")).strip(),

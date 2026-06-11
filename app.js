@@ -15,11 +15,18 @@ const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done"
 // 오류 문의가 전달될 주소(표시용). 실제 발송은 폼메일→Gmail→자동접수가 이 주소로 전달.
 const SUPPORT_EMAIL = "hcyang572@korea.kr";
 
+const HOME_TITLE = "🍊 상주시 정책 플랫폼";
+
+// 내비 스택 항목은 {v: 화면이름, t: 제목}. 뒤로/이후 시 제목까지 복원한다.
 function showView(name, push = true) {
   VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
-  if (push && state.navStack[state.navStack.length - 1] !== name) {
-    state.navStack.push(name);
-    state.fwdStack = [];   // 새 이동 → 앞으로(이후) 기록 초기화
+  $("topSub").hidden = name !== "home";   // 부제는 홈에서만 제목 옆에 표시
+  if (push) {
+    const top = state.navStack[state.navStack.length - 1];
+    if (!top || top.v !== name) {
+      state.navStack.push({ v: name, t: $("topTitle").textContent });
+      state.fwdStack = [];   // 새 이동 → 앞으로(이후) 기록 초기화
+    }
   }
   _updateNavButtons();
   window.scrollTo(0, 0);
@@ -34,14 +41,17 @@ function _updateNavButtons() {
 function goBack() {
   if (state.navStack.length <= 1) return;
   state.fwdStack.push(state.navStack.pop());     // 현재 화면을 '이후'로 보관
-  showView(state.navStack[state.navStack.length - 1], false);
+  const top = state.navStack[state.navStack.length - 1];
+  $("topTitle").textContent = top.t;             // 이전 화면 제목 복원
+  showView(top.v, false);
 }
 
 function goForward() {
   if (state.fwdStack.length === 0) return;
   const next = state.fwdStack.pop();
   state.navStack.push(next);
-  showView(next, false);
+  $("topTitle").textContent = next.t;            // 이후 화면 제목 복원
+  showView(next.v, false);
 }
 
 // ---------- 데이터 로딩 ----------
@@ -53,7 +63,7 @@ async function init() {
     $("app").innerHTML = '<p class="empty">데이터를 불러오지 못했습니다.<br>data.json 을 먼저 생성해 주세요 (build_data.py).</p>';
     return;
   }
-  state.navStack = ["home"];
+  state.navStack = [{ v: "home", t: HOME_TITLE }];
   state.fwdStack = [];
   renderCategoryChips();
   renderSituations();
@@ -155,7 +165,7 @@ function renderList() {
     return `<div class="card" data-idx="${idx}">
       <h3>${esc(p.사업명)}</h3>
       <p>${esc(p.내용 || p.대상자상세기준)}</p>
-      ${p.팀명 ? `<span class="team">${esc(p.팀명)}</span>` : ""}
+      <span class="team">${esc((p.팀명 || "").trim() || "담당팀 확인 필요")}</span>
     </div>`;
   }).join("");
   box.querySelectorAll(".card").forEach((el) => {
@@ -170,7 +180,17 @@ function openDetail(idx) {
   const p = DATA.programs[idx];
   $("topTitle").textContent = "사업 상세";
   const block = (k, v) => v ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : "";
+  const blockHtml = (k, html) => html ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${html}</div></div>` : "";
   const tags = (p.categories || []).map((c) => `<span class="t">${esc(c)}</span>`).join("");
+  // 담당: 팀명이 없으면 '담당팀 확인 필요'
+  const team = (p.팀명 || "").trim() || "담당팀 확인 필요";
+  const charge = [p.기관명, team].filter(Boolean).join(" · ");
+  // 연락처: 전화 걸기 링크
+  const tel = (p.연락처 || "").trim();
+  const telDigits = tel.replace(/[^0-9+]/g, "");
+  const telHtml = tel
+    ? `<a class="tel-link" href="tel:${esc(telDigits)}">${esc(tel)} <span class="tel-ico">📞</span></a>`
+    : "";
   $("detailContent").innerHTML = `
     <h2>${esc(p.사업명)}</h2>
     ${tags ? `<div class="detail-tags">${tags}</div>` : ""}
@@ -178,8 +198,8 @@ function openDetail(idx) {
     ${block("👥 지원 대상", p.대상자상세기준)}
     ${block("📝 이용 방법", p.이용방법)}
     ${block("📎 필요 서류", p.필요서류)}
-    ${block("🏢 담당", [p.기관명, p.팀명].filter(Boolean).join(" · "))}
-    ${block("☎ 연락처", p.연락처)}
+    ${block("🏢 담당", charge)}
+    ${blockHtml("☎ 연락처", telHtml)}
     ${block("📅 종료일", p.종료일)}
     <button class="big-btn primary full" id="detailApply">✋ 신청하기</button>
   `;
@@ -301,7 +321,7 @@ async function sendInquiry() {
     document.querySelector("#view-done h2").textContent = "문의해 주셔서 감사합니다";
     document.querySelector("#view-done .done-desc").innerHTML =
       "담당자에게 문의 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
-    state.navStack = ["home", "done"];
+    state.navStack = [{ v: "home", t: HOME_TITLE }, { v: "done", t: "문의 완료" }];
     state.fwdStack = [];
     showView("done", false);
   } catch (e) {
@@ -320,7 +340,7 @@ function showDone(p) {
     "담당 부서로 신청 내용이 전달되었습니다.<br>처리 결과는 담당자가 연락처로 안내드립니다.";
   $("doneProgram").textContent = p.사업명;
   // 완료 화면 이후 뒤로가기는 홈으로 가도록 스택 정리
-  state.navStack = ["home", "done"];
+  state.navStack = [{ v: "home", t: HOME_TITLE }, { v: "done", t: "접수 완료" }];
   state.fwdStack = [];
   showView("done", false);
 }
@@ -350,10 +370,16 @@ function bindEvents() {
   $("inquirySend").addEventListener("click", sendInquiry);
   $("doneHome").addEventListener("click", () => {
     state.selectedCats = new Set();
-    state.navStack = ["home"];
+    state.navStack = [{ v: "home", t: HOME_TITLE }];
     state.fwdStack = [];
-    $("topTitle").textContent = "🍊 상주시 정책 플랫폼";
+    $("topTitle").textContent = HOME_TITLE;
     showView("home", false);
+  });
+  // 팀원 소개 모달
+  $("teamBtn").addEventListener("click", () => { $("teamModal").hidden = false; });
+  $("teamClose").addEventListener("click", () => { $("teamModal").hidden = true; });
+  $("teamModal").addEventListener("click", (e) => {
+    if (e.target.id === "teamModal") $("teamModal").hidden = true;  // 배경 클릭 닫기
   });
 }
 

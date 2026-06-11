@@ -11,6 +11,9 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* hidden 속성은 display 지정 요소(.modal-backdrop·.fab-back 등)에서도 항상 우선 */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -36,7 +39,9 @@ body { max-width: 560px; margin: 0 auto; padding-bottom: 60px; }
   padding: 14px 16px;
   box-shadow: 0 2px 6px rgba(0,0,0,.12);
 }
+.topbar-titles { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .topbar h1 { font-size: 19px; margin: 0; font-weight: 700; }
+.topsub { font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .85); }
 .back-btn {
   background: rgba(255,255,255,.2);
   border: none;
@@ -140,6 +145,8 @@ main { padding: 16px; }
 .detail-block { margin-bottom: 16px; }
 .detail-block .k { font-weight: 700; font-size: 14px; color: var(--primary); margin-bottom: 4px; }
 .detail-block .v { font-size: 15px; white-space: pre-wrap; }
+.tel-link { color: var(--primary); font-weight: 700; text-decoration: none; }
+.tel-link .tel-ico { font-size: 14px; }
 .detail-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .detail-tags .t { font-size: 12px; background: var(--header); color: var(--primary); padding: 4px 10px; border-radius: 8px; }
 
@@ -191,6 +198,43 @@ main { padding: 16px; }
 
 .foot { text-align: center; font-size: 12px; color: var(--muted); padding: 20px 16px 78px; line-height: 1.9; }
 .foot-team { font-size: 13px; font-weight: 700; color: var(--text); }
-.foot-team .gear { color: var(--primary); }
+.gear-btn { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
+.foot-team .gear { color: var(--primary); font-weight: 700; text-decoration: underline; }
+
+/* 팀원 소개 모달 */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, .45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.team-card {
+  width: 100%; max-width: 360px;
+  background: var(--card);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .3);
+  animation: fade .2s ease;
+}
+.team-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.team-card-head .team-gear { font-size: 34px; color: var(--primary); }
+.team-card-title { font-size: 20px; font-weight: 800; color: var(--primary); }
+.team-card-sub { font-size: 13px; color: var(--muted); font-weight: 600; }
+.team-list { list-style: none; margin: 0 0 18px; padding: 0; }
+.team-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.team-list li:last-child { border-bottom: none; }
+.team-list .role {
+  flex: 0 0 46px; text-align: center;
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  background: var(--header); border-radius: 7px; padding: 4px 0;
+}
+.team-list .role-lead { color: #fff; background: var(--primary); }
+.team-list .role-mgr { color: #fff; background: #43A047; }
+.team-list .m-name { font-size: 17px; font-weight: 700; color: var(--text); }
+.team-list .m-dept { margin-left: auto; font-size: 13px; color: var(--muted); }
 .foot-inquiry { margin-top: 6px; }
 .foot-inquiry a { color: var(--primary); font-weight: 700; text-decoration: underline; }
