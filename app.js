@@ -15,7 +15,7 @@ const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done"
 // 오류 문의가 전달될 주소(표시용). 실제 발송은 폼메일→Gmail→자동접수가 이 주소로 전달.
 const SUPPORT_EMAIL = "hcyang572@korea.kr";
 
-const HOME_TITLE = "🍊 상주시 정책 플랫폼";
+const HOME_TITLE = "상주시 정책 플랫폼";
 
 // 내비 스택 항목은 {v: 화면이름, t: 제목}. 뒤로/이후 시 제목까지 복원한다.
 function showView(name, push = true) {
