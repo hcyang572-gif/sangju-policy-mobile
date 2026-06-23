@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#E66B3A">
+<title>상주시 정책 플랫폼 — 클라우드</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 로그인 -->
+<div id="login" class="login-screen">
+  <div class="login-card">
+    <img src="assets/gotgam.png" class="login-logo" alt="곶감">
+    <h1 class="login-title">상주시 정책 플랫폼</h1>
+    <p class="login-sub">공무원 관리자 로그인 (클라우드)</p>
+    <input id="email" type="email" class="login-input" placeholder="이메일" autocomplete="username">
+    <input id="pw" type="password" class="login-input" placeholder="비밀번호" autocomplete="current-password">
+    <button id="loginBtn" class="login-btn">🔐 로그인</button>
+    <p id="loginErr" class="login-err"></p>
+  </div>
+</div>
+
+<!-- 앱 -->
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <img src="assets/gotgam.png" class="brand-logo" alt="곶감">
+    <div class="brand-text">
+      <div class="brand-title">상주시 정책 플랫폼</div>
+      <div class="brand-sub" id="dbInfo">사업 관리 (실시간)</div>
+    </div>
+    <div class="top-actions">
+      <span id="realtimeDot" class="rt-dot" title="실시간 연결">●</span>
+      <button class="top-btn solid" id="btnAdd">➕ 새 사업</button>
+      <button class="top-btn ghost" id="btnLogout">로그아웃</button>
+    </div>
+  </header>
+  <div class="topline"></div>
+
+  <main class="content">
+    <div class="search-hint">🔎 사업을 검색하거나 분야를 선택해 조회·관리하세요. (변경은 모든 접속자에게 실시간 반영)</div>
+    <div id="catChips" class="chips wrap"></div>
+    <div class="toolbar">
+      <input id="search" class="search-input wide" placeholder="🔎 사업명 · 내용 · 담당팀 검색">
+      <select id="sortSel" class="sort-select"><option value="seq">기본순</option><option value="name">사업명순</option></select>
+      <span id="count" class="count"></span>
+    </div>
+    <div id="list" class="cardlist"></div>
+    <div id="pager" class="pager-wrap"></div>
+  </main>
+</div>
+
+<!-- 편집/상세 모달 -->
+<div id="modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <span id="mTitle" class="modal-title">사업</span>
+      <button id="mClose" class="modal-close">✕</button>
+    </div>
+    <div id="mBody" class="modal-body"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
