@@ -46,23 +46,30 @@ html, body {
   line-height: 1.5;
 }
 
-body { max-width: 560px; margin: 0 auto; padding-bottom: 60px; }
+/* 공무원앱(cloudui) 구조와 동일: body/헤더는 전체폭(edge-to-edge), 콘텐츠 래퍼(main)만 max-width 센터링.
+   모바일(<768px)에선 화면이 560px 이하라 현행과 동일하게 보임(헤더=화면폭, 본문=화면폭). */
+body { width: 100%; margin: 0; padding-bottom: 60px; }
 
-/* 상단바 — 공무원앱(cloudui)과 통일: 흰 배경 + 곶감 제목 + 얇은 곶감 라인 */
+/* 상단바 — 공무원앱(cloudui) 구조: 배경/sticky는 전체폭(.topbar), 내부 콘텐츠만 센터링(.topbar-inner).
+   페이지 배경(크림)과 일체화: 흰색 제거, 그림자 없이 한 덩어리처럼 */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 20;
+  background: var(--bg);   /* 크림(#FFF7F0) — 본문 배경과 동일해 일체감, sticky 시 본문 비침 방지(불투명) */
+  color: var(--text);
+  box-shadow: none;        /* 그림자 제거로 헤더-본문 경계 없앰 */
+}
+/* 헤더 내부 콘텐츠: flex 정렬 + 본문(main)과 동일한 폭 정책으로 센터링 */
+.topbar-inner {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #fff;
-  color: var(--text);
+  width: 100%;
   padding: 12px 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.06);
 }
 .topbar-titles { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-/* 제목: 곶감 주황 굵게 / 부제: muted 진회색(흰 배경 대비 5.3:1, AA 충족) */
+/* 제목: 곶감 주황 굵게(대형·굵은글씨 3:1 충족) / 부제: muted 진회색(크림 배경 대비 ≈5.3:1, AA 충족) */
 .topbar h1 { font-size: 19px; margin: 0; font-weight: 800; color: var(--primary); }
 .topsub { font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .back-btn {
@@ -75,12 +82,13 @@ body { max-width: 560px; margin: 0 auto; padding-bottom: 60px; }
   cursor: pointer;
 }
 .back-btn:active { background: var(--header); }
-/* 상상주도 CI 로고: 흰 배경 위에 바로(흰 칩 제거) */
+/* 상상주도 CI 로고: 크림 배경 위에 바로(흰 칩 제거) */
 .topbar-logo { height: 30px; width: auto; object-fit: contain; display: block; flex-shrink: 0; }
-/* 헤더 아래 얇은 곶감색 라인(공무원앱 .topline) */
-.topline { height: 3px; background: var(--primary); position: sticky; top: 58px; z-index: 19; }
+/* 헤더 아래 곶감색 라인 — 일체감 위해 아주 은은하게(2px·반투명, 브랜드 정체성만 남김) */
+.topline { height: 2px; background: rgba(230,107,58,.35); position: sticky; top: 58px; z-index: 19; }
 
-main { padding: 16px; }
+/* 콘텐츠 래퍼 — cloudui .content와 동일: 전체폭 안에서 max-width 센터링(큰 화면 @media에서 폭 지정) */
+main { width: 100%; margin: 0 auto; padding: 16px; }
 .view { animation: fade .18s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
@@ -153,9 +161,10 @@ main { padding: 16px; }
 }
 .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
-/* 목록 카드 */
+/* 목록 카드 — 모바일은 1열, 넓어지면 auto-fill로 열 수 자동 증가(아래 @media에서 활성).
+   기본(모바일 <768px)은 1열 유지 위해 단일 컬럼으로 둠 */
 .list-meta { font-size: 14px; color: var(--muted); margin: 10px 2px; }
-.cards { display: grid; gap: 12px; }
+.cards { display: grid; gap: 12px; grid-template-columns: 1fr; }
 .card {
   background: var(--card);
   border: 1.5px solid var(--border);
@@ -226,7 +235,7 @@ main { padding: 16px; }
 /* 하단 플로팅 뒤로가기 버튼(엄지 위치) */
 .fab-back {
   position: fixed;
-  right: max(16px, calc(50% - 280px + 16px));
+  right: 16px;   /* 화면 우측 고정(전체폭 레이아웃이라 컨테이너 보정 불필요) */
   bottom: 24px;
   z-index: 50;
   display: inline-flex;
@@ -503,33 +512,39 @@ main { padding: 16px; }
 .pp-modal-actions .big-btn { margin-top: 0; }
 
 /* ═══════════════════════════════════════════════════════════════
-   반응형 — 큰 화면(PC·태블릿)에서 자동으로 넓게 채우기
-   · 모바일(작은 화면)은 위 기본값 그대로 유지(아래 @media만 추가)
-   · 공무원앱(cloudui)과 톤 일관: 목록은 다단 그리드로 펼치고, 폼은 적정폭 유지
+   반응형 — 공무원앱(cloudui)과 동일한 폭/그리드 전략
+   · 구조: body/헤더(.topbar)는 전체폭(edge-to-edge), 콘텐츠 래퍼(.topbar-inner·main)만
+     width:100% + max-width + margin:0 auto 로 센터링 → 큰 화면에서 화면을 꽉 채우되
+     헤더와 본문이 같은 폭으로 정렬(cloudui .content/.tabbar 정책 그대로).
+   · 브레이크포인트·폭·그리드: cloudui 그대로
+       기본 큰화면 max-width 1100 / @900 → 1180·카드 2단 / @1320 → 1320·카드 3단
+   · 모바일(<768px)은 위 기본값(화면폭) 그대로 유지
+   · 폼/읽기 화면만 720px 가운데 정렬로 가독성 유지(cloudui 모달 폼도 좁음)
    · 신청/문의/스와이프/PWA/정책참여 RPC 등 기능은 레이아웃만 바뀌므로 무손상
    ═══════════════════════════════════════════════════════════════ */
 
-/* 태블릿~작은 노트북: 컨테이너 720→860px, 목록·홈버튼 2단 */
+/* 태블릿 이상: 헤더·본문을 cloudui와 동일하게 max-width 센터링(전체폭 안에서) */
 @media (min-width: 768px) {
-  body { max-width: 860px; }
+  /* cloudui .content/.tabbar: width:100% + max-width:1100 + margin:0 auto */
+  .topbar-inner,
+  main {
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .topbar-inner { padding: 12px 20px; }
+  main { padding: 18px 20px 30px; }
 
-  /* 헤더·검색창은 넓어진 컨테이너 폭에서 자연스럽게(가운데 정렬 유지) */
-  .topbar { padding-left: 22px; padding-right: 22px; }
-  main { padding: 22px 22px 30px; }
-
-  /* 목록/제안 카드: 2단 그리드로 펼쳐 넓은 폭 활용 */
-  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  /* 목록/제안 카드: 넓은 폭 활용(cloudui는 @900부터 2단 — 아래에서 처리). 여기선 카드 정렬만 */
   .cards .card { align-items: flex-start; }
 
   /* 홈 큰 버튼: 가로 2열로 보기 좋게 */
   .big-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  /* 분야칩: 넓은 폭에서도 좌측부터 자연 줄바꿈(기존 flex-wrap 유지) — 별도 변경 없음 */
+  /* FAB 뒤로가기: 우측 16px 고정(전체폭 기준 항상 화면 안 우측) */
+  .fab-back { right: 16px; }
 
-  /* FAB 뒤로가기: 넓어진 컨테이너(860px) 우측 안쪽에 맞춤 */
-  .fab-back { right: max(16px, calc(50% - 430px + 16px)); }
-
-  /* 폼·읽기 위주 화면은 너무 넓으면 가독성↓ → 적정폭(720px) 가운데 정렬.
+  /* 폼·읽기 위주 화면은 가독성 위해 적정폭(720px) 가운데 정렬 유지(전체폭으로 늘리지 않음).
      목록(view-list)·홈(view-home)·정책참여 목록(view-propose)은 풀폭(그리드 활용)로 제외 */
   #view-recommend,
   #view-detail,
@@ -545,18 +560,18 @@ main { padding: 16px; }
   }
 }
 
-/* PC·넓은 화면: 컨테이너 1140px, 목록 3단 */
-@media (min-width: 1100px) {
-  body { max-width: 1140px; }
+/* cloudui @900: content max-width 1180, padding 22 28, 카드 2단 */
+@media (min-width: 900px) {
+  .topbar-inner { max-width: 1180px; padding-left: 28px; padding-right: 28px; }
+  main { max-width: 1180px; padding: 22px 28px 36px; }
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+}
 
-  .topbar { padding-left: 28px; padding-right: 28px; }
-  main { padding: 26px 28px 36px; }
-
-  /* 목록/제안 카드: 3단 그리드 */
+/* cloudui @1320: content max-width 1320, 카드 3단 */
+@media (min-width: 1320px) {
+  .topbar-inner { max-width: 1320px; }
+  main { max-width: 1320px; }
   .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-
-  /* FAB 뒤로가기: 1140px 컨테이너 우측 안쪽 */
-  .fab-back { right: max(16px, calc(50% - 570px + 16px)); }
 }
 
 /* ───────────── 개인정보 처리방침 ───────────── */
