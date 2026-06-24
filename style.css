@@ -282,6 +282,32 @@ main { padding: 16px; }
 .a2hs-go { font-size: 13px; font-weight: 700; color: var(--primary); flex-shrink: 0; white-space: nowrap; }
 .a2hs-close { font-size: 13px; color: var(--muted); padding: 2px 4px; flex-shrink: 0; }
 
+/* 홈: 인앱 브라우저(카톡·네이버 등) 안내 배너 — 곶감 테마, 설치띠보다 강조 */
+.inapp-banner {
+  display: flex; align-items: flex-start; gap: 9px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 12px 12px;
+  background: var(--primary);
+  border-radius: 12px;
+  color: #fff;
+  text-align: left;
+  box-shadow: 0 3px 10px rgba(230,107,58,.28);
+}
+.inapp-emoji { font-size: 20px; flex-shrink: 0; line-height: 1.4; }
+.inapp-body { flex: 1; min-width: 0; }
+.inapp-text { font-size: 14px; font-weight: 700; line-height: 1.5; }
+.inapp-text b { text-decoration: underline; }
+.inapp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.inapp-btn {
+  font-family: inherit; font-size: 13px; font-weight: 800;
+  padding: 8px 14px; border-radius: 9px; cursor: pointer;
+  background: #fff; color: var(--primary); border: none;
+}
+.inapp-btn:active { transform: scale(.98); }
+.inapp-btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.7); }
+.inapp-close { font-size: 14px; color: rgba(255,255,255,.85); padding: 2px 4px; flex-shrink: 0; cursor: pointer; }
+
 /* 푸터: 설치 링크 + 공개 주소 */
 .foot-install { margin-top: 8px; }
 .foot-link-btn {

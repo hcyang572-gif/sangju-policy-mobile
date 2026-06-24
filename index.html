@@ -45,6 +45,18 @@
         </span>
       </div>
       <p class="lead">상주시 지원사업을 쉽게 찾아보세요</p>
+      <!-- 인앱 브라우저(카톡·네이버 등) 안내: 진짜 브라우저로 열어야 설치 가능 -->
+      <div id="inappBanner" class="inapp-banner" hidden>
+        <span class="inapp-emoji">📲</span>
+        <div class="inapp-body">
+          <div id="inappText" class="inapp-text"></div>
+          <div class="inapp-actions">
+            <button id="inappOpen" class="inapp-btn" type="button" hidden>크롬으로 열기</button>
+            <button id="inappCopy" class="inapp-btn ghost" type="button" hidden>주소 복사</button>
+          </div>
+        </div>
+        <span id="inappClose" class="inapp-close" role="button" aria-label="닫기">✕</span>
+      </div>
       <button id="a2hsTip" class="a2hs-tip" type="button" hidden>
         <span class="a2hs-emoji">📲</span>
         <span class="a2hs-text">홈 화면에 추가하면 <b>앱처럼</b> 써요</span>
@@ -133,6 +145,7 @@
   <footer class="foot">
     <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
     <div class="foot-install">📲 <button id="installLink" class="foot-link-btn" type="button">홈 화면에 앱처럼 추가하기</button></div>
+    <div class="foot-install">🌐 <button id="openBrowserLink" class="foot-link-btn" type="button">다른 브라우저(크롬·사파리)로 열기</button></div>
     <div class="foot-url">🔗 <span class="foot-url-text">hcyang572-gif.github.io/sangju-policy-mobile</span></div>
     <div class="foot-inquiry">오류 · 문의(개발자) <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
   </footer>

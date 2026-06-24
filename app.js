@@ -70,6 +70,7 @@ async function init() {
   bindEvents();
   showView("home", false);
   checkNewPrograms();
+  initInApp();
   initA2HS();
 }
 
@@ -83,10 +84,81 @@ function isStandalone() {
 function initA2HS() {
   let dismissed = false;
   try { dismissed = localStorage.getItem(A2HS_DISMISS_KEY) === "1"; } catch (e) {}
-  // 홈 상단 안내 띠: 한 번 닫았거나 이미 설치(standalone) 상태면 숨김
-  $("a2hsTip").hidden = dismissed || isStandalone();
+  // 홈 상단 안내 띠: 한 번 닫았거나, 이미 설치(standalone) 상태거나,
+  // 인앱 브라우저 배너가 떠 있으면(겹침 방지) 숨긴다.
+  $("a2hsTip").hidden = dismissed || isStandalone() || !$("inappBanner").hidden;
 }
 function openInstallGuide() { $("installModal").hidden = false; }
+
+// ---------- 인앱 브라우저(카톡·네이버 등) 대응 ----------
+const INAPP_DISMISS_KEY = "sangju_inapp_dismissed";
+// 카카오톡·네이버·라인·페이스북·인스타·다음 등 주요 인앱 웹뷰 감지
+function isInApp() {
+  const ua = (navigator.userAgent || "").toLowerCase();
+  return /kakaotalk|naver|line\/|fban|fbav|instagram|daumapps|whale|everytimeapp|band|kakaostory/.test(ua);
+}
+function isIOS() {
+  const ua = navigator.userAgent || "";
+  return /iphone|ipad|ipod/i.test(ua) ||
+    // iPadOS 13+ 는 Mac 처럼 보고하므로 터치 지원으로 보완 판별
+    (/macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
+function isAndroid() {
+  return /android/i.test(navigator.userAgent || "");
+}
+// 현재 주소를 안드로이드 크롬으로 강제로 여는 intent:// URL을 만든다.
+// 크롬 미설치 시 S.browser_fallback_url 로 폴백.
+function buildChromeIntent() {
+  const cur = window.location.href;
+  const hostPath = window.location.host + window.location.pathname +
+                   window.location.search + window.location.hash;
+  return "intent://" + hostPath +
+    "#Intent;scheme=https;package=com.android.chrome;" +
+    "S.browser_fallback_url=" + encodeURIComponent(cur) + ";end";
+}
+function initInApp() {
+  const banner = $("inappBanner");
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(INAPP_DISMISS_KEY) === "1"; } catch (e) {}
+  // 이미 설치 실행(standalone)이거나, 일반 브라우저거나, 닫았으면 숨김
+  if (isStandalone() || !isInApp() || dismissed) { banner.hidden = true; return; }
+
+  const txt = $("inappText");
+  const openBtn = $("inappOpen");
+  const copyBtn = $("inappCopy");
+  if (isAndroid()) {
+    txt.innerHTML = "앱 설치는 <b>크롬</b>에서 됩니다.<br>아래 버튼으로 크롬에서 열어주세요.";
+    openBtn.hidden = false;
+    copyBtn.hidden = true;
+  } else if (isIOS()) {
+    txt.innerHTML = "설치하려면 우측 위 <b>⋯ 메뉴 → ‘Safari로 열기’</b>를 눌러주세요.<br>(주소를 복사해 사파리에 붙여넣어도 됩니다.)";
+    openBtn.hidden = true;
+    copyBtn.hidden = false;
+  } else {
+    // 기타 인앱: 일반 안내 + 주소 복사
+    txt.innerHTML = "앱 설치는 <b>크롬·사파리 등 기본 브라우저</b>에서 됩니다.<br>주소를 복사해 브라우저에서 열어주세요.";
+    openBtn.hidden = true;
+    copyBtn.hidden = false;
+  }
+  banner.hidden = false;
+}
+// 현재 주소 복사(클립보드 API 실패 시 임시 input 폴백)
+async function copyCurrentUrl() {
+  const url = window.location.href;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else { throw new Error("no clipboard api"); }
+  } catch (e) {
+    try {
+      const t = document.createElement("input");
+      t.value = url; document.body.appendChild(t);
+      t.select(); document.execCommand("copy");
+      document.body.removeChild(t);
+    } catch (e2) { alert("주소: " + url); return; }
+  }
+  alert("주소를 복사했어요. 브라우저(크롬·사파리)에 붙여넣어 열어주세요.");
+}
 
 // 지난 방문 이후 새로 추가된 사업을 감지해 홈에 알림 배너를 띄운다(localStorage 기반).
 const SEEN_KEY = "sangju_seen_programs";
@@ -442,6 +514,19 @@ function bindEvents() {
     }
     openInstallGuide();
   });
+  // 인앱 브라우저 배너: 크롬으로 열기 / 주소 복사 / 닫기
+  $("inappOpen").addEventListener("click", () => { window.location.href = buildChromeIntent(); });
+  $("inappCopy").addEventListener("click", copyCurrentUrl);
+  $("inappClose").addEventListener("click", () => {
+    $("inappBanner").hidden = true;
+    try { localStorage.setItem(INAPP_DISMISS_KEY, "1"); } catch (err) {}
+    initA2HS();   // 인앱 배너가 사라졌으니 설치띠 노출 여부 재평가
+  });
+  // 푸터: 다른 브라우저로 열기 도움말(항상 접근 가능)
+  $("openBrowserLink").addEventListener("click", () => {
+    if (isAndroid()) { window.location.href = buildChromeIntent(); }
+    else { copyCurrentUrl(); }
+  });
   $("installLink").addEventListener("click", openInstallGuide);   // 푸터: 언제든 다시 보기
   $("installClose").addEventListener("click", () => { $("installModal").hidden = true; });
   $("installModal").addEventListener("click", (e) => {
@@ -481,3 +566,29 @@ function _bindSwipe() {
 }
 
 init();
+
+// ── PWA 서비스워커 등록 (설치 가능화 + 오프라인 로딩) ─────────────
+// 상대경로로 등록 → GitHub Pages 하위경로(/sangju-policy-mobile/)에서도 동작.
+// 등록 실패해도 앱 기능에는 영향 없음.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("sw.js")
+      .then((reg) => {
+        console.log("[PWA] 서비스워커 등록 성공:", reg.scope);
+        // 새 버전 감지 시: 설치 완료되면 즉시 적용(다음 새로고침부터 최신)
+        reg.addEventListener("updatefound", () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener("statechange", () => {
+            if (sw.state === "installed" && navigator.serviceWorker.controller) {
+              console.log("[PWA] 새 버전 준비됨 — 새로고침하면 최신으로 갱신됩니다.");
+            }
+          });
+        });
+      })
+      .catch((err) => {
+        console.warn("[PWA] 서비스워커 등록 실패(앱은 정상 동작):", err);
+      });
+  });
+}
