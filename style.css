@@ -502,6 +502,63 @@ main { padding: 16px; }
 .pp-modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
 .pp-modal-actions .big-btn { margin-top: 0; }
 
+/* ═══════════════════════════════════════════════════════════════
+   반응형 — 큰 화면(PC·태블릿)에서 자동으로 넓게 채우기
+   · 모바일(작은 화면)은 위 기본값 그대로 유지(아래 @media만 추가)
+   · 공무원앱(cloudui)과 톤 일관: 목록은 다단 그리드로 펼치고, 폼은 적정폭 유지
+   · 신청/문의/스와이프/PWA/정책참여 RPC 등 기능은 레이아웃만 바뀌므로 무손상
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 태블릿~작은 노트북: 컨테이너 720→860px, 목록·홈버튼 2단 */
+@media (min-width: 768px) {
+  body { max-width: 860px; }
+
+  /* 헤더·검색창은 넓어진 컨테이너 폭에서 자연스럽게(가운데 정렬 유지) */
+  .topbar { padding-left: 22px; padding-right: 22px; }
+  main { padding: 22px 22px 30px; }
+
+  /* 목록/제안 카드: 2단 그리드로 펼쳐 넓은 폭 활용 */
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .cards .card { align-items: flex-start; }
+
+  /* 홈 큰 버튼: 가로 2열로 보기 좋게 */
+  .big-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* 분야칩: 넓은 폭에서도 좌측부터 자연 줄바꿈(기존 flex-wrap 유지) — 별도 변경 없음 */
+
+  /* FAB 뒤로가기: 넓어진 컨테이너(860px) 우측 안쪽에 맞춤 */
+  .fab-back { right: max(16px, calc(50% - 430px + 16px)); }
+
+  /* 폼·읽기 위주 화면은 너무 넓으면 가독성↓ → 적정폭(720px) 가운데 정렬.
+     목록(view-list)·홈(view-home)·정책참여 목록(view-propose)은 풀폭(그리드 활용)로 제외 */
+  #view-recommend,
+  #view-detail,
+  #view-apply,
+  #view-inquiry,
+  #view-done,
+  #view-pdetail,
+  #view-pwrite,
+  #view-privacy {
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* PC·넓은 화면: 컨테이너 1140px, 목록 3단 */
+@media (min-width: 1100px) {
+  body { max-width: 1140px; }
+
+  .topbar { padding-left: 28px; padding-right: 28px; }
+  main { padding: 26px 28px 36px; }
+
+  /* 목록/제안 카드: 3단 그리드 */
+  .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* FAB 뒤로가기: 1140px 컨테이너 우측 안쪽 */
+  .fab-back { right: max(16px, calc(50% - 570px + 16px)); }
+}
+
 /* ───────────── 개인정보 처리방침 ───────────── */
 .foot-privacy { margin-top: 8px; }
 .privacy-doc {
