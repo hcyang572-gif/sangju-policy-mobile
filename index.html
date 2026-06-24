@@ -69,6 +69,7 @@
       <div class="big-actions">
         <button class="big-btn" data-go="all">📋<span>전체 사업 보기</span></button>
         <button class="big-btn primary" data-go="recommend">🙋<span>나에게 맞는 사업 찾기</span></button>
+        <button class="big-btn propose-btn" data-go="propose">🗳<span>정책참여 (시민 제안)</span></button>
       </div>
       <h2 class="section-title">분야별로 찾기</h2>
       <div id="categoryChips" class="chips"></div>
@@ -137,6 +138,70 @@
         <button id="doneHome" class="big-btn primary full">처음으로</button>
       </div>
     </section>
+
+    <!-- ▽▽▽ 정책참여(시민 제안) Phase A ▽▽▽ -->
+
+    <!-- 정책참여: 제안 목록 -->
+    <section id="view-propose" class="view" hidden>
+      <div class="propose-hero">
+        <div class="propose-hero-title">🗳 시민 정책제안</div>
+        <div class="propose-hero-sub">"이런 정책 어때요?" 시민이 직접 제안해요</div>
+      </div>
+      <p class="legal-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
+      <div class="propose-toolbar">
+        <select id="ppCategory" class="pp-select" aria-label="분야 선택"></select>
+        <select id="ppSort" class="pp-select" aria-label="정렬">
+          <option value="new">최신순</option>
+          <option value="like">인기순</option>
+        </select>
+        <button id="ppNew" class="pp-new-btn" type="button">＋ 제안</button>
+      </div>
+      <div id="ppListMeta" class="list-meta"></div>
+      <div id="ppList" class="cards"></div>
+      <button id="ppMore" class="pp-more-btn" type="button" hidden>더 보기</button>
+    </section>
+
+    <!-- 정책참여: 제안 상세 -->
+    <section id="view-pdetail" class="view" hidden>
+      <div id="pdetailContent"></div>
+    </section>
+
+    <!-- 정책참여: 제안 작성 -->
+    <section id="view-pwrite" class="view" hidden>
+      <h2 id="pwriteTitle" class="apply-title">🗳 정책 제안하기</h2>
+      <p class="apply-hint">닉네임으로 자유롭게 제안하세요. 실명·연락처는 적지 마세요.</p>
+
+      <label class="field-label">제안 분야</label>
+      <select id="pwCategory" class="pp-select full"></select>
+
+      <label class="field-label">제목 <span class="req">*</span></label>
+      <input id="pwTitle" class="text-input" type="text" maxlength="80" placeholder="예: ○○동 마을버스 노선 신설" />
+
+      <label class="field-label">내용 <span class="req">*</span></label>
+      <textarea id="pwBody" class="text-input" rows="6" maxlength="2000" placeholder="어떤 정책이 왜 필요한지 적어주세요."></textarea>
+
+      <label class="field-label">닉네임 <span class="req">*</span></label>
+      <input id="pwNick" class="text-input" type="text" maxlength="20" placeholder="예: 상주시민김 (실명 금지)" />
+
+      <label class="field-label">동네 (선택)</label>
+      <input id="pwRegion" class="text-input" type="text" maxlength="20" placeholder="예: 무양동 (선택)" />
+
+      <label class="field-label">수정용 PIN (숫자 4자리) <span class="req">*</span></label>
+      <input id="pwPin" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="예: 1234 (본인 수정/삭제용)" />
+      <p class="apply-note" style="text-align:left;margin-top:6px;">※ PIN은 본인 글 수정·삭제에만 쓰입니다. <b>분실 시 복구할 수 없습니다.</b></p>
+
+      <!-- 도배방지 허니팟(사람 눈엔 안 보임) -->
+      <input id="pwHoney" class="pp-honey" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" />
+
+      <label class="pp-agree">
+        <input id="pwAgree" type="checkbox" />
+        <span>허위·욕설·개인정보(실명·전화·주민번호)를 포함하지 않음에 동의합니다.</span>
+      </label>
+
+      <button id="pwSubmit" class="big-btn primary full">제안 등록</button>
+      <p class="apply-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
+    </section>
+    <!-- △△△ 정책참여 끝 △△△ -->
   </main>
 
   <!-- 엄지로 누르기 편한 하단 뒤로가기 버튼(상단 버튼과 별개) -->
@@ -204,7 +269,52 @@
     </div>
   </div>
 
+  <!-- 정책참여: 본인 수정/삭제(PIN) 모달 -->
+  <div id="pinModal" class="modal-backdrop" hidden>
+    <div class="install-card" role="dialog" aria-modal="true">
+      <div class="install-head">
+        <span class="install-emoji">🔒</span>
+        <div>
+          <div class="install-title">본인 확인</div>
+          <div class="install-sub">작성 시 정한 4자리 PIN을 입력하세요</div>
+        </div>
+      </div>
+      <input id="pinInput" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" />
+      <div class="pp-modal-actions">
+        <button id="pinEdit" class="big-btn full" type="button">✏ 수정</button>
+        <button id="pinDelete" class="big-btn full pp-danger" type="button">🗑 삭제</button>
+      </div>
+      <button id="pinCancel" class="big-btn primary full">취소</button>
+    </div>
+  </div>
+
+  <!-- 정책참여: 신고 모달 -->
+  <div id="reportModal" class="modal-backdrop" hidden>
+    <div class="install-card" role="dialog" aria-modal="true">
+      <div class="install-head">
+        <span class="install-emoji">🚩</span>
+        <div>
+          <div class="install-title">제안 신고</div>
+          <div class="install-sub">부적절한 내용을 알려주세요</div>
+        </div>
+      </div>
+      <select id="reportReason" class="pp-select full">
+        <option value="욕설·비방">욕설·비방</option>
+        <option value="광고·홍보">광고·홍보</option>
+        <option value="개인정보 노출">개인정보 노출</option>
+        <option value="허위·근거 없음">허위·근거 없음</option>
+        <option value="기타">기타</option>
+      </select>
+      <textarea id="reportMemo" class="text-input" rows="3" placeholder="구체적인 사유(선택)"></textarea>
+      <button id="reportSend" class="big-btn primary full">신고 보내기</button>
+      <button id="reportCancel" class="big-btn full">취소</button>
+    </div>
+  </div>
+
   <script src="config.js"></script>
+  <!-- 정책참여 라이브 read/write 용 Supabase 클라이언트 (공무원앱과 동일 버전) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
+  <script src="proposals.js"></script>
 </body>
 </html>

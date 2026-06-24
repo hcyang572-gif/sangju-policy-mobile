@@ -346,3 +346,103 @@ main { padding: 16px; }
 .install-os li { font-size: 14px; line-height: 1.7; }
 .install-os li b { color: var(--primary); }
 .install-os .ico { font-size: 13px; }
+
+/* ───────────── 정책참여(시민 제안) Phase A ───────────── */
+/* 홈의 정책참여 진입 버튼(곶감 테마 강조) */
+.propose-btn { border-color: var(--primary); color: var(--primary); }
+.propose-btn span { color: var(--primary); }
+
+/* 정책참여 헤더 */
+.propose-hero {
+  background: var(--header);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.propose-hero-title { font-size: 19px; font-weight: 800; color: var(--primary); }
+.propose-hero-sub { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.legal-note { font-size: 12.5px; color: var(--muted); margin: 0 2px 12px; }
+.req { color: var(--primary); }
+
+/* 툴바: 분야/정렬/제안 */
+.propose-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.pp-select {
+  flex: 1; min-width: 0;
+  padding: 11px 10px; font-size: 15px;
+  border: 1.5px solid var(--border); border-radius: 10px;
+  background: var(--card); color: var(--text);
+  font-family: inherit;
+}
+.pp-select.full { width: 100%; flex: none; }
+.pp-new-btn {
+  flex-shrink: 0;
+  padding: 11px 16px; font-size: 15px; font-weight: 800;
+  border: none; border-radius: 10px;
+  background: var(--primary); color: #fff; cursor: pointer;
+  font-family: inherit;
+}
+.pp-new-btn:active { transform: scale(.97); }
+.pp-more-btn {
+  width: 100%; margin-top: 14px;
+  padding: 13px; font-size: 15px; font-weight: 700;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  background: var(--card); color: var(--text); cursor: pointer;
+  font-family: inherit;
+}
+
+/* 제안 카드 */
+.pp-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.pp-badge {
+  font-size: 12px; font-weight: 800; color: #fff;
+  padding: 3px 9px; border-radius: 8px; white-space: nowrap;
+}
+.pp-badge.st-accept { background: #8C7A6E; }
+.pp-badge.st-review { background: #E66B3A; }
+.pp-badge.st-done { background: #43A047; }
+.pp-badge.st-reject { background: #B5483A; }
+.pp-badge.st-hold { background: #B59A3A; }
+.pp-cat { font-size: 12px; color: var(--primary); background: var(--header); padding: 3px 9px; border-radius: 8px; }
+.pp-card-meta { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.pp-like { font-size: 14px; font-weight: 800; color: var(--primary); }
+.pp-date { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+
+/* 제안 상세 */
+.pd-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.pd-title { font-size: 21px; margin: 4px 0 8px; }
+.pd-meta { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.pd-meta b { color: var(--text); }
+.pd-body { font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; margin-bottom: 22px; }
+.pd-like-box { text-align: center; background: var(--header); border-radius: 14px; padding: 18px; margin-bottom: 22px; }
+.pd-like-count { font-size: 16px; margin-bottom: 12px; }
+.pd-like-count b { color: var(--primary); font-size: 20px; }
+.pp-liked { background: #43A047 !important; color: #fff !important; border-color: #43A047 !important; }
+.pd-section-title { font-size: 15px; font-weight: 800; color: var(--primary); margin: 0 0 12px; }
+.pd-timeline { list-style: none; margin: 0 0 22px; padding: 0; }
+.pd-timeline li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; padding: 7px 0; color: var(--muted);
+}
+.pd-timeline .tl-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--border); flex-shrink: 0;
+}
+.pd-timeline .tl-past { color: var(--text); }
+.pd-timeline .tl-past .tl-dot { background: var(--primary); }
+.pd-timeline .tl-current { color: var(--primary); font-weight: 800; }
+.pd-timeline .tl-current .tl-dot { background: var(--primary); box-shadow: 0 0 0 4px rgba(230,107,58,.25); }
+.pd-reply { background: #F0F7F0; border: 1.5px solid #C9E3C9; border-radius: 14px; padding: 15px; margin-bottom: 18px; }
+.pd-reply-title { font-size: 14px; font-weight: 800; color: #2E7D32; margin-bottom: 6px; }
+.pd-reply-body { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+.pd-actions { display: grid; gap: 10px; margin-top: 18px; }
+.pp-ghost { color: var(--muted); }
+.pp-danger { color: #fff; background: #B5483A; border-color: #B5483A; }
+
+/* 작성 폼: 동의·허니팟 */
+.pp-agree { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0 4px; font-size: 14px; cursor: pointer; }
+.pp-agree input { width: 20px; height: 20px; accent-color: var(--primary); flex-shrink: 0; margin-top: 1px; }
+.pp-honey { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+/* 정책참여 모달 버튼 묶음 */
+.pp-modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+.pp-modal-actions .big-btn { margin-top: 0; }

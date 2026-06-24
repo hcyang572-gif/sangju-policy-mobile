@@ -98,6 +98,53 @@ body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background
 .appfoot{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;color:var(--sub);font-size:12px;font-weight:700;border-top:1px solid var(--line);}
 .foot-gotgam{width:20px;height:20px;object-fit:contain;opacity:.85;}
 
+/* ── 정책제안 관리(관리자 남색 톤) ── */
+:root{ --navy:#1B2A4A; --navy-d:#10192E; --navy-l:#E3E8F2; --navy-ll:#F1F4FA; }
+
+/* 상단 탭바 */
+.tabbar{display:flex;gap:8px;max-width:1100px;width:100%;margin:0 auto;padding:12px 20px 0;}
+.tab-btn{flex:0 0 auto;border:1.5px solid var(--line);border-bottom:none;background:#fff;color:var(--sub);
+  border-radius:12px 12px 0 0;padding:11px 20px;font-size:14px;font-weight:800;cursor:pointer;}
+.tab-btn.on{background:var(--gotgam);color:#fff;border-color:var(--gotgam);}
+#tabProposals.on{background:var(--navy);border-color:var(--navy);}
+
+/* 정책제안 카드 */
+.pcard{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px 18px;display:flex;
+  align-items:center;gap:14px;border-left:5px solid var(--navy);cursor:pointer;transition:transform .12s;}
+.pcard:hover{transform:translateY(-2px);}
+.pcard.hidden-row{opacity:.6;border-left-color:#9AA4B8;background:#FAFBFD;}
+.pcard-main{flex:1;min-width:0;}
+.pcard-top{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px;}
+.pcard-title{font-size:16px;font-weight:800;}
+.pcard-meta{font-size:12.5px;color:#7a6f66;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+
+/* 상태 뱃지 */
+.st-badge{font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:8px;white-space:nowrap;}
+.st-접수{background:#E3E8F2;color:#1B2A4A;}
+.st-검토중{background:#FFF3CD;color:#7A5B00;}
+.st-반영{background:#E3F6EA;color:#1F7A41;}
+.st-불채택{background:#FDE7E7;color:#C0392B;}
+.st-보류{background:#ECEFF3;color:#5A6678;}
+.cat-tag{font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:8px;background:var(--gotgam-l);color:var(--gotgam-d);}
+.hide-tag{font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:8px;background:#37404F;color:#fff;}
+.like-tag{font-weight:800;color:var(--navy);}
+.report-tag{font-weight:800;color:#C0392B;}
+
+/* 정책제안 모달 헤더 = 남색 */
+.modal-head.admin{background:var(--navy);}
+.tab-btn:focus-visible,.st-select:focus{outline:2px solid var(--navy);}
+.st-select{width:100%;height:42px;border:1.5px solid var(--navy-l);border-radius:10px;padding:0 12px;
+  font-size:14px;font-weight:700;font-family:inherit;background:#fff;cursor:pointer;outline:none;}
+.modal-actions .nav-btn{flex:1;height:46px;font-size:15px;border:none;border-radius:10px;font-weight:800;cursor:pointer;
+  background:var(--navy);color:#fff;}
+.modal-actions .nav-btn:hover{background:var(--navy-d);}
+.pm-body-text{font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;
+  background:var(--navy-ll);border:1px solid var(--navy-l);border-radius:10px;padding:12px 14px;}
+.pm-reports{background:#FFF5F5;border:1px solid #F3CFCF;border-radius:10px;padding:10px 12px;font-size:13px;color:#8A3A30;}
+.pm-reports .pm-rep-item{padding:4px 0;border-bottom:1px dashed #EDC9C9;}
+.pm-reports .pm-rep-item:last-child{border-bottom:none;}
+.toggle-line{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--ink);cursor:pointer;}
+
 /* 반응형(핸드폰) */
 @media (max-width:600px){
   .topbar{flex-wrap:wrap;padding:10px 14px;}

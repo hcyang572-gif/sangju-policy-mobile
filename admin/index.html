@@ -53,7 +53,14 @@
   </header>
   <div class="topline"></div>
 
-  <main class="content">
+  <!-- 상단 탭: 사업 관리 ↔ 정책제안 관리 -->
+  <nav class="tabbar">
+    <button id="tabBenefits" class="tab-btn on" type="button">📂 사업 관리</button>
+    <button id="tabProposals" class="tab-btn" type="button">🗳 정책제안 관리</button>
+  </nav>
+
+  <!-- 섹션 1: 사업 관리 (기존) -->
+  <main id="secBenefits" class="content">
     <div class="search-hint">🔎 사업을 검색하거나 분야를 선택해 조회·관리하세요. (변경은 모든 접속자에게 실시간 반영)</div>
     <div id="catChips" class="chips wrap"></div>
     <div class="toolbar">
@@ -63,6 +70,23 @@
     </div>
     <div id="list" class="cardlist"></div>
     <div id="pager" class="pager-wrap"></div>
+  </main>
+
+  <!-- 섹션 2: 정책제안 관리 (신규) -->
+  <main id="secProposals" class="content hidden">
+    <div class="search-hint">🗳 시민 정책제안을 검토·답변·관리하세요. 숨김(블라인드) 글도 공무원에게는 보입니다. (변경은 실시간 반영)</div>
+    <div id="pStatusChips" class="chips wrap"></div>
+    <div id="pCatChips" class="chips wrap" style="margin-top:8px;"></div>
+    <div class="toolbar">
+      <input id="pSearch" class="search-input wide" placeholder="🔎 제목 · 내용 · 닉네임 검색">
+      <select id="pSortSel" class="sort-select">
+        <option value="new">최신순</option>
+        <option value="like">공감순</option>
+      </select>
+      <span id="pCount" class="count"></span>
+    </div>
+    <div id="pList" class="cardlist"></div>
+    <div id="pPager" class="pager-wrap"></div>
   </main>
 
   <footer class="appfoot">
@@ -79,6 +103,17 @@
       <button id="mClose" class="modal-close">✕</button>
     </div>
     <div id="mBody" class="modal-body"></div>
+  </div>
+</div>
+
+<!-- 정책제안 상세/관리 모달 -->
+<div id="pModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-head admin">
+      <span id="pmTitle" class="modal-title">🗳 정책제안</span>
+      <button id="pmClose" class="modal-close">✕</button>
+    </div>
+    <div id="pmBody" class="modal-body"></div>
   </div>
 </div>
 

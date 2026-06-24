@@ -10,7 +10,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done"];
+const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done",
+  "propose", "pdetail", "pwrite"];
 
 // 오류 문의가 전달될 주소(표시용). 실제 발송은 폼메일→Gmail→자동접수가 이 주소로 전달.
 const SUPPORT_EMAIL = "hcyang572@korea.kr";
@@ -469,6 +470,7 @@ function bindEvents() {
       const go = el.dataset.go;
       if (go === "all") { state.selectedCats = new Set(); openList({ title: "전체 사업" }); }
       else if (go === "recommend") { $("topTitle").textContent = "맞춤 찾기"; showView("recommend"); }
+      else if (go === "propose") { if (window.Proposals) window.Proposals.open(); }
     });
   });
   $("homeSearch").addEventListener("keydown", (e) => {

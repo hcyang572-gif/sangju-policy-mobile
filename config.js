@@ -6,3 +6,9 @@
 //   · 받은 키(예: a1b2c3d4-....)를 아래 따옴표 안에 붙여넣으세요.
 //   · 이 키는 공개되어도 안전합니다(그 메일주소로 신청서를 보내는 용도만).
 window.WEB3FORMS_KEY = "b9e8dc17-a4a5-4a3e-b800-c8cbbdccb195";
+
+// ── 정책참여(시민 제안) 기능용 Supabase 연결 ──────────────────────
+// anon key 는 공개되어도 안전합니다(RLS 행 수준 보안으로 보호).
+// 공무원앱(cloudui/config.js)과 같은 프로젝트·같은 값입니다.
+window.SUPABASE_URL = "https://nalpuhtdruovzulcagtj.supabase.co";
+window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbHB1aHRkcnVvdnp1bGNhZ3RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxODk2MjIsImV4cCI6MjA5Nzc2NTYyMn0.hBALnDwobaCMlbaW-ANhG1Uwjf5eNcNxWed11b7mY2M";
