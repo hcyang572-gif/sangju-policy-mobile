@@ -5,7 +5,9 @@
   <!-- 저시력자 화면확대 허용(KWCAG 2.2): maximum-scale·user-scalable=no 사용 금지 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#E66B3A" />
-  <title>상주시 정책 플랫폼</title>
+  <title>상주시 정책 플랫폼 — 내게 맞는 지원사업 찾기</title>
+  <meta name="description" content="상주시 지원사업을 검색·맞춤추천으로 쉽게 찾고 휴대폰으로 바로 신청하세요. 시민 정책제안도 가능합니다." />
+  <link rel="canonical" href="https://hcyang572-gif.github.io/sangju-policy-mobile/" />
 
   <!-- PWA: 홈 화면에 추가 시 앱 이름/아이콘 -->
   <link rel="manifest" href="manifest.json" />
@@ -28,12 +30,13 @@
 <body>
   <header class="topbar">
     <button id="backBtn" class="back-btn" hidden aria-label="뒤로">‹</button>
-    <span class="topbar-logo-chip"><img src="assets/sangsang1.png" class="topbar-logo" alt="상상주도" /></span>
+    <img src="assets/sangsang1.png" class="topbar-logo" alt="상상주도" />
     <div class="topbar-titles">
       <h1 id="topTitle">상주시 정책 플랫폼</h1>
       <span id="topSub" class="topsub">수요자 기반 정책 플랫폼</span>
     </div>
   </header>
+  <div class="topline"></div>
 
   <main id="app">
     <!-- 홈 -->
@@ -70,8 +73,20 @@
       <div class="big-actions">
         <button class="big-btn" data-go="all">📋<span>전체 사업 보기</span></button>
         <button class="big-btn primary" data-go="recommend">🙋<span>나에게 맞는 사업 찾기</span></button>
-        <button class="big-btn propose-btn" data-go="propose">🗳<span>정책참여 (시민 제안)</span></button>
       </div>
+
+      <!-- 정책참여: 지원사업과 다른 갈래임을 색·구분선으로 명확히 분리 -->
+      <div class="home-divider" role="separator" aria-hidden="true"></div>
+      <h2 class="section-label propose-label">🗳 시민 정책참여</h2>
+      <button class="propose-card" data-go="propose" type="button"
+              aria-label="시민 정책참여 — 시민이 직접 정책을 제안하고 공감하는 공간으로 이동">
+        <span class="propose-card-icon" aria-hidden="true">🗳</span>
+        <span class="propose-card-text">
+          <span class="propose-card-title">정책참여 (시민 제안)</span>
+          <span class="propose-card-desc">이런 정책 어때요? 시민이 직접 제안·공감해요</span>
+        </span>
+        <span class="propose-card-arrow" aria-hidden="true">›</span>
+      </button>
       <h2 class="section-title">분야별로 찾기</h2>
       <div id="categoryChips" class="chips"></div>
     </section>
@@ -81,7 +96,7 @@
       <div class="search-box sticky">
         <input id="listSearch" type="search" placeholder="🔍 결과 안에서 검색" aria-label="결과 안에서 검색" />
       </div>
-      <p id="listMeta" class="list-meta"></p>
+      <p id="listMeta" class="list-meta" aria-live="polite"></p>
       <div id="listResults" class="cards"></div>
     </section>
 
@@ -157,7 +172,7 @@
         </select>
         <button id="ppNew" class="pp-new-btn" type="button">＋ 제안</button>
       </div>
-      <div id="ppListMeta" class="list-meta"></div>
+      <div id="ppListMeta" class="list-meta" aria-live="polite"></div>
       <div id="ppList" class="cards"></div>
       <button id="ppMore" class="pp-more-btn" type="button" hidden>더 보기</button>
     </section>
@@ -189,7 +204,7 @@
 
       <label class="field-label" for="pwPin">수정용 PIN (숫자 4자리) <span class="req">*</span></label>
       <input id="pwPin" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="예: 1234 (본인 수정/삭제용)" />
-      <p class="apply-note" style="text-align:left;margin-top:6px;">※ PIN은 본인 글 수정·삭제에만 쓰입니다. <b>분실 시 복구할 수 없습니다.</b></p>
+      <p class="apply-note left">※ PIN은 본인 글 수정·삭제에만 쓰입니다. <b>분실 시 복구할 수 없습니다.</b></p>
 
       <!-- 도배방지 허니팟(사람 눈엔 안 보임) -->
       <input id="pwHoney" class="pp-honey" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" />
@@ -267,7 +282,7 @@
   <button id="fabBack" class="fab-back" hidden aria-label="뒤로가기">‹ 뒤로</button>
 
   <footer class="foot">
-    <div class="foot-team"><img src="assets/gotgam.png" class="foot-gotgam" alt="상주 곶감" /><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
+    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
     <div class="foot-install">📲 <button id="installLink" class="foot-link-btn" type="button">홈 화면에 앱처럼 추가하기</button></div>
     <div class="foot-install">🌐 <button id="openBrowserLink" class="foot-link-btn" type="button">다른 브라우저(크롬·사파리)로 열기</button></div>
     <div class="foot-url">🔗 <span class="foot-url-text">hcyang572-gif.github.io/sangju-policy-mobile</span></div>

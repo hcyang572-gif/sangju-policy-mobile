@@ -12,7 +12,17 @@ body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background
 /* 스크린리더 전용(화면엔 숨김, 보조기기엔 노출) */
 .sr-only{position:absolute !important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
 /* 키보드 포커스 가시성(KWCAG) */
-a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--gotgam-d);outline-offset:2px;}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,
+[role="button"]:focus-visible{outline:3px solid var(--gotgam-d);outline-offset:2px;}
+/* 카드(role=button)의 키보드 포커스 — 곶감/남색 톤 구분 */
+.card[role="button"]:focus-visible{outline:3px solid var(--gotgam-d);outline-offset:2px;}
+.pcard[role="button"]:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
+
+/* C12: 인라인 style 대체 클래스 */
+.mb-10{margin-bottom:10px;}
+.mt-8{margin-top:8px;}
+.req-note{color:#C0392B;font-weight:700;}
+.muted-date{opacity:.6;}
 
 /* 로그인 */
 .login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#FFF3EA,#FFE2CE);padding:20px;}
@@ -25,7 +35,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .login-input:focus{border-color:var(--gotgam);}
 .login-btn{width:100%;height:48px;margin-top:8px;border:none;border-radius:12px;background:var(--gotgam);color:#fff;font-size:16px;font-weight:800;cursor:pointer;}
 .login-btn:hover{background:var(--gotgam-d);}
-.login-err{color:#E53935;font-size:13px;font-weight:700;margin-top:10px;min-height:18px;}
+.login-err{color:#C62828;font-size:13px;font-weight:700;margin-top:10px;min-height:18px;}
 
 /* 앱 */
 .app{min-height:100vh;display:flex;flex-direction:column;}
@@ -65,7 +75,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .card-desc{font-size:13px;color:#7a6f66;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .badge{font-size:12px;font-weight:800;padding:5px 11px;border-radius:8px;background:var(--gotgam-l);color:var(--gotgam-d);white-space:nowrap;}
 .badge.warn{background:#FFEBEE;color:#E53935;}
-.empty{text-align:center;color:#b3a89f;font-size:15px;padding:46px 0;line-height:1.7;}
+.empty{text-align:center;color:#766458;font-size:15px;padding:46px 0;line-height:1.7;}
 
 .pager-wrap{display:flex;justify-content:center;margin-top:18px;}
 .pager{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;}
@@ -98,6 +108,23 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .guest-banner{display:flex;align-items:center;gap:10px;margin:0;padding:10px 16px;background:#FFF3CD;border-bottom:1px solid #F0DDA0;color:#7A5B00;font-size:13px;font-weight:700;}
 .guest-banner .gb-text{flex:1;}
 .guest-banner .gb-close{flex:0 0 auto;border:none;background:transparent;color:#7A5B00;font-size:16px;font-weight:800;cursor:pointer;padding:2px 6px;}
+
+/* 인앱 브라우저(카톡·네이버 등) 안내 배너 — 공무원앱 남색 정체성, 게스트띠보다 강조.
+   body 최상단 고정 위치(로그인·앱 어느 화면 위에서도 동일 노출). */
+.inapp-banner{display:flex;align-items:flex-start;gap:9px;width:100%;padding:11px 16px;
+  background:linear-gradient(135deg,#1B2A4A,#10192E);color:#fff;
+  box-shadow:0 3px 10px rgba(16,25,46,.30);}
+.inapp-emoji{font-size:20px;flex-shrink:0;line-height:1.4;}
+.inapp-body{flex:1;min-width:0;}
+.inapp-text{font-size:14px;font-weight:700;line-height:1.5;}
+.inapp-text b{text-decoration:underline;}
+.inapp-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px;}
+.inapp-btn{font-family:inherit;font-size:13px;font-weight:800;padding:8px 14px;border-radius:9px;
+  cursor:pointer;background:#fff;color:#10192E;border:none;}
+.inapp-btn:active{transform:scale(.98);}
+.inapp-btn.ghost{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.75);}
+.inapp-close{font-size:14px;color:rgba(255,255,255,.9);padding:2px 4px;flex-shrink:0;cursor:pointer;
+  background:none;border:none;font-family:inherit;line-height:1.4;}
 
 /* 푸터(상주 곶감 은은한 포인트) */
 .appfoot{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:16px;color:var(--sub);font-size:12px;font-weight:700;border-top:1px solid var(--line);}

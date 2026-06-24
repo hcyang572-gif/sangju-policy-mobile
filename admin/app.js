@@ -10,6 +10,70 @@ function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTi
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
 function el(t, c) { const e = document.createElement(t); if (c) e.className = c; return e; }
 
+/* ── 담당팀 색 구분 (시민앱과 동일 팔레트·해시 → 같은 팀 = 양앱 같은 색) ──
+   팀명을 결정적 해시로 팔레트에 매핑. 연한 배경+진한 글자(대비 4.5:1↑).
+   null이면 색 미지정(기존 중립 배지 유지). 팀 수>14면 색 겹침 가능. */
+const TEAM_PALETTE = [
+  { bg: '#E8F0FE', fg: '#1A4480' }, { bg: '#E6F4EA', fg: '#1E6B33' }, { bg: '#FCE8E6', fg: '#A52714' },
+  { bg: '#FEF7E0', fg: '#7A5900' }, { bg: '#F3E8FD', fg: '#6A1B9A' }, { bg: '#E0F7FA', fg: '#00695C' },
+  { bg: '#FCE4EC', fg: '#AD1457' }, { bg: '#EFEBE9', fg: '#4E342E' }, { bg: '#E8EAF6', fg: '#283593' },
+  { bg: '#F1F8E9', fg: '#33691E' }, { bg: '#FFF3E0', fg: '#B33C00' }, { bg: '#ECEFF1', fg: '#37474F' },
+  { bg: '#E0F2F1', fg: '#00796B' }, { bg: '#FFEBEE', fg: '#C2185B' }
+];
+function teamColor(name) {
+  const s = (name || '').trim();
+  if (!s || s === '담당팀 확인 필요' || s === '-') return null;
+  let h = 0; for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+  return TEAM_PALETTE[h % TEAM_PALETTE.length];
+}
+
+/* ── 접근성 헬퍼 (KWCAG 2.2) ───────────────────────────────── */
+// C7: 스크린리더에 결과/오류를 알림(시각 alert와 별개로 보조기기 통지)
+function announce(msg) {
+  const box = document.getElementById("liveStatus");
+  if (!box) return;
+  box.textContent = "";
+  // 같은 문구 연속 시에도 다시 읽도록 다음 프레임에 주입
+  setTimeout(() => { box.textContent = String(msg || ""); }, 30);
+}
+
+// C2: 모달 포커스 트랩 — 열 때 첫 포커스, Tab 순환, Esc/닫기 시 복귀.
+// 모달별로 한 번만 등록(중복 keydown 방지). open/close는 헬퍼로 통일.
+const FOCUS_SEL = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+let _lastFocus = null;          // 모달 열기 전 포커스 복귀용
+let _activeModal = null;        // 현재 열린 모달 엘리먼트
+
+function _trapKeydown(e) {
+  if (!_activeModal) return;
+  if (e.key === "Escape") { closeModal(_activeModal); return; }
+  if (e.key !== "Tab") return;
+  const f = [..._activeModal.querySelectorAll(FOCUS_SEL)].filter((n) => n.offsetParent !== null);
+  if (!f.length) { e.preventDefault(); return; }
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+// 트랩 keydown은 문서에 단 한 번만 등록(모달 전환돼도 _activeModal만 갱신)
+document.addEventListener("keydown", _trapKeydown);
+
+function openModal(modal) {
+  if (!modal) return;
+  _lastFocus = document.activeElement;
+  _activeModal = modal;
+  modal.classList.remove("hidden");
+  // 첫 포커스: 닫기 버튼이 아닌 첫 입력요소 우선, 없으면 첫 포커스 대상
+  const focusables = [...modal.querySelectorAll(FOCUS_SEL)].filter((n) => n.offsetParent !== null);
+  const target = focusables.find((n) => !n.classList.contains("modal-close")) || focusables[0];
+  if (target) setTimeout(() => target.focus(), 30);
+}
+function closeModal(modal) {
+  if (!modal) return;
+  modal.classList.add("hidden");
+  if (_activeModal === modal) _activeModal = null;
+  if (_lastFocus && typeof _lastFocus.focus === "function") { try { _lastFocus.focus(); } catch (e) {} }
+  _lastFocus = null;
+}
+
 // 기존 세션 있으면 바로 앱
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
@@ -24,12 +88,93 @@ $("#email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#pw")
 $("#guestBtn").onclick = () => { IS_GUEST = true; showApp(); };
 $("#guestBannerClose").onclick = () => $("#guestBanner").classList.add("hidden");
 
+/* ── 인앱 브라우저(카톡·네이버 등) 대응 ──────────────────────────
+   카톡/네이버 등 인앱 웹뷰는 PWA 설치·정상 사용이 어렵다.
+   인앱일 때만 상단 배너로 크롬(안드로이드)·사파리(iOS) 전환을 유도한다.
+   시민앱(모바일웹/app.js)의 isInApp/isIOS/isAndroid/buildChromeIntent와 동등. */
+const INAPP_DISMISS_KEY = "sangju_admin_inapp_dismissed";
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+         window.navigator.standalone === true;
+}
+// 카카오톡·네이버·라인·페이스북·인스타·다음 등 주요 인앱 웹뷰 감지(일반 크롬/사파리/삼성=false)
+function isInApp() {
+  const ua = (navigator.userAgent || "").toLowerCase();
+  return /kakaotalk|naver|line\/|fban|fbav|instagram|daumapps|whale|everytimeapp|band|kakaostory/.test(ua);
+}
+function isIOS() {
+  const ua = navigator.userAgent || "";
+  return /iphone|ipad|ipod/i.test(ua) ||
+    // iPadOS 13+ 는 Mac 처럼 보고 → 터치 지원으로 보완 판별
+    (/macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
+function isAndroid() {
+  return /android/i.test(navigator.userAgent || "");
+}
+// 현재 주소(/admin/)를 안드로이드 크롬으로 강제로 여는 intent:// URL. 미설치 시 fallback_url 로 폴백.
+function buildChromeIntent() {
+  const cur = window.location.href;
+  const hostPath = window.location.host + window.location.pathname +
+                   window.location.search + window.location.hash;
+  return "intent://" + hostPath +
+    "#Intent;scheme=https;package=com.android.chrome;" +
+    "S.browser_fallback_url=" + encodeURIComponent(cur) + ";end";
+}
+// 현재 주소 복사(클립보드 API 실패 시 임시 input 폴백)
+async function copyCurrentUrl() {
+  const url = window.location.href;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else { throw new Error("no clipboard api"); }
+    announce("주소를 복사했어요. 브라우저에 붙여넣어 열어주세요.");
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand("copy"); announce("주소를 복사했어요."); }
+    catch (e2) { announce("주소 복사에 실패했어요. 주소창을 길게 눌러 복사해 주세요."); }
+    document.body.removeChild(ta);
+  }
+}
+function initInApp() {
+  const banner = $("#inappBanner");
+  if (!banner) return;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(INAPP_DISMISS_KEY) === "1"; } catch (e) {}
+  // 설치 실행(standalone)·일반 브라우저·이미 닫음 → 숨김
+  if (isStandalone() || !isInApp() || dismissed) { banner.classList.add("hidden"); return; }
+
+  const txt = $("#inappText"), openBtn = $("#inappOpen"), copyBtn = $("#inappCopy");
+  if (isAndroid()) {
+    txt.innerHTML = "앱 설치·정상 이용은 <b>크롬</b>에서 됩니다.<br>아래 버튼으로 크롬에서 열어주세요.";
+    openBtn.hidden = false; copyBtn.hidden = true;
+  } else if (isIOS()) {
+    txt.innerHTML = "정상 이용하려면 우측 위 <b>⋯ 메뉴 → ‘Safari로 열기’</b>를 눌러주세요.<br>(주소를 복사해 사파리에 붙여넣어도 됩니다.)";
+    openBtn.hidden = true; copyBtn.hidden = false;
+  } else {
+    txt.innerHTML = "정상 이용은 <b>크롬·사파리 등 기본 브라우저</b>에서 됩니다.<br>주소를 복사해 브라우저에서 열어주세요.";
+    openBtn.hidden = true; copyBtn.hidden = false;
+  }
+  banner.classList.remove("hidden");
+}
+// 인앱 배너 이벤트(로그인 전에도 동작하도록 즉시 바인딩)
+$("#inappOpen").onclick = () => { window.location.href = buildChromeIntent(); };
+$("#inappCopy").onclick = copyCurrentUrl;
+$("#inappClose").onclick = () => {
+  $("#inappBanner").classList.add("hidden");
+  try { localStorage.setItem(INAPP_DISMISS_KEY, "1"); } catch (e) {}
+};
+// 진입 즉시 1회 평가(로그인 화면 상단에서도 노출)
+initInApp();
+
 async function login() {
   const email = $("#email").value.trim(), password = $("#pw").value;
   if (!email || !password) { $("#loginErr").textContent = "이메일과 비밀번호를 입력하세요."; return; }
   $("#loginErr").textContent = "로그인 중...";
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { $("#loginErr").textContent = "로그인 실패: " + error.message; return; }
+  // 성공 시 앱 진입은 showApp() 에서 처리
   showApp();
 }
 
@@ -58,17 +203,16 @@ function bindUI() {
     if (!IS_GUEST) { try { await sb.auth.signOut(); } catch (e) {} }
     location.reload();
   };
-  $("#mClose").onclick = () => $("#modal").classList.add("hidden");
-  $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").classList.add("hidden"); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#modal").classList.add("hidden"); });
+  // C2: 닫기/바깥클릭은 closeModal로 통일(포커스 복귀). Esc는 _trapKeydown이 일괄 처리.
+  $("#mClose").onclick = () => closeModal($("#modal"));
+  $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal($("#modal")); });
 
-  // 개인정보 처리방침 모달 (열기/닫기/Esc/바깥클릭)
+  // 개인정보 처리방침 모달 (열기/닫기/바깥클릭) — Esc는 공통 트랩에서 처리
   const pp = $("#ppModal");
   if (pp) {
-    $("#btnPrivacy").onclick = () => pp.classList.remove("hidden");
-    $("#ppClose").onclick = () => pp.classList.add("hidden");
-    pp.addEventListener("click", (e) => { if (e.target.id === "ppModal") pp.classList.add("hidden"); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") pp.classList.add("hidden"); });
+    $("#btnPrivacy").onclick = () => openModal(pp);
+    $("#ppClose").onclick = () => closeModal(pp);
+    pp.addEventListener("click", (e) => { if (e.target.id === "ppModal") closeModal(pp); });
   }
 }
 
@@ -122,12 +266,26 @@ function render() {
     const team = (r.team || "").trim();
     const content = (r.content || "").replace(/\s+/g, " ").trim();
     const card = el("div", "card");
+    // C1: 키보드 접근 — 버튼 의미 부여 + Enter/Space 동작 + 접근명
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-label", `${r.name || "사업"} 수정`);
     card.innerHTML = `<div class="card-main">
         <div class="card-title">📂 ${esc(r.name)}</div>
         <div class="card-desc">${esc(content.slice(0, 90)) || "—"}</div>
       </div>
       <span class="badge ${team ? "" : "warn"}">${team ? esc(team) : "담당팀 확인 필요"}</span>`;
-    card.onclick = () => openEdit(r);
+    // 담당팀 색 구분: 팀명별 결정적 색을 배지에 적용(시민앱과 동일). null이면 중립 유지.
+    const tc = teamColor(team);
+    if (tc) {
+      const bdg = card.querySelector(".badge");
+      if (bdg) { bdg.style.background = tc.bg; bdg.style.color = tc.fg; }
+    }
+    const openIt = () => openEdit(r);
+    card.onclick = openIt;
+    card.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openIt(); }
+    });
     list.appendChild(card);
   });
   renderPager(rows.length, pages);
@@ -174,9 +332,11 @@ function openEdit(r) {
   let html = "";
   FIELDS.forEach(([label, key, multi]) => {
     const v = r ? (r[key] || "") : "";
-    html += `<div class="field"><div class="field-label">${label}</div>` +
-      (multi ? `<textarea class="form-textarea" data-k="${key}">${esc(v)}</textarea>`
-             : `<input class="form-input" data-k="${key}" value="${esc(v)}">`) + `</div>`;
+    // C8: field-label → <label for> 로 input/textarea id와 연결
+    const fid = `f_${key}`;
+    html += `<div class="field"><label class="field-label" for="${fid}">${label}</label>` +
+      (multi ? `<textarea id="${fid}" class="form-textarea" data-k="${key}">${esc(v)}</textarea>`
+             : `<input id="${fid}" class="form-input" data-k="${key}" value="${esc(v)}">`) + `</div>`;
   });
   html += `<div class="modal-actions"><button id="mSave" class="top-btn solid">💾 저장</button>` +
     (r ? `<button id="mDel" class="top-btn danger">🗑 삭제</button>` : ``) + `</div>`;
@@ -184,33 +344,36 @@ function openEdit(r) {
   $("#mSave").onclick = async () => {
     const obj = {};
     document.querySelectorAll("#mBody [data-k]").forEach((e) => { obj[e.dataset.k] = e.value; });
-    if (!(obj.name || "").trim()) { alert("사업명을 입력하세요."); return; }
+    if (!(obj.name || "").trim()) { announce("사업명을 입력하세요."); alert("사업명을 입력하세요."); const nm = $("#f_name"); if (nm) nm.focus(); return; }
     if (r) {
       // 낙관적 잠금: 내가 연 이후 다른 담당자가 먼저 수정했는지 updated_at으로 확인
       const { data, error } = await sb.from("benefits")
         .update(obj).eq("id", r.id).eq("updated_at", r.updated_at).select();
-      if (error) { alert(writeErrMsg(error, "저장")); return; }
+      if (error) { announce(writeErrMsg(error, "저장")); alert(writeErrMsg(error, "저장")); return; }
       if (!data || !data.length) {
+        announce("다른 담당자가 먼저 수정했습니다. 새로고침합니다.");
         alert("⚠️ 다른 담당자가 먼저 이 사업을 수정했습니다.\n최신 내용으로 새로고침하니, 다시 확인 후 수정해 주세요.");
-        $("#modal").classList.add("hidden");
+        closeModal($("#modal"));
         await loadBenefits();
         return;
       }
     } else {
       const { error } = await sb.from("benefits").insert(obj);
-      if (error) { alert(writeErrMsg(error, "저장")); return; }
+      if (error) { announce(writeErrMsg(error, "저장")); alert(writeErrMsg(error, "저장")); return; }
     }
-    $("#modal").classList.add("hidden");
+    closeModal($("#modal"));
+    announce("저장되었습니다.");
     await loadBenefits();
   };
   if (r) $("#mDel").onclick = async () => {
     if (!confirm("이 사업을 삭제하시겠습니까?")) return;
     const res = await sb.from("benefits").delete().eq("id", r.id);
-    if (res.error) { alert(writeErrMsg(res.error, "삭제")); return; }
-    $("#modal").classList.add("hidden");
+    if (res.error) { announce(writeErrMsg(res.error, "삭제")); alert(writeErrMsg(res.error, "삭제")); return; }
+    closeModal($("#modal"));
+    announce("삭제되었습니다.");
     await loadBenefits();
   };
-  $("#modal").classList.remove("hidden");
+  openModal($("#modal"));
 }
 
 /* ============================================================
@@ -229,9 +392,9 @@ function bindProposalsUI() {
   $("#tabProposals").onclick = () => switchTab("proposals");
   $("#pSearch").addEventListener("input", debounce(() => { pPage = 0; renderProposals(); }, 300));
   $("#pSortSel").addEventListener("change", () => { pSort = $("#pSortSel").value; renderProposals(); });
-  $("#pmClose").onclick = () => $("#pModal").classList.add("hidden");
-  $("#pModal").addEventListener("click", (e) => { if (e.target.id === "pModal") $("#pModal").classList.add("hidden"); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#pModal").classList.add("hidden"); });
+  $("#pmClose").onclick = () => closeModal($("#pModal"));
+  $("#pModal").addEventListener("click", (e) => { if (e.target.id === "pModal") closeModal($("#pModal")); });
+  // Esc는 공통 트랩(_trapKeydown)에서 처리 — 중복 등록 제거
 }
 
 function switchTab(which) {
@@ -331,21 +494,37 @@ function renderProposals() {
     const st = r.status || "접수";
     const reps = P_REPORTS[r.id] || 0;
     const card = el("div", "pcard" + (r.is_hidden ? " hidden-row" : ""));
+    // C1: 키보드 접근 — 버튼 의미 + Enter/Space + 상태 포함 접근명
+    // C9: 이모지 단독 의미(🚩신고/🚫블라인드 등)를 접근명 텍스트로 보강
+    const aLabel = [
+      `상태 ${st}`,
+      r.category ? `분야 ${r.category}` : "",
+      r.is_hidden ? "블라인드 처리됨" : "",
+      reps ? `신고 ${reps}건` : "",
+      `제목 ${r.title || ""}`,
+    ].filter(Boolean).join(", ") + " — 검토 열기";
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-label", aLabel);
     card.innerHTML = `<div class="pcard-main">
         <div class="pcard-top">
           <span class="st-badge st-${esc(st)}">${esc(st)}</span>
           ${r.category ? `<span class="cat-tag">${esc(r.category)}</span>` : ""}
-          ${r.is_hidden ? `<span class="hide-tag">🚫 블라인드</span>` : ""}
-          ${reps ? `<span class="report-tag">🚩 신고 ${reps}</span>` : ""}
+          ${r.is_hidden ? `<span class="hide-tag"><span aria-hidden="true">🚫</span> 블라인드</span>` : ""}
+          ${reps ? `<span class="report-tag"><span aria-hidden="true">🚩</span> 신고 ${reps}</span>` : ""}
         </div>
         <div class="pcard-title">${esc(r.title)}</div>
         <div class="pcard-meta">
-          <span class="like-tag">👍 ${r.like_count || 0}</span>
-          <span>🙍 ${esc(r.author_nick || "익명")}${r.region ? " · " + esc(r.region) : ""}</span>
-          <span>🗓 ${esc(fmtDate(r.created_at))}</span>
+          <span class="like-tag"><span aria-hidden="true">👍</span> 공감 ${r.like_count || 0}</span>
+          <span><span aria-hidden="true">🙍</span> ${esc(r.author_nick || "익명")}${r.region ? " · " + esc(r.region) : ""}</span>
+          <span><span aria-hidden="true">🗓</span> ${esc(fmtDate(r.created_at))}</span>
         </div>
       </div>`;
-    card.onclick = () => openProposal(r);
+    const openIt = () => openProposal(r);
+    card.onclick = openIt;
+    card.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openIt(); }
+    });
     list.appendChild(card);
   });
   renderPPager(rows.length, pages);
@@ -374,25 +553,25 @@ async function openProposal(r) {
   const optHtml = P_STATUSES.map((s) => `<option value="${s}"${s === st ? " selected" : ""}>${s}</option>`).join("");
 
   $("#pmBody").innerHTML = `
-    <div class="pcard-top" style="margin-bottom:10px;">
+    <div class="pcard-top mb-10">
       <span class="st-badge st-${esc(st)}">${esc(st)}</span>
       ${r.category ? `<span class="cat-tag">${esc(r.category)}</span>` : ""}
-      ${r.is_hidden ? `<span class="hide-tag">🚫 블라인드</span>` : ""}
+      ${r.is_hidden ? `<span class="hide-tag"><span aria-hidden="true">🚫</span> 블라인드</span>` : ""}
     </div>
     <div class="field"><div class="field-label">제목</div><div class="field-value">${esc(r.title)}</div></div>
-    <div class="field"><div class="field-label">작성</div><div class="field-value">🙍 ${esc(r.author_nick || "익명")}${r.region ? " · " + esc(r.region) : ""} · 🗓 ${esc(fmtDate(r.created_at))} · 👍 ${r.like_count || 0}</div></div>
+    <div class="field"><div class="field-label">작성</div><div class="field-value"><span aria-hidden="true">🙍</span> ${esc(r.author_nick || "익명")}${r.region ? " · " + esc(r.region) : ""} · <span aria-hidden="true">🗓</span> ${esc(fmtDate(r.created_at))} · <span aria-hidden="true">👍</span> 공감 ${r.like_count || 0}</div></div>
     <div class="field"><div class="field-label">내용</div><div class="pm-body-text">${esc(r.body || "")}</div></div>
-    ${reps ? `<div class="field"><div class="field-label">🚩 신고 ${reps}건</div><div id="pmReports" class="pm-reports">불러오는 중…</div></div>` : ""}
+    ${reps ? `<div class="field"><div class="field-label"><span aria-hidden="true">🚩</span> 신고 ${reps}건</div><div id="pmReports" class="pm-reports" role="status" aria-live="polite">불러오는 중…</div></div>` : ""}
     <div class="field">
-      <div class="field-label">진행 상태 변경</div>
+      <label class="field-label" for="pmStatus">진행 상태 변경</label>
       <select id="pmStatus" class="st-select">${optHtml}</select>
     </div>
     <div class="field">
-      <div class="field-label">💬 담당부서 답변 / 사유 <span style="color:#C0392B;font-weight:700;">(반영·불채택 전환 시 필수)</span></div>
+      <label class="field-label" for="pmReply"><span aria-hidden="true">💬</span> 담당부서 답변 / 사유 <span class="req-note">(반영·불채택 전환 시 필수)</span></label>
       <textarea id="pmReply" class="form-textarea" placeholder="시민에게 공개되는 공식 답변·사유를 입력하세요.">${esc(r.admin_reply || "")}</textarea>
     </div>
     <div class="field">
-      <label class="toggle-line"><input type="checkbox" id="pmHidden"${r.is_hidden ? " checked" : ""}> 🚫 블라인드(부적절 글 숨김) — 체크 시 시민에게 안 보임</label>
+      <label class="toggle-line"><input type="checkbox" id="pmHidden"${r.is_hidden ? " checked" : ""}> <span aria-hidden="true">🚫</span> 블라인드(부적절 글 숨김) — 체크 시 시민에게 안 보임</label>
     </div>
     <div class="modal-actions">
       <button id="pmSave" class="nav-btn">💾 저장</button>
@@ -406,7 +585,8 @@ async function openProposal(r) {
     const isHidden = $("#pmHidden").checked;
     // 반영·불채택 전환 시 답변 필수
     if (REPLY_REQUIRED.has(newStatus) && !reply) {
-      alert(`'${newStatus}' 상태로 변경하려면 담당부서 답변/사유를 반드시 입력해야 합니다.`);
+      const m = `'${newStatus}' 상태로 변경하려면 담당부서 답변/사유를 반드시 입력해야 합니다.`;
+      announce(m); alert(m);
       $("#pmReply").focus();
       return;
     }
@@ -417,12 +597,13 @@ async function openProposal(r) {
       updated_at: new Date().toISOString(),
     };
     const { error } = await sb.from("proposals").update(patch).eq("id", r.id);
-    if (error) { alert(writeErrMsg(error, "저장")); return; }
-    $("#pModal").classList.add("hidden");
+    if (error) { announce(writeErrMsg(error, "저장")); alert(writeErrMsg(error, "저장")); return; }
+    closeModal($("#pModal"));
+    announce("정책제안이 저장되었습니다.");
     await loadProposals();
   };
 
-  $("#pModal").classList.remove("hidden");
+  openModal($("#pModal"));
 }
 
 async function loadReportDetail(proposalId) {
@@ -433,6 +614,6 @@ async function loadReportDetail(proposalId) {
   if (error) { box.textContent = "신고 내역 조회 권한이 없습니다."; return; }
   if (!data || !data.length) { box.textContent = "신고 내역 없음"; return; }
   box.innerHTML = data.map((x) =>
-    `<div class="pm-rep-item">• ${esc(x.reason || "(사유 없음)")} <span style="opacity:.6;">(${esc(fmtDate(x.created_at))})</span></div>`
+    `<div class="pm-rep-item">• ${esc(x.reason || "(사유 없음)")} <span class="muted-date">(${esc(fmtDate(x.created_at))})</span></div>`
   ).join("");
 }

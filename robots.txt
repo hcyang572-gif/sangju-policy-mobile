@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+
+Sitemap: https://hcyang572-gif.github.io/sangju-policy-mobile/sitemap.xml

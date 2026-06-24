@@ -165,7 +165,9 @@
     }
     box.innerHTML = pstate.items.map((p) => {
       const b = STATUS_BADGE[p.status] || STATUS_BADGE["접수"];
-      return `<div class="card pp-card" data-id="${esc(p.id)}">
+      // 키보드 접근(KWCAG 2.2): role=button + tabindex 로 Tab 이동·Enter/Space 실행 가능
+      return `<div class="card pp-card" data-id="${esc(p.id)}" role="button" tabindex="0"
+        aria-label="제안 ${esc(p.title)} 상세 보기">
         <div class="pp-card-top">
           <span class="pp-badge ${b.cls}">${esc(b.label)}</span>
           ${p.category ? `<span class="pp-cat">${esc(p.category)}</span>` : ""}
@@ -180,7 +182,11 @@
     $("ppListMeta").textContent = `${pstate.items.length}개 표시`;
     $("ppMore").hidden = pstate.end;
     box.querySelectorAll(".pp-card").forEach((el) => {
-      el.addEventListener("click", () => openDetail(el.dataset.id));
+      const open = () => openDetail(el.dataset.id);
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      });
     });
   }
 
@@ -231,7 +237,7 @@
       <div class="pd-body">${esc(p.body)}</div>
 
       <div class="pd-like-box">
-        <div class="pd-like-count">👍 공감 <b id="pdLikeCount">${Number(p.like_count) || 0}</b></div>
+        <div class="pd-like-count" aria-live="polite">👍 공감 <b id="pdLikeCount">${Number(p.like_count) || 0}</b></div>
         <button id="pdLikeBtn" class="big-btn full ${liked ? "pp-liked" : "primary"}">${liked ? "👍 공감함 (취소)" : "👍 공감하기"}</button>
       </div>
 
@@ -242,7 +248,7 @@
 
       <div class="pd-actions">
         <button id="pdEditDel" class="big-btn full">본인 글 수정/삭제 (PIN)</button>
-        <button id="pdReport" class="big-btn full pp-ghost">🚩 신고</button>
+        <button id="pdReport" class="big-btn full pp-ghost" aria-label="이 제안 신고하기"><span aria-hidden="true">🚩</span> 신고</button>
       </div>
       <p class="apply-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
     `;
@@ -356,8 +362,13 @@
     pinTarget = p;
     $("pinInput").value = "";
     $("pinModal").hidden = false;
+    if (window.ModalA11y) window.ModalA11y.open("pinModal", closePinModal);  // 포커스 트랩·Esc·복귀
   }
-  function closePinModal() { $("pinModal").hidden = true; pinTarget = null; }
+  function closePinModal() {
+    $("pinModal").hidden = true;
+    pinTarget = null;
+    if (window.ModalA11y) window.ModalA11y.close("pinModal");
+  }
 
   async function doPinDelete() {
     const pin = $("pinInput").value.trim();
@@ -451,8 +462,13 @@
     $("reportReason").value = "욕설·비방";
     $("reportMemo").value = "";
     $("reportModal").hidden = false;
+    if (window.ModalA11y) window.ModalA11y.open("reportModal", closeReportModal);  // 포커스 트랩·Esc·복귀
   }
-  function closeReportModal() { $("reportModal").hidden = true; reportTarget = null; }
+  function closeReportModal() {
+    $("reportModal").hidden = true;
+    reportTarget = null;
+    if (window.ModalA11y) window.ModalA11y.close("reportModal");
+  }
 
   async function doReport() {
     const reason = $("reportReason").value + ($("reportMemo").value.trim() ? (" - " + $("reportMemo").value.trim()) : "");

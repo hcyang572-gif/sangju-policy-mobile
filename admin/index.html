@@ -19,6 +19,23 @@
 </head>
 <body>
 
+<!-- 화면 읽기(스크린리더) 전용 실시간 알림 영역: 저장·오류·상태 -->
+<div id="liveStatus" class="sr-only" role="status" aria-live="polite"></div>
+
+<!-- 인앱 브라우저(카톡·네이버 등) 안내: 진짜 브라우저로 열어야 PWA 설치·정상 사용 가능 -->
+<!-- 로그인·앱 화면 위 어디서나 보이도록 body 최상단에 1개만 배치 -->
+<div id="inappBanner" class="inapp-banner hidden" role="region" aria-label="브라우저 안내">
+  <span class="inapp-emoji" aria-hidden="true">📲</span>
+  <div class="inapp-body">
+    <div id="inappText" class="inapp-text"></div>
+    <div class="inapp-actions">
+      <button id="inappOpen" class="inapp-btn" type="button" aria-label="크롬 브라우저로 열기" hidden>크롬으로 열기</button>
+      <button id="inappCopy" class="inapp-btn ghost" type="button" aria-label="현재 주소 복사" hidden>주소 복사</button>
+    </div>
+  </div>
+  <button id="inappClose" class="inapp-close" type="button" aria-label="안내 닫기">✕</button>
+</div>
+
 <!-- 로그인 -->
 <div id="login" class="login-screen">
   <div class="login-card">
@@ -28,7 +45,7 @@
     <input id="email" type="email" class="login-input" placeholder="이메일" autocomplete="username">
     <input id="pw" type="password" class="login-input" placeholder="비밀번호" autocomplete="current-password">
     <button id="loginBtn" class="login-btn">🔐 로그인</button>
-    <p id="loginErr" class="login-err"></p>
+    <p id="loginErr" class="login-err" role="alert" aria-live="assertive"></p>
     <button id="guestBtn" class="guest-btn" type="button">🔓 로그인 없이 입장<br>(임시 공개 · 추후 로그인 적용 예정)</button>
   </div>
 </div>
@@ -78,7 +95,7 @@
   <main id="secProposals" class="content hidden" role="tabpanel" aria-label="정책제안 관리">
     <div class="search-hint">🗳 시민 정책제안을 검토·답변·관리하세요. 숨김(블라인드) 글도 공무원에게는 보입니다. (변경은 실시간 반영)</div>
     <div id="pStatusChips" class="chips wrap" role="group" aria-label="상태 필터"></div>
-    <div id="pCatChips" class="chips wrap" style="margin-top:8px;" role="group" aria-label="분야 필터"></div>
+    <div id="pCatChips" class="chips wrap mt-8" role="group" aria-label="분야 필터"></div>
     <div class="toolbar">
       <label for="pSearch" class="sr-only">제목 · 내용 · 닉네임 검색</label>
       <input id="pSearch" class="search-input wide" type="search" placeholder="🔎 제목 · 내용 · 닉네임 검색" aria-label="제목 · 내용 · 닉네임 검색">
@@ -95,7 +112,7 @@
 
   <footer class="appfoot" role="contentinfo">
     <img src="assets/gotgam.png" class="foot-gotgam" alt="상주 곶감">
-    <span>상주 곶감의 고장 · 상주시 정책 플랫폼</span>
+    <span>상주시 정책 플랫폼</span>
     <button id="btnPrivacy" class="foot-link" type="button">개인정보 처리방침</button>
   </footer>
 </div>

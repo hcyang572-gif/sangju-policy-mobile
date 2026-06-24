@@ -10,6 +10,29 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// ---------- 담당팀별 색 구분(공무원앱과 동일 매핑) ----------
+// 팀명 문자열 → 결정적 색(연한 배경+진한 글자, 대비 4.5:1 이상). 같은 팀=같은 색.
+// ★ 공무원앱도 동일 함수를 사용하므로 임의 수정 금지(두 앱 색 일치 보장).
+const TEAM_PALETTE = [
+  { bg: '#E8F0FE', fg: '#1A4480' }, { bg: '#E6F4EA', fg: '#1E6B33' }, { bg: '#FCE8E6', fg: '#A52714' },
+  { bg: '#FEF7E0', fg: '#7A5900' }, { bg: '#F3E8FD', fg: '#6A1B9A' }, { bg: '#E0F7FA', fg: '#00695C' },
+  { bg: '#FCE4EC', fg: '#AD1457' }, { bg: '#EFEBE9', fg: '#4E342E' }, { bg: '#E8EAF6', fg: '#283593' },
+  { bg: '#F1F8E9', fg: '#33691E' }, { bg: '#FFF3E0', fg: '#B33C00' }, { bg: '#ECEFF1', fg: '#37474F' },
+  { bg: '#E0F2F1', fg: '#00796B' }, { bg: '#FFEBEE', fg: '#C2185B' }
+];
+function teamColor(name) {
+  const s = (name || '').trim();
+  if (!s || s === '담당팀 확인 필요' || s === '-') return null; // 미지정은 색 없음(중립)
+  let h = 0; for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+  return TEAM_PALETTE[h % TEAM_PALETTE.length];
+}
+// 팀색을 요소에 입힌다(미지정이면 기존 중립 스타일 유지). 동적값이라 element.style로 주입.
+function applyTeamColor(el, name) {
+  if (!el) return;
+  const c = teamColor(name);
+  if (c) { el.style.background = c.bg; el.style.color = c.fg; }
+}
+
 const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done",
   "propose", "pdetail", "pwrite", "privacy"];
 
@@ -89,7 +112,11 @@ function initA2HS() {
   // 인앱 브라우저 배너가 떠 있으면(겹침 방지) 숨긴다.
   $("a2hsTip").hidden = dismissed || isStandalone() || !$("inappBanner").hidden;
 }
-function openInstallGuide() { $("installModal").hidden = false; }
+function closeInstallGuide() { $("installModal").hidden = true; window.ModalA11y && ModalA11y.close("installModal"); }
+function openInstallGuide() {
+  $("installModal").hidden = false;
+  window.ModalA11y && ModalA11y.open("installModal", closeInstallGuide);
+}
 
 // ---------- 인앱 브라우저(카톡·네이버 등) 대응 ----------
 const INAPP_DISMISS_KEY = "sangju_inapp_dismissed";
@@ -277,14 +304,22 @@ function renderList() {
   }
   box.innerHTML = results.map((p) => {
     const idx = DATA.programs.indexOf(p);
-    return `<div class="card" data-idx="${idx}">
+    const teamName = (p.팀명 || "").trim() || "담당팀 확인 필요";
+    // 키보드 접근(KWCAG 2.2): role=button + tabindex 로 Tab 이동·Enter/Space 실행 가능
+    return `<div class="card" data-idx="${idx}" role="button" tabindex="0"
+      aria-label="${esc(p.사업명)} 상세 보기">
       <h3>${esc(p.사업명)}</h3>
       <p>${esc(p.내용 || p.대상자상세기준)}</p>
-      <span class="team">${esc((p.팀명 || "").trim() || "담당팀 확인 필요")}</span>
+      <span class="team" data-team="${esc(teamName)}">${esc(teamName)}</span>
     </div>`;
   }).join("");
   box.querySelectorAll(".card").forEach((el) => {
-    el.addEventListener("click", () => openDetail(parseInt(el.dataset.idx, 10)));
+    applyTeamColor(el.querySelector(".team"), el.querySelector(".team").dataset.team);
+    const open = () => openDetail(parseInt(el.dataset.idx, 10));
+    el.addEventListener("click", open);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
   });
 }
 
@@ -297,14 +332,16 @@ function openDetail(idx) {
   const block = (k, v) => v ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : "";
   const blockHtml = (k, html) => html ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${html}</div></div>` : "";
   const tags = (p.categories || []).map((c) => `<span class="t">${esc(c)}</span>`).join("");
-  // 담당: 팀명이 없으면 '담당팀 확인 필요'
+  // 담당: 팀명이 없으면 '담당팀 확인 필요'. 팀명은 팀별 색 배지로 표시(색은 렌더 후 주입).
   const team = (p.팀명 || "").trim() || "담당팀 확인 필요";
-  const charge = [p.기관명, team].filter(Boolean).join(" · ");
+  const org = (p.기관명 || "").trim();
+  const teamBadge = `<span class="team detail-team" data-team="${esc(team)}">${esc(team)}</span>`;
+  const chargeHtml = (org ? esc(org) + " · " : "") + teamBadge;
   // 연락처: 전화 걸기 링크
   const tel = (p.연락처 || "").trim();
   const telDigits = tel.replace(/[^0-9+]/g, "");
   const telHtml = tel
-    ? `<a class="tel-link" href="tel:${esc(telDigits)}">${esc(tel)} <span class="tel-ico">📞</span></a>`
+    ? `<a class="tel-link" href="tel:${esc(telDigits)}" aria-label="${esc(tel)} 전화 걸기"><span aria-hidden="true">📞</span> ${esc(tel)}</a>`
     : "";
   $("detailContent").innerHTML = `
     <h2>${esc(p.사업명)}</h2>
@@ -313,12 +350,14 @@ function openDetail(idx) {
     ${block("👥 지원 대상", p.대상자상세기준)}
     ${block("📝 이용 방법", p.이용방법)}
     ${block("📎 필요 서류", p.필요서류)}
-    ${block("🏢 담당", charge)}
+    ${blockHtml("🏢 담당", chargeHtml)}
     ${blockHtml("☎ 연락처", telHtml)}
     ${block("📅 종료일", p.종료일)}
     <button class="big-btn primary full" id="detailApply">✋ 신청하기</button>
   `;
   showView("detail");
+  const teamEl = $("detailContent").querySelector(".detail-team");
+  if (teamEl) applyTeamColor(teamEl, teamEl.dataset.team);
   $("detailApply").addEventListener("click", () => openApply(idx));
 }
 
@@ -466,6 +505,67 @@ function showDone(p) {
   showView("done", false);
 }
 
+// ---------- 모달 접근성: 포커스 트랩 + Esc 닫기 + 호출 버튼으로 복귀 (KWCAG 2.2) ----------
+// app.js·proposals.js 두 곳에서 공용으로 쓰도록 전역 노출(window.ModalA11y).
+const ModalA11y = (function () {
+  const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]),' +
+    ' input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  // 모달 id → {keyHandler, opener} 보관(중복 리스너 누적 방지·복귀 대상 기억)
+  const active = {};
+
+  function focusables(modal) {
+    return Array.prototype.filter.call(
+      modal.querySelectorAll(FOCUSABLE),
+      (el) => el.offsetParent !== null || el === document.activeElement
+    );
+  }
+
+  // 모달 열기: 첫 요소로 포커스 이동 + Tab 순환 + Esc 닫기 바인딩
+  // close: 닫기 동작(해당 모달의 닫기 함수)
+  function open(modalId, close) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    if (active[modalId]) teardown(modalId);   // 안전: 이전 바인딩 제거
+    const opener = document.activeElement;     // 닫을 때 포커스 돌려줄 호출 버튼
+
+    const keyHandler = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close(); return; }
+      if (e.key !== "Tab") return;
+      const items = focusables(modal);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", keyHandler, true);
+    active[modalId] = { keyHandler, opener };
+
+    // 첫 포커스 이동(렌더 직후)
+    const items = focusables(modal);
+    if (items.length) items[0].focus();
+  }
+
+  function teardown(modalId) {
+    const rec = active[modalId];
+    if (!rec) return;
+    document.removeEventListener("keydown", rec.keyHandler, true);
+    delete active[modalId];
+    return rec.opener;
+  }
+
+  // 모달 닫기 후 호출: 리스너 제거 + 호출 버튼으로 포커스 복귀
+  function close(modalId) {
+    const opener = teardown(modalId);
+    if (opener && typeof opener.focus === "function") {
+      try { opener.focus(); } catch (e) {}
+    }
+  }
+
+  return { open, close };
+})();
+window.ModalA11y = ModalA11y;
+
 // ---------- 이벤트 ----------
 function bindEvents() {
   $("backBtn").addEventListener("click", goBack);
@@ -516,11 +616,12 @@ function bindEvents() {
     openList({ title: "새로 추가된 사업", onlyNames: newProgramNames });
   });
   $("newBannerClose").addEventListener("click", () => { $("newBanner").hidden = true; });
-  // 팀원 소개 모달
-  $("teamBtn").addEventListener("click", () => { $("teamModal").hidden = false; });
-  $("teamClose").addEventListener("click", () => { $("teamModal").hidden = true; });
+  // 팀원 소개 모달 (포커스 트랩·Esc·복귀 적용)
+  const closeTeam = () => { $("teamModal").hidden = true; ModalA11y.close("teamModal"); };
+  $("teamBtn").addEventListener("click", () => { $("teamModal").hidden = false; ModalA11y.open("teamModal", closeTeam); });
+  $("teamClose").addEventListener("click", closeTeam);
   $("teamModal").addEventListener("click", (e) => {
-    if (e.target.id === "teamModal") $("teamModal").hidden = true;  // 배경 클릭 닫기
+    if (e.target.id === "teamModal") closeTeam();  // 배경 클릭 닫기
   });
   // '홈 화면에 추가' 안내 (홈 띠 + 푸터 링크 → 동일 모달)
   $("a2hsTip").addEventListener("click", (e) => {
@@ -545,9 +646,9 @@ function bindEvents() {
     else { copyCurrentUrl(); }
   });
   $("installLink").addEventListener("click", openInstallGuide);   // 푸터: 언제든 다시 보기
-  $("installClose").addEventListener("click", () => { $("installModal").hidden = true; });
+  $("installClose").addEventListener("click", closeInstallGuide);
   $("installModal").addEventListener("click", (e) => {
-    if (e.target.id === "installModal") $("installModal").hidden = true;  // 배경 클릭 닫기
+    if (e.target.id === "installModal") closeInstallGuide();  // 배경 클릭 닫기
   });
 }
 
