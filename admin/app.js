@@ -4,6 +4,7 @@ const $ = (s) => document.querySelector(s);
 
 let ALL = [], CATS = [], SELCATS = new Set(), sortKey = "seq", page = 0;
 const PAGE = 12;
+let IS_GUEST = false; // 임시 공개(로그인 없이 입장) 여부
 
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
@@ -19,6 +20,10 @@ $("#loginBtn").onclick = login;
 $("#pw").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
 $("#email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#pw").focus(); });
 
+// 임시 공개: 로그인 없이 입장(게스트). 정식 로그인은 그대로 유지.
+$("#guestBtn").onclick = () => { IS_GUEST = true; showApp(); };
+$("#guestBannerClose").onclick = () => $("#guestBanner").classList.add("hidden");
+
 async function login() {
   const email = $("#email").value.trim(), password = $("#pw").value;
   if (!email || !password) { $("#loginErr").textContent = "이메일과 비밀번호를 입력하세요."; return; }
@@ -31,6 +36,11 @@ async function login() {
 async function showApp() {
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
+  // 게스트(임시 공개)면 안내 배너 표시 + 로그아웃 버튼 문구를 자연스럽게
+  if (IS_GUEST) {
+    $("#guestBanner").classList.remove("hidden");
+    $("#btnLogout").textContent = "로그인 화면으로";
+  }
   bindUI();
   await loadBenefits();
   subscribeRealtime();
@@ -40,7 +50,11 @@ function bindUI() {
   $("#search").addEventListener("input", debounce(() => { page = 0; render(); }, 300));
   $("#sortSel").addEventListener("change", () => { sortKey = $("#sortSel").value; render(); });
   $("#btnAdd").onclick = () => openEdit(null);
-  $("#btnLogout").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  $("#btnLogout").onclick = async () => {
+    // 게스트면 세션이 없으므로 그냥 로그인 화면으로 복귀
+    if (!IS_GUEST) { try { await sb.auth.signOut(); } catch (e) {} }
+    location.reload();
+  };
   $("#mClose").onclick = () => $("#modal").classList.add("hidden");
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").classList.add("hidden"); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#modal").classList.add("hidden"); });
@@ -125,6 +139,24 @@ const FIELDS = [
   ["담당자 이메일", "manager_email", false], ["지원 대상", "target", true],
   ["사업 내용", "content", true], ["이용 방법", "method", true], ["필요 서류", "documents", true],
 ];
+// 저장/삭제 실패 메시지: RLS(권한) 거부면 임시공개 안내로 친절하게.
+function writeErrMsg(error, verb) {
+  const msg = (error && error.message ? error.message : "").toLowerCase();
+  const code = error && error.code ? String(error.code) : "";
+  const isPerm =
+    code === "42501" || // insufficient_privilege (Postgres)
+    msg.includes("row-level security") ||
+    msg.includes("rls") ||
+    msg.includes("permission") ||
+    msg.includes("policy") ||
+    msg.includes("not authorized") ||
+    msg.includes("violates");
+  if (isPerm) {
+    return "⚠️ 저장 권한이 없습니다.\n아직 임시공개 권한 적용 전이거나 로그인이 필요합니다.\n(관리자에게 권한 개방을 요청하거나 로그인 후 다시 시도해 주세요.)";
+  }
+  return `${verb} 실패: ` + (error && error.message ? error.message : "알 수 없는 오류");
+}
+
 function openEdit(r) {
   $("#mTitle").textContent = r ? "✏ 사업 수정" : "➕ 새 사업 추가";
   let html = "";
@@ -145,7 +177,7 @@ function openEdit(r) {
       // 낙관적 잠금: 내가 연 이후 다른 담당자가 먼저 수정했는지 updated_at으로 확인
       const { data, error } = await sb.from("benefits")
         .update(obj).eq("id", r.id).eq("updated_at", r.updated_at).select();
-      if (error) { alert("저장 실패: " + error.message); return; }
+      if (error) { alert(writeErrMsg(error, "저장")); return; }
       if (!data || !data.length) {
         alert("⚠️ 다른 담당자가 먼저 이 사업을 수정했습니다.\n최신 내용으로 새로고침하니, 다시 확인 후 수정해 주세요.");
         $("#modal").classList.add("hidden");
@@ -154,7 +186,7 @@ function openEdit(r) {
       }
     } else {
       const { error } = await sb.from("benefits").insert(obj);
-      if (error) { alert("저장 실패: " + error.message); return; }
+      if (error) { alert(writeErrMsg(error, "저장")); return; }
     }
     $("#modal").classList.add("hidden");
     await loadBenefits();
@@ -162,7 +194,7 @@ function openEdit(r) {
   if (r) $("#mDel").onclick = async () => {
     if (!confirm("이 사업을 삭제하시겠습니까?")) return;
     const res = await sb.from("benefits").delete().eq("id", r.id);
-    if (res.error) { alert("삭제 실패: " + res.error.message); return; }
+    if (res.error) { alert(writeErrMsg(res.error, "삭제")); return; }
     $("#modal").classList.add("hidden");
     await loadBenefits();
   };

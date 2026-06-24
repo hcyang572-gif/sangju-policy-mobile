@@ -2,7 +2,7 @@
  * 경로는 모두 상대경로(self.registration.scope 기준)로 다뤄
  * GitHub Pages 하위경로(/sangju-policy-mobile/)에서도 깨지지 않게 함.
  * 캐시 버전을 올리려면 아래 CACHE 값을 바꾸면 됨(예: sangju-v2). */
-const CACHE = "sangju-v1";
+const CACHE = "sangju-v2";
 
 // scope(예: https://hcyang572-gif.github.io/sangju-policy-mobile/)를 기준으로
 // 절대 URL을 만들어 둔다. (서브경로/루트 모두 안전)
@@ -20,6 +20,7 @@ const PRECACHE = [
   "icon-192.png",
   "icon-512.png",
   "qr.png",
+  "assets/sangsang1.png",
   "assets/gotgam.png",
 ];
 
@@ -82,6 +83,10 @@ self.addEventListener("fetch", (event) => {
 
   // 동일 출처가 아니면(외부 API·CDN 등) 그대로 네트워크로 통과
   if (url.origin !== self.location.origin) return;
+
+  // 공무원앱(/admin/) 경로는 시민 서비스워커가 가로채지 않고 통과.
+  // → 공무원앱은 자체 서비스워커(sangju-admin-*)가 제어한다(두 앱 완전 분리).
+  if (url.pathname.includes("/admin/")) return;
 
   // 데이터는 항상 최신을 우선 — network-first
   if (url.pathname.endsWith("/data.json") || url.pathname.endsWith("data.json")) {

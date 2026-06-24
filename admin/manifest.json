@@ -1,0 +1,33 @@
+{
+  "id": "/sangju-policy-mobile/admin/",
+  "name": "상주정책(공무원용)",
+  "short_name": "상주정책(공무원용)",
+  "description": "상주시 지원사업을 공무원이 관리(추가·수정·삭제)하는 관리자용 앱",
+  "lang": "ko",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1B2A4A",
+  "background_color": "#E1E9F2",
+  "icons": [
+    {
+      "src": "assets/icon-admin-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-admin-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-admin-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

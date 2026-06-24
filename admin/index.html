@@ -3,8 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#E66B3A">
-<title>상주시 정책 플랫폼 — 클라우드</title>
+<meta name="theme-color" content="#1B2A4A">
+<title>상주정책(공무원용)</title>
+
+<!-- PWA: 홈 화면에 별도 앱으로 설치 (시민앱과 분리된 정체성) -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="assets/icon-admin-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="상주정책(공무원용)">
+<meta name="application-name" content="상주정책(공무원용)">
+
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,20 +22,25 @@
 <!-- 로그인 -->
 <div id="login" class="login-screen">
   <div class="login-card">
-    <img src="assets/gotgam.png" class="login-logo" alt="곶감">
+    <img src="assets/sangsang1.png" class="login-logo" alt="상상주도">
     <h1 class="login-title">상주시 정책 플랫폼</h1>
-    <p class="login-sub">공무원 관리자 로그인 (클라우드)</p>
+    <p class="login-sub"><img src="assets/gotgam.png" class="login-gotgam" alt="상주 곶감">공무원 관리자 로그인 (클라우드)</p>
     <input id="email" type="email" class="login-input" placeholder="이메일" autocomplete="username">
     <input id="pw" type="password" class="login-input" placeholder="비밀번호" autocomplete="current-password">
     <button id="loginBtn" class="login-btn">🔐 로그인</button>
     <p id="loginErr" class="login-err"></p>
+    <button id="guestBtn" class="guest-btn" type="button">🔓 로그인 없이 입장<br>(임시 공개 · 추후 로그인 적용 예정)</button>
   </div>
 </div>
 
 <!-- 앱 -->
 <div id="app" class="app hidden">
+  <div id="guestBanner" class="guest-banner hidden">
+    <span class="gb-text">⚠️ 임시 공개 모드 — 로그인 없이 접속 중입니다. 정식 운영 시 로그인 적용 예정.</span>
+    <button id="guestBannerClose" class="gb-close" type="button" aria-label="닫기">✕</button>
+  </div>
   <header class="topbar">
-    <img src="assets/gotgam.png" class="brand-logo" alt="곶감">
+    <img src="assets/sangsang1.png" class="brand-logo" alt="상상주도">
     <div class="brand-text">
       <div class="brand-title">상주시 정책 플랫폼</div>
       <div class="brand-sub" id="dbInfo">사업 관리 (실시간)</div>
@@ -49,6 +64,11 @@
     <div id="list" class="cardlist"></div>
     <div id="pager" class="pager-wrap"></div>
   </main>
+
+  <footer class="appfoot">
+    <img src="assets/gotgam.png" class="foot-gotgam" alt="상주 곶감">
+    <span>상주 곶감의 고장 · 상주시 정책 플랫폼</span>
+  </footer>
 </div>
 
 <!-- 편집/상세 모달 -->
@@ -65,5 +85,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+
+<!-- PWA 서비스워커 등록 (상대경로 → /admin/ 하위에서만 동작, 시민앱과 분리) -->
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker
+        .register("sw.js")
+        .then(function (reg) { console.log("[PWA·공무원] 서비스워커 등록:", reg.scope); })
+        .catch(function (e) { console.warn("[PWA·공무원] 서비스워커 등록 실패(무시):", e); });
+    });
+  }
+</script>
 </body>
 </html>

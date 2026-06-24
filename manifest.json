@@ -1,6 +1,7 @@
 {
-  "name": "상주시 정책 플랫폼",
-  "short_name": "상주정책",
+  "id": "/sangju-policy-mobile/",
+  "name": "상주정책(시민용)",
+  "short_name": "상주정책(시민용)",
   "description": "상주시 지원사업을 쉽게 찾고 신청하는 시민용 앱",
   "lang": "ko",
   "start_url": ".",
