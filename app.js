@@ -11,7 +11,7 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done",
-  "propose", "pdetail", "pwrite"];
+  "propose", "pdetail", "pwrite", "privacy"];
 
 // 오류 문의가 전달될 주소(표시용). 실제 발송은 폼메일→Gmail→자동접수가 이 주소로 전달.
 const SUPPORT_EMAIL = "hcyang572@korea.kr";
@@ -389,6 +389,12 @@ async function sendApply() {
   }
 }
 
+// ---------- 개인정보 처리방침 ----------
+function openPrivacy() {
+  $("topTitle").textContent = "개인정보 처리방침";
+  showView("privacy");
+}
+
 // ---------- 오류 문의 ----------
 function openInquiry() {
   $("topTitle").textContent = "오류 · 문의(개발자)";
@@ -488,6 +494,15 @@ function bindEvents() {
   $("applySend").addEventListener("click", sendApply);
   $("inquiryLink").addEventListener("click", (e) => { e.preventDefault(); openInquiry(); });
   $("inquirySend").addEventListener("click", sendInquiry);
+  // 개인정보 처리방침 (푸터 링크 → 전용 화면, '처음으로'로 복귀)
+  $("privacyLink").addEventListener("click", openPrivacy);
+  $("privacyHome").addEventListener("click", () => {
+    state.selectedCats = new Set();
+    state.navStack = [{ v: "home", t: HOME_TITLE }];
+    state.fwdStack = [];
+    $("topTitle").textContent = HOME_TITLE;
+    showView("home", false);
+  });
   $("doneHome").addEventListener("click", () => {
     state.selectedCats = new Set();
     state.navStack = [{ v: "home", t: HOME_TITLE }];

@@ -61,6 +61,15 @@ function bindUI() {
   $("#mClose").onclick = () => $("#modal").classList.add("hidden");
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").classList.add("hidden"); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#modal").classList.add("hidden"); });
+
+  // 개인정보 처리방침 모달 (열기/닫기/Esc/바깥클릭)
+  const pp = $("#ppModal");
+  if (pp) {
+    $("#btnPrivacy").onclick = () => pp.classList.remove("hidden");
+    $("#ppClose").onclick = () => pp.classList.add("hidden");
+    pp.addEventListener("click", (e) => { if (e.target.id === "ppModal") pp.classList.add("hidden"); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") pp.classList.add("hidden"); });
+  }
 }
 
 async function loadBenefits() {
@@ -230,6 +239,8 @@ function switchTab(which) {
   const onBenefits = which === "benefits";
   $("#tabBenefits").classList.toggle("on", onBenefits);
   $("#tabProposals").classList.toggle("on", !onBenefits);
+  $("#tabBenefits").setAttribute("aria-selected", onBenefits ? "true" : "false");
+  $("#tabProposals").setAttribute("aria-selected", onBenefits ? "false" : "true");
   $("#secBenefits").classList.toggle("hidden", !onBenefits);
   $("#secProposals").classList.toggle("hidden", onBenefits);
   if (!onBenefits && !P_LOADED) loadProposals();

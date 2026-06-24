@@ -6,7 +6,7 @@
   --card: #FFFFFF;
   --header: #FDECE4;
   --border: #EEDACF;
-  --muted: #8C7A6E;
+  --muted: #766456; /* 명도대비 보정(배경 5.3:1·카드 5.6:1, AA 충족) */
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -310,7 +310,7 @@ main { padding: 16px; }
 }
 .inapp-btn:active { transform: scale(.98); }
 .inapp-btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.7); }
-.inapp-close { font-size: 14px; color: rgba(255,255,255,.85); padding: 2px 4px; flex-shrink: 0; cursor: pointer; }
+.inapp-close { font-size: 14px; color: rgba(255,255,255,.85); padding: 2px 4px; flex-shrink: 0; cursor: pointer; background: none; border: none; font-family: inherit; line-height: 1.4; }
 
 /* 푸터: 설치 링크 + 공개 주소 */
 .foot-install { margin-top: 8px; }
@@ -397,11 +397,11 @@ main { padding: 16px; }
   font-size: 12px; font-weight: 800; color: #fff;
   padding: 3px 9px; border-radius: 8px; white-space: nowrap;
 }
-.pp-badge.st-accept { background: #8C7A6E; }
+.pp-badge.st-accept { background: #766456; } /* 명도대비 보정(흰 글씨 5.6:1) */
 .pp-badge.st-review { background: #E66B3A; }
 .pp-badge.st-done { background: #43A047; }
 .pp-badge.st-reject { background: #B5483A; }
-.pp-badge.st-hold { background: #B59A3A; }
+.pp-badge.st-hold { background: #8A7320; } /* 명도대비 보정(흰 글씨 4.6:1, AA 충족) */
 .pp-cat { font-size: 12px; color: var(--primary); background: var(--header); padding: 3px 9px; border-radius: 8px; }
 .pp-card-meta { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 .pp-like { font-size: 14px; font-weight: 800; color: var(--primary); }
@@ -446,3 +446,22 @@ main { padding: 16px; }
 /* 정책참여 모달 버튼 묶음 */
 .pp-modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
 .pp-modal-actions .big-btn { margin-top: 0; }
+
+/* ───────────── 개인정보 처리방침 ───────────── */
+.foot-privacy { margin-top: 8px; }
+.privacy-doc {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 16px 8px;
+  margin-top: 10px;
+}
+.privacy-h {
+  font-size: 15.5px; font-weight: 800; color: var(--primary);
+  margin: 16px 0 8px;
+}
+.privacy-h:first-child { margin-top: 4px; }
+.privacy-ul { margin: 0 0 6px; padding-left: 20px; }
+.privacy-ul li { font-size: 14.5px; line-height: 1.7; color: var(--text); margin-bottom: 4px; }
+.privacy-ul li b { color: var(--text); }
+.privacy-mail { color: var(--primary); font-weight: 700; text-decoration: underline; }

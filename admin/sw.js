@@ -2,7 +2,7 @@
  * 경로는 모두 상대경로(self.registration.scope 기준 = /sangju-policy-mobile/admin/)로 다뤄
  * 시민앱 서비스워커와 캐시·범위가 완전히 분리되도록 CACHE 이름을 다르게 둔다.
  * 캐시 버전을 올리려면 아래 CACHE 값을 바꾸면 됨(예: sangju-admin-v2). */
-const CACHE = "sangju-admin-v1";
+const CACHE = "sangju-admin-v2";
 
 // scope(예: https://hcyang572-gif.github.io/sangju-policy-mobile/admin/)를 기준으로
 // 절대 URL을 만들어 둔다. (서브경로에서도 안전)

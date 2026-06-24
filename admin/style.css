@@ -1,13 +1,18 @@
 /* 상주시 정책 플랫폼 — 클라우드(곶감 테마, 반응형) */
 :root{
-  --gotgam:#E66B3A; --gotgam-d:#D15626; --gotgam-l:#FBE3D4; --gotgam-ll:#FFF1E8;
-  --ink:#4A3B32; --sub:#9A7A66; --cream:#FFF7F0; --line:#F0E0D5; --card:#FFFFFF;
+  --gotgam:#E66B3A; --gotgam-d:#C24E20; --gotgam-l:#FBE3D4; --gotgam-ll:#FFF1E8;
+  --ink:#4A3B32; --sub:#8A6A55; --cream:#FFF7F0; --line:#F0E0D5; --card:#FFFFFF;
   --shadow:0 6px 18px rgba(170,90,45,.13);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background:var(--cream);color:var(--ink);}
 .hidden{display:none !important;}
+
+/* 스크린리더 전용(화면엔 숨김, 보조기기엔 노출) */
+.sr-only{position:absolute !important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+/* 키보드 포커스 가시성(KWCAG) */
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--gotgam-d);outline-offset:2px;}
 
 /* 로그인 */
 .login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#FFF3EA,#FFE2CE);padding:20px;}
@@ -95,8 +100,18 @@ body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background
 .guest-banner .gb-close{flex:0 0 auto;border:none;background:transparent;color:#7A5B00;font-size:16px;font-weight:800;cursor:pointer;padding:2px 6px;}
 
 /* 푸터(상주 곶감 은은한 포인트) */
-.appfoot{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;color:var(--sub);font-size:12px;font-weight:700;border-top:1px solid var(--line);}
+.appfoot{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:16px;color:var(--sub);font-size:12px;font-weight:700;border-top:1px solid var(--line);}
 .foot-gotgam{width:20px;height:20px;object-fit:contain;opacity:.85;}
+.foot-link{border:none;background:transparent;color:var(--gotgam-d);font-size:12px;font-weight:800;cursor:pointer;text-decoration:underline;padding:4px 6px;border-radius:6px;}
+.foot-link:hover{color:var(--gotgam);}
+
+/* 개인정보 처리방침 본문 */
+.pp-intro{font-size:14px;line-height:1.7;color:var(--ink);margin-bottom:14px;}
+.pp-h{font-size:14.5px;font-weight:800;color:var(--gotgam-d);margin:16px 0 6px;}
+.pp-p{font-size:13.5px;line-height:1.7;color:var(--ink);}
+.pp-list{margin:0 0 4px;padding-left:20px;font-size:13.5px;line-height:1.7;color:var(--ink);}
+.pp-list li{margin-bottom:4px;}
+.pp-foot{margin-top:18px;font-size:12.5px;line-height:1.6;color:var(--sub);border-top:1px dashed var(--line);padding-top:12px;}
 
 /* ── 정책제안 관리(관리자 남색 톤) ── */
 :root{ --navy:#1B2A4A; --navy-d:#10192E; --navy-l:#E3E8F2; --navy-ll:#F1F4FA; }
@@ -154,4 +169,17 @@ body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background
   .content{padding:14px;}
   .card{padding:14px;}
   .card-title{font-size:15px;}
+}
+
+/* 반응형(공무원 PC·넓은 화면) — 목록 2단, 여백 활용 */
+@media (min-width:900px){
+  .content{max-width:1180px;padding:22px 28px 36px;}
+  .tabbar{max-width:1180px;padding-left:28px;padding-right:28px;}
+  .cardlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .card,.pcard{align-items:flex-start;}
+}
+@media (min-width:1320px){
+  .content{max-width:1320px;}
+  .tabbar{max-width:1320px;}
+  .cardlist{grid-template-columns:repeat(3,minmax(0,1fr));}
 }
