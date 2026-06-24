@@ -6,6 +6,15 @@
   <meta name="theme-color" content="#E66B3A" />
   <title>상주시 정책 플랫폼</title>
 
+  <!-- PWA: 홈 화면에 추가 시 앱 이름/아이콘 -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="상주정책" />
+  <meta name="application-name" content="상주정책" />
+
   <!-- 카카오톡/SNS 링크 미리보기 카드 (Open Graph) -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="상주시 정책 플랫폼 — 내게 맞는 지원사업 찾기" />
@@ -36,6 +45,12 @@
         </span>
       </div>
       <p class="lead">상주시 지원사업을 쉽게 찾아보세요</p>
+      <button id="a2hsTip" class="a2hs-tip" type="button" hidden>
+        <span class="a2hs-emoji">📲</span>
+        <span class="a2hs-text">홈 화면에 추가하면 <b>앱처럼</b> 써요</span>
+        <span class="a2hs-go">방법 보기 ›</span>
+        <span id="a2hsClose" class="a2hs-close" role="button" aria-label="닫기">✕</span>
+      </button>
       <div class="search-box">
         <input id="homeSearch" type="search" placeholder="🔍 사업명·내용으로 검색" />
       </div>
@@ -117,6 +132,8 @@
 
   <footer class="foot">
     <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
+    <div class="foot-install">📲 <button id="installLink" class="foot-link-btn" type="button">홈 화면에 앱처럼 추가하기</button></div>
+    <div class="foot-url">🔗 <span class="foot-url-text">hcyang572-gif.github.io/sangju-policy-mobile</span></div>
     <div class="foot-inquiry">오류 · 문의(개발자) <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
   </footer>
 
@@ -139,6 +156,38 @@
         <li><span class="role">팀원</span><span class="m-name">양호창</span><span class="m-dept">공업8</span></li>
       </ul>
       <button id="teamClose" class="big-btn primary full">닫기</button>
+    </div>
+  </div>
+
+  <!-- 홈 화면에 추가(앱처럼 쓰기) 안내 모달 -->
+  <div id="installModal" class="modal-backdrop" hidden>
+    <div class="install-card" role="dialog" aria-modal="true">
+      <div class="install-head">
+        <span class="install-emoji">📲</span>
+        <div>
+          <div class="install-title">앱처럼 설치하기</div>
+          <div class="install-sub">홈 화면에 추가하면 한 번에 열려요</div>
+        </div>
+      </div>
+      <div class="install-guide">
+        <div class="install-os">
+          <div class="install-os-name">🍎 아이폰 (Safari)</div>
+          <ol>
+            <li>아래 <b>공유 버튼</b> <span class="ico">⬆️</span> 누르기</li>
+            <li><b>‘홈 화면에 추가’</b> 선택</li>
+            <li>오른쪽 위 <b>‘추가’</b> 누르기</li>
+          </ol>
+        </div>
+        <div class="install-os">
+          <div class="install-os-name">🤖 안드로이드 (Chrome)</div>
+          <ol>
+            <li>오른쪽 위 <b>⋮ 메뉴</b> 누르기</li>
+            <li><b>‘홈 화면에 추가’</b> 또는 <b>‘앱 설치’</b> 선택</li>
+            <li><b>‘추가’</b> 누르기</li>
+          </ol>
+        </div>
+      </div>
+      <button id="installClose" class="big-btn primary full">알겠어요</button>
     </div>
   </div>
 

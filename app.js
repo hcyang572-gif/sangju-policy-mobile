@@ -70,7 +70,23 @@ async function init() {
   bindEvents();
   showView("home", false);
   checkNewPrograms();
+  initA2HS();
 }
+
+// ---------- 홈 화면에 추가(앱처럼 쓰기) 안내 ----------
+const A2HS_DISMISS_KEY = "sangju_a2hs_dismissed";
+function isStandalone() {
+  // 이미 홈 화면 앱으로 실행 중이면 안내가 불필요
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+         window.navigator.standalone === true;
+}
+function initA2HS() {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(A2HS_DISMISS_KEY) === "1"; } catch (e) {}
+  // 홈 상단 안내 띠: 한 번 닫았거나 이미 설치(standalone) 상태면 숨김
+  $("a2hsTip").hidden = dismissed || isStandalone();
+}
+function openInstallGuide() { $("installModal").hidden = false; }
 
 // 지난 방문 이후 새로 추가된 사업을 감지해 홈에 알림 배너를 띄운다(localStorage 기반).
 const SEEN_KEY = "sangju_seen_programs";
@@ -416,6 +432,20 @@ function bindEvents() {
   $("teamClose").addEventListener("click", () => { $("teamModal").hidden = true; });
   $("teamModal").addEventListener("click", (e) => {
     if (e.target.id === "teamModal") $("teamModal").hidden = true;  // 배경 클릭 닫기
+  });
+  // '홈 화면에 추가' 안내 (홈 띠 + 푸터 링크 → 동일 모달)
+  $("a2hsTip").addEventListener("click", (e) => {
+    if (e.target.id === "a2hsClose") {          // ✕: 다시 안 뜨게 닫기
+      $("a2hsTip").hidden = true;
+      try { localStorage.setItem(A2HS_DISMISS_KEY, "1"); } catch (err) {}
+      return;
+    }
+    openInstallGuide();
+  });
+  $("installLink").addEventListener("click", openInstallGuide);   // 푸터: 언제든 다시 보기
+  $("installClose").addEventListener("click", () => { $("installModal").hidden = true; });
+  $("installModal").addEventListener("click", (e) => {
+    if (e.target.id === "installModal") $("installModal").hidden = true;  // 배경 클릭 닫기
   });
 }
 

@@ -29,4 +29,4 @@ py -3 -m http.server 5180
 
 ## 한계 / 다음 단계
 - 신청이 **이메일**이라 실시간 접수대장 동기화는 아직 없음 → 로드맵 2단계(서버+DB)에서 해결.
-- `app.js`의 `FALLBACK_EMAIL`(담당자 이메일이 빈 사업의 대체 수신처)을 운영 주소로 교체 필요.
+- `FALLBACK_EMAIL`은 폐기됨(현재 모바일 코드에 없음). 담당자 이메일이 빈 사업은 PC의 `자동접수.py`가 `SUPPORT_EMAIL`(hcyang572@korea.kr)로 폴백 전달함.

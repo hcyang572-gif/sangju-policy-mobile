@@ -259,3 +259,60 @@ main { padding: 16px; }
 .team-list .m-dept { margin-left: auto; font-size: 13px; color: var(--muted); }
 .foot-inquiry { margin-top: 6px; }
 .foot-inquiry a { color: var(--primary); font-weight: 700; text-decoration: underline; }
+
+/* 홈: '홈 화면에 추가' 작은 안내 띠 */
+.a2hs-tip {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 11px 12px;
+  background: var(--header);
+  border: 1.5px dashed var(--primary);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 14px; font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.a2hs-tip:active { transform: scale(.99); }
+.a2hs-emoji { font-size: 19px; flex-shrink: 0; }
+.a2hs-text { flex: 1; font-weight: 600; }
+.a2hs-text b { color: var(--primary); }
+.a2hs-go { font-size: 13px; font-weight: 700; color: var(--primary); flex-shrink: 0; white-space: nowrap; }
+.a2hs-close { font-size: 13px; color: var(--muted); padding: 2px 4px; flex-shrink: 0; }
+
+/* 푸터: 설치 링크 + 공개 주소 */
+.foot-install { margin-top: 8px; }
+.foot-link-btn {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--primary); font-weight: 700; text-decoration: underline;
+}
+.foot-url { margin-top: 4px; font-size: 12px; color: var(--muted); word-break: break-all; }
+.foot-url-text { font-weight: 600; }
+
+/* 설치 안내 모달 */
+.install-card {
+  width: 100%; max-width: 380px;
+  background: var(--card);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .3);
+  animation: fade .2s ease;
+}
+.install-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.install-emoji { font-size: 34px; }
+.install-title { font-size: 20px; font-weight: 800; color: var(--primary); }
+.install-sub { font-size: 13px; color: var(--muted); font-weight: 600; }
+.install-guide { display: grid; gap: 14px; }
+.install-os {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 13px 14px;
+  background: var(--bg);
+}
+.install-os-name { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.install-os ol { margin: 0; padding-left: 20px; }
+.install-os li { font-size: 14px; line-height: 1.7; }
+.install-os li b { color: var(--primary); }
+.install-os .ico { font-size: 13px; }
