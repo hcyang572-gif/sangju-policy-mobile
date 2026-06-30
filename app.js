@@ -566,6 +566,64 @@ const ModalA11y = (function () {
 })();
 window.ModalA11y = ModalA11y;
 
+// ---------- 버전 정보 + 버전별 개선사항(체인지로그) ----------
+// 데이터 단일 소스: version.js의 window.APP_VERSION / window.APP_CHANGELOG.
+function renderChangelog() {
+  const box = $("changelogBody");
+  if (!box) return;
+  const logs = window.APP_CHANGELOG || [];
+  box.innerHTML = "";
+  logs.forEach((e) => {
+    const entry = document.createElement("div");
+    entry.className = "cl-entry";
+
+    const head = document.createElement("div");
+    head.className = "cl-head";
+    const ver = document.createElement("span");
+    ver.className = "cl-ver";
+    ver.textContent = "v" + (e.version || "");
+    head.appendChild(ver);
+    if (e.date) {
+      const date = document.createElement("span");
+      date.className = "cl-date";
+      date.textContent = e.date;
+      head.appendChild(date);
+    }
+    entry.appendChild(head);
+
+    if (e.title) {
+      const t = document.createElement("div");
+      t.className = "cl-title";
+      t.textContent = e.title;
+      entry.appendChild(t);
+    }
+
+    const ul = document.createElement("ul");
+    ul.className = "cl-items";
+    (e.items || []).forEach((it) => {
+      const li = document.createElement("li");
+      li.textContent = it;
+      ul.appendChild(li);
+    });
+    entry.appendChild(ul);
+    box.appendChild(entry);
+  });
+}
+
+function initVersion() {
+  const v = window.APP_VERSION || "";
+  const btn = $("versionBtn");
+  if (btn && v) {
+    btn.textContent = "v" + v;                  // 단일 소스에서 버전 주입
+    btn.setAttribute("aria-label", "현재 버전 " + v + ", 버전별 개선사항 보기");
+  }
+  renderChangelog();
+  const closeCl = () => { $("versionModal").hidden = true; ModalA11y.close("versionModal"); };
+  if (btn) btn.addEventListener("click", () => { $("versionModal").hidden = false; ModalA11y.open("versionModal", closeCl); });
+  $("versionClose").addEventListener("click", closeCl);
+  $("versionModal").addEventListener("click", (e) => { if (e.target.id === "versionModal") closeCl(); });  // 배경 클릭 닫기
+}
+
 // ---------- 이벤트 ----------
 function bindEvents() {
   $("backBtn").addEventListener("click", goBack);
@@ -596,6 +654,8 @@ function bindEvents() {
   $("inquirySend").addEventListener("click", sendInquiry);
   // 개인정보 처리방침 (푸터 링크 → 전용 화면, '처음으로'로 복귀)
   $("privacyLink").addEventListener("click", openPrivacy);
+  // 버전 라벨 + 버전별 개선사항(체인지로그) 모달
+  initVersion();
   $("privacyHome").addEventListener("click", () => {
     state.selectedCats = new Set();
     state.navStack = [{ v: "home", t: HOME_TITLE }];
