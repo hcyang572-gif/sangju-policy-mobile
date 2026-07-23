@@ -1,0 +1,75 @@
+# 상주시 정책 플랫폼 — Supabase 자동 일시정지 예방(Keep-Alive)
+#
+# 왜 필요한가
+#   Supabase 무료 플랜은 약 7일간 데이터베이스 요청이 없으면 프로젝트를 자동으로
+#   일시정지(pause)한다. 실제로 2026-06-30 마지막 배포 후 23일 만에 정지되어
+#   시민앱 정책참여 · 공무원앱 전체 · PC앱 정책제안 관리가 동시에 멈췄다.
+#   이 워크플로가 3일마다 가벼운 조회를 보내 '활동 중' 상태를 유지한다.
+#
+# 안전성
+#   - 사용하는 키는 anon(공개) 키뿐이다. 이미 이 저장소의 config.js 에 공개돼 있고
+#     RLS로 보호되므로 추가 노출이 없다. service_role 키는 절대 쓰지 않는다.
+#   - 읽기(select)만 수행하며 어떤 데이터도 쓰거나 지우지 않는다.
+#
+# 주의
+#   GitHub는 저장소에 60일간 아무 활동이 없으면 예약(schedule) 워크플로를 자동 중지한다.
+#   장기 방치 시 Actions 탭에서 'Enable workflow'로 다시 켜야 한다.
+
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # 3일마다 03:00 UTC (한국시간 정오 12:00) — 7일 정지 기준의 절반 이하 주기
+    - cron: "0 3 */3 * *"
+  workflow_dispatch:        # 필요할 때 수동 실행 가능
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: config.js 에서 접속 정보 추출
+        id: cfg
+        run: |
+          set -euo pipefail
+          URL=$(grep -oE 'https://[a-z0-9]+\.supabase\.co' config.js | head -1)
+          KEY=$(grep -oE 'SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*"[^"]+"' config.js \
+                | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "::error::config.js 에서 SUPABASE_URL 또는 SUPABASE_ANON_KEY 를 찾지 못했습니다."
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$KEY"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "대상 프로젝트: $URL"
+
+      - name: DB 활동 유지용 조회
+        run: |
+          set -euo pipefail
+          URL="${{ steps.cfg.outputs.url }}"
+          KEY="${{ steps.cfg.outputs.key }}"
+          FAIL=0
+          for T in proposals benefits; do
+            CODE=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+                   -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+                   --max-time 30 --retry 3 --retry-delay 10 --retry-connrefused \
+                   "$URL/rest/v1/$T?select=id&limit=1") || CODE="000"
+            if [ "$CODE" = "200" ]; then
+              echo "✅ $T — HTTP $CODE"
+            else
+              echo "::error::❌ $T — HTTP $CODE / $(head -c 300 /tmp/out.json 2>/dev/null || true)"
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" = "1" ]; then
+            echo "::error::Supabase 응답 실패. 프로젝트가 일시정지되었거나 삭제되었을 수 있습니다. 대시보드를 확인하세요: https://supabase.com/dashboard"
+            exit 1
+          fi
+          echo "핑 완료 — 프로젝트 활동 상태 유지됨"
