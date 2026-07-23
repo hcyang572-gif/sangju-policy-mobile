@@ -66,12 +66,16 @@
         </div>
         <button id="inappClose" class="inapp-close" type="button" aria-label="닫기">✕</button>
       </div>
-      <button id="a2hsTip" class="a2hs-tip" type="button" hidden>
-        <span class="a2hs-emoji">📲</span>
-        <span class="a2hs-text">홈 화면에 추가하면 <b>앱처럼</b> 써요</span>
-        <span class="a2hs-go">방법 보기 ›</span>
-        <span id="a2hsClose" class="a2hs-close" role="button" aria-label="닫기">✕</span>
-      </button>
+      <!-- ⚠ HTML 규격: button 안에 button(또는 role="button")을 넣을 수 없다(중첩 컨트롤).
+           바깥은 div 로 두고 «안내 열기»와 «닫기»를 형제 버튼으로 분리 → 키보드로 각각 조작 가능 -->
+      <div id="a2hsTip" class="a2hs-tip" hidden>
+        <button id="a2hsOpen" class="a2hs-open" type="button">
+          <span class="a2hs-emoji" aria-hidden="true">📲</span>
+          <span class="a2hs-text">홈 화면에 추가하면 <b>앱처럼</b> 써요</span>
+          <span class="a2hs-go">방법 보기 ›</span>
+        </button>
+        <button id="a2hsClose" class="a2hs-close" type="button" aria-label="설치 안내 닫기">✕</button>
+      </div>
       <div class="search-box">
         <input id="homeSearch" type="search" placeholder="🔍 사업명·내용으로 검색" aria-label="사업명·내용으로 검색" />
       </div>
@@ -83,8 +87,9 @@
       <!-- 정책참여: 지원사업과 다른 갈래임을 색·구분선으로 명확히 분리 -->
       <div class="home-divider" role="separator" aria-hidden="true"></div>
       <h2 class="section-label propose-label">🗳 시민 정책참여</h2>
-      <button class="propose-card" data-go="propose" type="button"
-              aria-label="시민 정책참여 — 시민이 직접 정책을 제안하고 공감하는 공간으로 이동">
+      <!-- 접근명(aria-label)을 따로 두지 않는다. 카드 안 «보이는 글자»가 그대로 접근명이 되어야
+           «정책참여 눌러» 같은 음성 명령이 매칭된다(장식 아이콘·화살표는 aria-hidden 이라 제외됨). -->
+      <button class="propose-card" data-go="propose" type="button">
         <span class="propose-card-icon" aria-hidden="true">🗳</span>
         <span class="propose-card-text">
           <span class="propose-card-title">정책참여 (시민 제안)</span>
@@ -98,6 +103,8 @@
 
     <!-- 목록 -->
     <section id="view-list" class="view" hidden>
+      <!-- section 은 이름(heading)이 있어야 보조기기가 영역을 구분한다. 화면 제목은 상단바가 맡으므로 화면에는 숨기고 낭독만 -->
+      <h2 class="sr-only">지원사업 목록</h2>
       <div class="search-box sticky">
         <input id="listSearch" type="search" placeholder="🔍 결과 안에서 검색" aria-label="결과 안에서 검색" />
       </div>
@@ -107,6 +114,7 @@
 
     <!-- 맞춤 추천 -->
     <section id="view-recommend" class="view" hidden>
+      <h2 class="sr-only">나에게 맞는 사업 찾기</h2>
       <p class="lead">나이와 상황을 알려주시면 맞는 분야를 찾아드려요</p>
       <label class="field-label" for="ageInput">① 나이 (선택)</label>
       <div class="age-row">
@@ -120,12 +128,13 @@
 
     <!-- 상세 -->
     <section id="view-detail" class="view" hidden>
+      <h2 class="sr-only">사업 상세</h2>
       <div id="detailContent"></div>
     </section>
 
     <!-- 신청 -->
     <section id="view-apply" class="view" hidden>
-      <h2 id="applyTitle" class="apply-title"></h2>
+      <h2 id="applyTitle" class="apply-title">신청하기</h2>
       <p class="apply-hint">아래 내용을 작성해 제출하면 담당 부서로 바로 접수됩니다.</p>
       <label class="field-label" for="applyName">신청자 이름</label>
       <input id="applyName" class="text-input" type="text" autocomplete="name" placeholder="홍길동" />
@@ -165,7 +174,7 @@
     <!-- 정책참여: 제안 목록 -->
     <section id="view-propose" class="view" hidden>
       <div class="propose-hero">
-        <div class="propose-hero-title">🗳 시민 정책제안</div>
+        <h2 class="propose-hero-title">🗳 시민 정책제안</h2>
         <div class="propose-hero-sub">"이런 정책 어때요?" 시민이 직접 제안해요</div>
       </div>
       <p class="legal-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
@@ -177,6 +186,13 @@
         </select>
         <button id="ppNew" class="pp-new-btn" type="button">＋ 제안</button>
       </div>
+      <!-- 실시간 알림 띠: 새 제안이 들어와도 화면을 저절로 바꾸지 않고 여기서 알린다.
+           (자동 변경이 없으므로 «정지 기능»이 따로 필요 없다) -->
+      <div id="ppRtBanner" class="rt-banner" role="status" aria-live="polite" hidden>
+        <span aria-hidden="true">🔔</span>
+        <span id="ppRtText" class="rt-banner-text"></span>
+        <button id="ppRtBtn" class="rt-banner-btn" type="button">새로고침</button>
+      </div>
       <div id="ppListMeta" class="list-meta" aria-live="polite"></div>
       <div id="ppList" class="cards"></div>
       <button id="ppMore" class="pp-more-btn" type="button" hidden>더 보기</button>
@@ -184,6 +200,7 @@
 
     <!-- 정책참여: 제안 상세 -->
     <section id="view-pdetail" class="view" hidden>
+      <h2 class="sr-only">정책제안 상세</h2>
       <div id="pdetailContent"></div>
     </section>
 
@@ -208,8 +225,9 @@
       <input id="pwRegion" class="text-input" type="text" maxlength="20" placeholder="예: 무양동 (선택)" />
 
       <label class="field-label" for="pwPin">수정용 PIN (숫자 4자리) <span class="req">*</span></label>
-      <input id="pwPin" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="예: 1234 (본인 수정/삭제용)" />
-      <p class="apply-note left">※ PIN은 본인 글 수정·삭제에만 쓰입니다. <b>분실 시 복구할 수 없습니다.</b></p>
+      <input id="pwPin" class="text-input" type="tel" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="예: 1234 (본인 수정/삭제용)" />
+      <p class="apply-note left">※ PIN은 본인 글 수정·삭제에만 쓰입니다.<br>
+        PIN을 잊으셨나요? <button id="pwPinHelp" class="foot-link-btn" type="button">오류 문의</button>로 연락 주시면 확인 후 도와드립니다.</p>
 
       <!-- 도배방지 허니팟(사람 눈엔 안 보임) -->
       <input id="pwHoney" class="pp-honey" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" />
@@ -288,8 +306,8 @@
 
   <footer class="foot">
     <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
-    <div class="foot-inquiry">오류 문의 <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
-    <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <button id="versionBtn" class="foot-link-btn" type="button" aria-label="버전 정보 및 이용 안내 보기">v0.0.2</button></div>
+    <div class="foot-inquiry">오류 문의 <button id="inquiryLink" class="foot-mail-btn" type="button">hcyang572@korea.kr</button></div>
+    <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <button id="versionBtn" class="foot-link-btn" type="button" aria-label="v0.0.2 — 버전 정보 및 이용 안내 보기">v0.0.2</button></div>
   </footer>
 
   <!-- 팀원 소개 모달 -->
@@ -356,7 +374,8 @@
           <div class="install-sub">작성 시 정한 4자리 PIN을 입력하세요</div>
         </div>
       </div>
-      <input id="pinInput" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" aria-label="PIN 4자리 입력" />
+      <input id="pinInput" class="text-input" type="tel" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="PIN 4자리" aria-label="PIN 4자리 입력" />
+      <p class="apply-note left">PIN을 잊으셨나요? <button id="pinHelp" class="foot-link-btn" type="button">오류 문의</button>로 연락 주시면 확인 후 도와드립니다.</p>
       <div class="pp-modal-actions">
         <button id="pinEdit" class="big-btn full" type="button">✏ 수정</button>
         <button id="pinDelete" class="big-btn full pp-danger" type="button">🗑 삭제</button>

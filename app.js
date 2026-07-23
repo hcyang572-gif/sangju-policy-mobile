@@ -53,6 +53,11 @@ function showView(name, push = true) {
     }
   }
   _updateNavButtons();
+  // 정책참여 알림 띠는 «목록 화면일 때만» 보인다 → 화면이 바뀔 때마다 다시 계산한다.
+  // (뒤로가기로 목록에 돌아온 경우에도 쌓인 알림이 제대로 뜨게 하려는 것)
+  if (window.Proposals && window.Proposals.syncNotice) {
+    try { window.Proposals.syncNotice(); } catch (e) { /* 무시 */ }
+  }
   window.scrollTo(0, 0);
 }
 
@@ -630,7 +635,8 @@ function initVersion() {
   const btn = $("versionBtn");
   if (btn && v) {
     btn.textContent = "v" + v;                  // 단일 소스에서 버전 주입
-    btn.setAttribute("aria-label", "현재 버전 " + v + ", 버전별 개선사항 보기");
+    // 음성 명령이 «보이는 글자»로 눌리도록 접근명 맨 앞에 화면 텍스트(v0.0.3 등)를 그대로 둔다
+    btn.setAttribute("aria-label", "v" + v + " — 버전 정보 및 이용 안내 보기");
   }
   renderChangelog();
   const closeCl = () => { $("versionModal").hidden = true; ModalA11y.close("versionModal"); };
@@ -699,13 +705,12 @@ function bindEvents() {
     if (e.target.id === "teamModal") closeTeam();  // 배경 클릭 닫기
   });
   // '홈 화면에 추가' 안내 (홈 띠 + 푸터 링크 → 동일 모달)
-  $("a2hsTip").addEventListener("click", (e) => {
-    if (e.target.id === "a2hsClose") {          // ✕: 다시 안 뜨게 닫기
-      $("a2hsTip").hidden = true;
-      try { localStorage.setItem(A2HS_DISMISS_KEY, "1"); } catch (err) {}
-      return;
-    }
-    openInstallGuide();
+  // (HTML 규격상 중첩 버튼이 금지되어 «안내 열기»·«닫기»가 형제 버튼으로 분리됨)
+  $("a2hsOpen").addEventListener("click", openInstallGuide);
+  $("a2hsClose").addEventListener("click", (e) => {   // ✕: 다시 안 뜨게 닫기
+    e.stopPropagation();                              // 부모 띠로 전파 방지
+    $("a2hsTip").hidden = true;
+    try { localStorage.setItem(A2HS_DISMISS_KEY, "1"); } catch (err) {}
   });
   // 인앱 브라우저 배너: 크롬으로 열기 / 주소 복사 / 닫기
   $("inappOpen").addEventListener("click", () => { window.location.href = buildChromeIntent(); });

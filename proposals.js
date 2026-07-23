@@ -187,6 +187,8 @@
   }
 
   function reload() {
+    rtPending = 0;              // 새로 불러오므로 «밀린 알림»도 지운다
+    syncRtBanner();
     pstate.page = 0;
     pstate.items = [];
     pstate.end = false;
@@ -443,11 +445,12 @@
     $("pinModal").hidden = true;
     pinTarget = null;
     if (window.ModalA11y) window.ModalA11y.close("pinModal");
+    syncRtBanner();   // 모달 중 쌓인 알림을 다시 계산(안 하면 영영 안 뜬다)
   }
 
   async function doPinDelete() {
     const pin = $("pinInput").value.trim();
-    if (!/^\d{4}$/.test(pin)) { alert("PIN 4자리를 입력해 주세요."); return; }
+    if (!/^\d{4}$/.test(pin)) { alert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
     if (!confirm("정말 이 제안을 삭제할까요? 되돌릴 수 없습니다.")) return;
     const client = getClient();
     if (!client || !pinTarget) { alert("삭제할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
@@ -460,13 +463,14 @@
       reload();
     } catch (e) {
       console.warn("[정책참여] 삭제 실패:", e);
-      alert(errKind(e) === "conn" ? actionErrMsg(e, "삭제") : "삭제에 실패했습니다. PIN이 맞는지 확인해 주세요.");
+      alert(errKind(e) === "conn" ? actionErrMsg(e, "삭제")
+        : "삭제에 실패했습니다. PIN이 맞는지 확인해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.");
     }
   }
 
   function doPinEdit() {
     const pin = $("pinInput").value.trim();
-    if (!/^\d{4}$/.test(pin)) { alert("PIN 4자리를 입력해 주세요."); return; }
+    if (!/^\d{4}$/.test(pin)) { alert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
     if (!pinTarget) return;
     // 수정 화면 재사용: 작성 폼에 기존 내용 채우고 '수정 모드'로 전환
     fillCategorySelects();
@@ -517,7 +521,8 @@
       reload();
     } catch (e) {
       console.warn("[정책참여] 수정 실패:", e);
-      alert(errKind(e) === "conn" ? actionErrMsg(e, "수정") : "수정에 실패했습니다. PIN이 맞는지 확인해 주세요.");
+      alert(errKind(e) === "conn" ? actionErrMsg(e, "수정")
+        : "수정에 실패했습니다. PIN이 맞는지 확인해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.");
     } finally {
       btn.disabled = false; btn.textContent = orig;
     }
@@ -543,6 +548,7 @@
     $("reportModal").hidden = true;
     reportTarget = null;
     if (window.ModalA11y) window.ModalA11y.close("reportModal");
+    syncRtBanner();   // 모달 중 쌓인 알림을 다시 계산(안 하면 영영 안 뜬다)
   }
 
   async function doReport() {
@@ -563,6 +569,30 @@
   }
 
   // ---------- 실시간(선택) ----------
+  // ⚠ 예전에는 새 데이터가 들어오면 목록을 즉시 갈아끼웠다. 보고 있던 위치가 사라지고,
+  //    모달·작성 중이던 폼까지 영향을 받아 «정지 기능»(KWCAG 6.2.2)이 필요한 자동 변경이었다.
+  //    → 이제는 화면을 건드리지 않고 누적 건수만 알림 띠로 알리고, 갱신은 사용자가 누를 때만 한다.
+  let rtPending = 0;
+
+  // 모달이 열려 있거나 제안을 작성 중이면 알림 띠도 띄우지 않는다(작업 방해 금지)
+  function rtBusy() {
+    return !$("pinModal").hidden || !$("reportModal").hidden || !$("view-pwrite").hidden;
+  }
+
+  function syncRtBanner() {
+    const box = $("ppRtBanner");
+    if (!box) return;
+    const show = rtPending > 0 && !$("view-propose").hidden && !rtBusy();
+    if (show) $("ppRtText").textContent = `새 제안·변경 ${rtPending}건이 있습니다`;
+    box.hidden = !show;
+  }
+
+  function applyRtRefresh() {
+    rtPending = 0;
+    syncRtBanner();
+    reload();
+  }
+
   function subscribeRealtime() {
     const client = getClient();
     if (!client || realtimeSub) return;
@@ -570,10 +600,8 @@
       realtimeSub = client
         .channel("proposals-citizen")
         .on("postgres_changes", { event: "*", schema: "public", table: "proposals" }, () => {
-          // 목록 화면일 때만 가볍게 새로고침
-          if (!$("view-propose").hidden) reload();
-          // 상세 화면이면 현재 글 공감수·상태 갱신
-          else if (!$("view-pdetail").hidden && currentP) refreshDetailQuietly();
+          rtPending += 1;       // 화면은 그대로 두고 «알림»만
+          syncRtBanner();
         })
         .subscribe();
     } catch (e) {
@@ -595,6 +623,16 @@
 
   // ---------- 이벤트 바인딩 ----------
   function bind() {
+    // 실시간 알림 띠의 «새로고침» — 목록 갱신은 오직 이 클릭으로만 일어난다
+    if ($("ppRtBtn")) $("ppRtBtn").addEventListener("click", applyRtRefresh);
+    // PIN 분실 안내 → 오류 문의 화면으로(실제 PIN 재설정은 서버 인증이 필요해 범위 밖)
+    ["pwPinHelp", "pinHelp"].forEach((id) => {
+      const b = $(id);
+      if (b) b.addEventListener("click", () => {
+        if (!$("pinModal").hidden) closePinModal();
+        if (window.openInquiry) window.openInquiry();
+      });
+    });
     if ($("ppNew")) $("ppNew").addEventListener("click", openWrite);
     if ($("ppMore")) $("ppMore").addEventListener("click", loadMore);
     if ($("ppCategory")) $("ppCategory").addEventListener("change", (e) => { pstate.cat = e.target.value; reload(); });
@@ -627,5 +665,8 @@
   }
 
   // app.js 가 쓰는 전역 노출
-  window.Proposals = { open, openWrite, resetWriteForm };
+  // syncNotice: 화면이 바뀔 때 app.js 의 showView 가 불러 준다.
+  // 상세·작성 화면에 있는 동안 도착한 알림은 띠가 숨겨진 채 카운트만 쌓이므로,
+  // 목록으로 돌아왔을 때 다시 계산해 주지 않으면 알림이 영영 안 뜬다.
+  window.Proposals = { open, openWrite, resetWriteForm, syncNotice: syncRtBanner };
 })();
