@@ -1,15 +1,36 @@
+/* ═══════════════════════════════════════════════════════════════
+   공통 접근성 팔레트 (시민앱 · 공무원앱(cloudui) · PC앱(webui) 3종 동일 값)
+   ─────────────────────────────────────────────────────────────
+   토큰 대응표 (이름은 각 앱 기존 체계 유지, 값만 일치)
+     역할                     값        시민앱            cloudui           대비(흰 기준)
+     장식·테두리 전용         #E66B3A   --primary         --gotgam          3.22 (흰글자 배경 금지)
+     흰 글자 얹는 배경 전용   #C2501F   --primary-hover   --gotgam-d        4.71
+     밝은 배경 위 주황 글자   #A8431A   --accent-text     --gotgam-t        6.03
+     보조 텍스트              #7A6152   --muted           --sub             5.74
+     비활성·빈상태 텍스트     #6F6A63   --disabled        (직접값)          5.36
+     경계선                   #F0E0D5   --border          --line            (비텍스트)
+   ⚠ #E66B3A 위에 흰 글자를 얹으면 3.22:1 로 AA(4.5) 미달 → 반드시 --primary-hover 사용
+   ═══════════════════════════════════════════════════════════════ */
 :root {
   --bg: #FFF7F0;
   --text: #4A3B32;
+  /* 장식·테두리 전용. 흰 글자 배경으로 쓰지 말 것(3.22:1) */
   --primary: #E66B3A;
-  --primary-hover: #D15626;
+  /* 흰 글자를 얹는 배경 전용(흰 대비 4.71:1, AA 충족) — 버튼·칩·배지 배경 */
+  --primary-hover: #C2501F;
+  /* 눌림(:active) 배경 — 흰 대비 6.03:1 */
+  --primary-press: #A8431A;
   --card: #FFFFFF;
   --header: #FDECE4;
-  --border: #EEDACF;
-  --muted: #766456; /* 명도대비 보정(배경 5.3:1·카드 5.6:1, AA 충족) */
-  /* 소형·본문 주황 텍스트 전용(WCAG AA 4.5:1): 흰 5.62·헤더칩 4.89·배경 5.30 모두 충족.
-     배경/큰 굵은 버튼의 브랜드 주황(--primary)은 그대로 유지하고 작은 글씨에만 사용 */
-  --accent-text: #B0461C;
+  --border: #F0E0D5;
+  /* 보조 텍스트: 흰 5.74 · 크림 5.41 · 헤더칩 5.00 (AA 충족) */
+  --muted: #7A6152;
+  /* 비활성·빈상태 텍스트: 흰 5.36 · 크림 5.06 (AA 충족) */
+  --disabled: #6F6A63;
+  /* 밝은 배경 위 주황 글자 전용: 흰 6.03 · 크림 5.69 · 헤더칩 5.25 (AA 충족) */
+  --accent-text: #A8431A;
+  /* 흰 글자를 얹는 초록 배경(반영·공감 완료): 흰 대비 5.13:1 */
+  --ok-bg: #2E7D32;
   /* 정책참여 전용 청록(상상주도 톤): 흰글자 5.52:1·연청록부제 4.64:1·라벨 7.10:1 (AA 충족) */
   --civic: #00747F;
   --civic-dark: #00626B;
@@ -26,6 +47,21 @@
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* 건너뛰기 링크(KWCAG 2.2 «반복 영역 건너뛰기»): 평소엔 화면 밖, 키보드 포커스 시에만 노출 */
+.skip-link {
+  position: absolute;
+  left: 8px; top: -60px;
+  z-index: 999;
+  padding: 10px 16px;
+  background: var(--primary-hover);   /* 흰 글자 4.71:1 */
+  color: #fff;
+  font-size: 15px; font-weight: 800;
+  border-radius: 0 0 10px 10px;
+  text-decoration: none;
+  transition: top .12s ease;
+}
+.skip-link:focus { top: 0; }
 
 /* 스크린리더 전용(시각적으로 숨기되 보조기기엔 읽힘) */
 .sr-only {
@@ -70,12 +106,12 @@ body { width: 100%; margin: 0; padding-bottom: 60px; }
 }
 .topbar-titles { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 /* 제목: 곶감 주황 굵게(대형·굵은글씨 3:1 충족) / 부제: muted 진회색(크림 배경 대비 ≈5.3:1, AA 충족) */
-.topbar h1 { font-size: 19px; margin: 0; font-weight: 800; color: var(--primary); }
+.topbar h1 { font-size: 19px; margin: 0; font-weight: 800; color: var(--accent-text); } /* 크림 5.69:1 */
 .topsub { font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .back-btn {
   background: transparent;
   border: none;
-  color: var(--primary);
+  color: var(--accent-text);   /* 크림 5.69:1 */
   width: 34px; height: 34px;
   border-radius: 50%;
   font-size: 26px; line-height: 1;
@@ -109,7 +145,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   border: none; cursor: pointer; font-weight: 700;
   border-radius: 8px; padding: 7px 12px; font-size: 14px;
 }
-#newBannerView { background: var(--primary); color: #fff; }
+#newBannerView { background: var(--primary-hover); color: #fff; } /* 흰글자 4.71:1 */
 #newBannerClose { background: transparent; color: var(--muted); padding: 7px 8px; }
 .section-title { font-size: 16px; margin: 22px 0 10px; }
 
@@ -145,7 +181,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 }
 .big-btn span { font-size: 17px; }
 .big-btn:active { transform: scale(.98); }
-.big-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.big-btn.primary { background: var(--primary-hover); color: #fff; border-color: var(--primary-hover); } /* 흰글자 4.71:1 */
 .big-btn.full { width: 100%; flex-direction: row; justify-content: center; margin-top: 20px; }
 
 /* 카테고리 칩 */
@@ -159,7 +195,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   color: var(--text);
   cursor: pointer;
 }
-.chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.chip.active { background: var(--primary-hover); color: #fff; border-color: var(--primary-hover); } /* 흰글자 4.71:1 */
 
 /* 목록 카드 — 모바일은 1열, 넓어지면 auto-fill로 열 수 자동 증가(아래 @media에서 활성).
    기본(모바일 <768px)은 1열 유지 위해 단일 컬럼으로 둠 */
@@ -178,7 +214,19 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .card .team { display: inline-block; margin-top: 10px; font-size: 12px; color: var(--accent-text); background: var(--header); padding: 3px 9px; border-radius: 8px; }
 /* 상세 '담당' 안의 팀명 배지(팀색은 JS가 동적 주입, 미지정이면 아래 중립색) */
 .detail-team { display: inline-block; font-size: 13px; font-weight: 700; color: var(--accent-text); background: var(--header); padding: 2px 9px; border-radius: 8px; }
-.empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 15px; }
+.empty { text-align: center; color: var(--disabled); padding: 40px 16px; font-size: 15px; } /* 흰 5.36:1 */
+
+/* 오류 안내 박스 — 원인(연결/권한/미설정)에 따라 문구가 달라지고 «다시 시도»를 제공 */
+.err-box { padding: 34px 16px; }
+.err-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 8px; line-height: 1.5; }
+.err-desc { font-size: 14px; color: var(--muted); line-height: 1.7; }   /* 크림 5.41:1 */
+.err-actions { margin-top: 16px; }
+.err-retry {
+  font-family: inherit; font-size: 15px; font-weight: 800;
+  padding: 11px 20px; border: none; border-radius: 10px;
+  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 4.71:1 */
+}
+.err-retry:active { background: var(--primary-press); transform: scale(.97); }
 
 /* 맞춤추천 */
 .field-label { display: block; font-weight: 700; margin: 18px 0 8px; font-size: 16px; }
@@ -229,7 +277,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .done-box { text-align: center; padding: 40px 16px; }
 .done-check { font-size: 64px; line-height: 1; margin-bottom: 16px; }
 .done-box h2 { font-size: 23px; margin: 0 0 12px; }
-.done-program { font-size: 17px; font-weight: 700; color: var(--primary); background: var(--header); display: inline-block; padding: 8px 16px; border-radius: 10px; margin: 0 0 18px; }
+.done-program { font-size: 17px; font-weight: 700; color: var(--accent-text); background: var(--header); /* 5.25:1 */ display: inline-block; padding: 8px 16px; border-radius: 10px; margin: 0 0 18px; }
 .done-desc { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 0 0 28px; }
 
 /* 하단 플로팅 뒤로가기 버튼(엄지 위치) */
@@ -245,14 +293,14 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-size: 16px;
   font-weight: 700;
   color: #fff;
-  background: var(--primary);
+  background: var(--primary-hover);   /* 흰글자 4.71:1 */
   border: none;
   border-radius: 999px;
   box-shadow: 0 5px 16px rgba(0, 0, 0, .28);
   cursor: pointer;
   font-family: inherit;
 }
-.fab-back:active { background: var(--primary-hover); transform: scale(.95); }
+.fab-back:active { background: var(--primary-press); transform: scale(.95); } /* 흰글자 6.03:1 */
 
 .foot { text-align: center; font-size: 12px; color: var(--muted); padding: 20px 16px 78px; line-height: 1.9; }
 .foot-team { font-size: 13px; font-weight: 700; color: var(--text); }
@@ -277,8 +325,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   animation: fade .2s ease;
 }
 .team-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.team-card-head .team-gear { font-size: 34px; color: var(--primary); }
-.team-card-title { font-size: 20px; font-weight: 800; color: var(--primary); }
+.team-card-head .team-gear { font-size: 34px; color: var(--accent-text); }
+.team-card-title { font-size: 20px; font-weight: 800; color: var(--accent-text); } /* 6.03:1 */
 .team-card-sub { font-size: 13px; color: var(--muted); font-weight: 600; }
 .team-list { list-style: none; margin: 0 0 18px; padding: 0; }
 .team-list li {
@@ -292,8 +340,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-size: 12px; font-weight: 700; color: var(--muted);
   background: var(--header); border-radius: 7px; padding: 4px 0;
 }
-.team-list .role-lead { color: #fff; background: var(--primary); }
-.team-list .role-mgr { color: #fff; background: #43A047; }
+.team-list .role-lead { color: #fff; background: var(--primary-hover); } /* 흰글자 4.71:1 */
+.team-list .role-mgr { color: #fff; background: var(--ok-bg); } /* 흰글자 5.13:1 */
 .team-list .m-name { font-size: 17px; font-weight: 700; color: var(--text); }
 .team-list .m-dept { margin-left: auto; font-size: 13px; color: var(--muted); }
 .foot-inquiry { margin-top: 6px; }
@@ -327,11 +375,11 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   width: 100%;
   margin: 0 0 14px;
   padding: 12px 12px;
-  background: var(--primary);
+  background: var(--primary-hover);   /* 흰글자 4.71:1 */
   border-radius: 12px;
   color: #fff;
   text-align: left;
-  box-shadow: 0 3px 10px rgba(230,107,58,.28);
+  box-shadow: 0 3px 10px rgba(194,80,31,.28);
 }
 .inapp-emoji { font-size: 20px; flex-shrink: 0; line-height: 1.4; }
 .inapp-body { flex: 1; min-width: 0; }
@@ -341,20 +389,18 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .inapp-btn {
   font-family: inherit; font-size: 13px; font-weight: 800;
   padding: 8px 14px; border-radius: 9px; cursor: pointer;
-  background: #fff; color: var(--primary); border: none;
+  background: #fff; color: var(--accent-text); border: none;   /* 흰바탕 6.03:1 */
 }
 .inapp-btn:active { transform: scale(.98); }
 .inapp-btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.7); }
 .inapp-close { font-size: 14px; color: rgba(255,255,255,.85); padding: 2px 4px; flex-shrink: 0; cursor: pointer; background: none; border: none; font-family: inherit; line-height: 1.4; }
 
-/* 푸터: 설치 링크 + 공개 주소 */
-.foot-install { margin-top: 8px; }
+/* 푸터 링크 버튼(개인정보 처리방침 · 버전 정보)
+   ※ 설치 안내·브라우저 열기·공개 주소는 버전 정보 모달의 «📌 이용 안내»로 이동함 */
 .foot-link-btn {
   background: none; border: none; padding: 0; cursor: pointer; font: inherit;
   color: var(--accent-text); font-weight: 700; text-decoration: underline;
 }
-.foot-url { margin-top: 4px; font-size: 12px; color: var(--muted); word-break: break-all; }
-.foot-url-text { font-weight: 600; }
 
 /* 설치 안내 모달 */
 .install-card {
@@ -367,7 +413,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 }
 .install-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .install-emoji { font-size: 34px; }
-.install-title { font-size: 20px; font-weight: 800; color: var(--primary); }
+.install-title { font-size: 20px; font-weight: 800; color: var(--accent-text); } /* 6.03:1 */
 .install-sub { font-size: 13px; color: var(--muted); font-weight: 600; }
 .install-guide { display: grid; gap: 14px; }
 .install-os {
@@ -424,7 +470,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   padding: 16px;
   margin-bottom: 10px;
 }
-.propose-hero-title { font-size: 19px; font-weight: 800; color: var(--primary); }
+.propose-hero-title { font-size: 19px; font-weight: 800; color: var(--accent-text); } /* 헤더칩 5.25:1 */
 .propose-hero-sub { font-size: 14px; color: var(--muted); margin-top: 4px; }
 .legal-note { font-size: 12.5px; color: var(--muted); margin: 0 2px 12px; }
 .req { color: var(--accent-text); }
@@ -443,7 +489,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   flex-shrink: 0;
   padding: 11px 16px; font-size: 15px; font-weight: 800;
   border: none; border-radius: 10px;
-  background: var(--primary); color: #fff; cursor: pointer;
+  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 4.71:1 */
   font-family: inherit;
 }
 .pp-new-btn:active { transform: scale(.97); }
@@ -461,9 +507,9 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-size: 12px; font-weight: 800; color: #fff;
   padding: 3px 9px; border-radius: 8px; white-space: nowrap;
 }
-.pp-badge.st-accept { background: #766456; } /* 명도대비 보정(흰 글씨 5.6:1) */
-.pp-badge.st-review { background: #E66B3A; }
-.pp-badge.st-done { background: #43A047; }
+.pp-badge.st-accept { background: var(--muted); } /* 흰 글씨 5.74:1 */
+.pp-badge.st-review { background: #C2501F; } /* 흰 글씨 4.71:1 */
+.pp-badge.st-done { background: #2E7D32; } /* 흰 글씨 5.13:1 */
 .pp-badge.st-reject { background: #B5483A; }
 .pp-badge.st-hold { background: #8A7320; } /* 명도대비 보정(흰 글씨 4.6:1, AA 충족) */
 .pp-cat { font-size: 12px; color: var(--accent-text); background: var(--header); padding: 3px 9px; border-radius: 8px; }
@@ -479,8 +525,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .pd-body { font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; margin-bottom: 22px; }
 .pd-like-box { text-align: center; background: var(--header); border-radius: 14px; padding: 18px; margin-bottom: 22px; }
 .pd-like-count { font-size: 16px; margin-bottom: 12px; }
-.pd-like-count b { color: var(--primary); font-size: 20px; }
-.pp-liked { background: #43A047 !important; color: #fff !important; border-color: #43A047 !important; }
+.pd-like-count b { color: var(--accent-text); font-size: 20px; } /* 헤더칩 5.25:1 */
+.pp-liked { background: var(--ok-bg) !important; color: #fff !important; border-color: var(--ok-bg) !important; } /* 흰글자 5.13:1 */
 .pd-section-title { font-size: 15px; font-weight: 800; color: var(--accent-text); margin: 0 0 12px; }
 .pd-timeline { list-style: none; margin: 0 0 22px; padding: 0; }
 .pd-timeline li {
@@ -492,15 +538,15 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   background: var(--border); flex-shrink: 0;
 }
 .pd-timeline .tl-past { color: var(--text); }
-.pd-timeline .tl-past .tl-dot { background: var(--primary); }
+.pd-timeline .tl-past .tl-dot { background: var(--primary-hover); }
 .pd-timeline .tl-current { color: var(--accent-text); font-weight: 800; }
-.pd-timeline .tl-current .tl-dot { background: var(--primary); box-shadow: 0 0 0 4px rgba(230,107,58,.25); }
+.pd-timeline .tl-current .tl-dot { background: var(--primary-hover); box-shadow: 0 0 0 4px rgba(194,80,31,.25); }
 .pd-reply { background: #F0F7F0; border: 1.5px solid #C9E3C9; border-radius: 14px; padding: 15px; margin-bottom: 18px; }
-.pd-reply-title { font-size: 14px; font-weight: 800; color: #2E7D32; margin-bottom: 6px; }
+.pd-reply-title { font-size: 14px; font-weight: 800; color: #2E7D32; margin-bottom: 6px; } /* 연초록 배경 4.70:1 */
 .pd-reply-body { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
 .pd-actions { display: grid; gap: 10px; margin-top: 18px; }
-.pp-ghost { color: var(--muted); }
-.pp-danger { color: #fff; background: #B5483A; border-color: #B5483A; }
+.pp-ghost { color: var(--muted); } /* 흰 5.74:1 */
+.pp-danger { color: #fff; background: #B5483A; border-color: #B5483A; } /* 흰글자 5.31:1 */
 
 /* 작성 폼: 동의·허니팟 */
 .pp-agree { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0 4px; font-size: 14px; cursor: pointer; }
@@ -574,21 +620,41 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-/* ───────────── 버전별 개선사항(체인지로그) 모달 ───────────── */
+/* ───────────── 버전 정보 · 이용 안내 모달 ───────────── */
 .changelog-card { max-width: 420px; }
 .changelog-body {
   text-align: left;
-  max-height: 58vh;
+  max-height: 42vh;
   overflow-y: auto;
   margin: 6px 0 16px;
   -webkit-overflow-scrolling: touch;
 }
+/* 섹션 제목 */
+.cl-sec-h {
+  text-align: left; font-size: 13.5px; font-weight: 800;
+  color: var(--accent-text); margin: 14px 0 6px;
+}
+/* 📌 이용 안내 — 기존 푸터 항목을 이곳으로 통합 */
+.cl-guide { text-align: left; }
+.cl-guide-row {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 11px 13px; margin-bottom: 7px; font-family: inherit;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  text-align: left; cursor: pointer; transition: background .12s;
+}
+.cl-guide-row:hover { background: var(--header); }
+.cl-guide-row.static { cursor: default; background: #fff; }
+.cl-guide-emoji { font-size: 17px; flex-shrink: 0; }
+.cl-guide-txt { flex: 1; min-width: 0; }
+.cl-guide-url { font-size: 12.5px; font-weight: 600; color: var(--muted); word-break: break-all; }
+.cl-guide-go { color: var(--accent-text); font-weight: 800; flex-shrink: 0; }
 .cl-entry { padding: 12px 2px; border-bottom: 1px solid var(--border); }
 .cl-entry:last-child { border-bottom: none; }
 .cl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .cl-ver {
   font-size: 13px; font-weight: 800; color: #fff;
-  background: var(--primary); border-radius: 7px; padding: 3px 9px;
+  background: var(--primary-hover); border-radius: 7px; padding: 3px 9px;   /* 흰글자 4.71:1 */
 }
 .cl-date { font-size: 12px; color: var(--muted); font-weight: 600; }
 .cl-title { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
@@ -613,3 +679,30 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .privacy-ul li { font-size: 14.5px; line-height: 1.7; color: var(--text); margin-bottom: 4px; }
 .privacy-ul li b { color: var(--text); }
 .privacy-mail { color: var(--accent-text); font-weight: 700; text-decoration: underline; }
+
+/* ───────────── 움직임 최소화(OS "동작 줄이기" 존중) ─────────────
+ * KWCAG 2.2 «깜빡임과 번쩍임 사용 제한» / 전자정부 웹품질 지침(사용자 제어).
+ * PC앱(webui/style.css)·공무원앱(cloudui/style.css)과 동일 규약.
+ * 시민앱에서 실제로 쓰는 움직임을 빠짐없이 무효화한다.
+ *   · 화면 전환 fade  : .view (translateY 포함)
+ *   · 모달 등장 fade  : .team-card / .install-card
+ *   · 눌림 반응 scale : .big-btn / .card / .err-retry / .fab-back / .a2hs-tip / .inapp-btn
+ *                       .propose-card / .pp-new-btn
+ *   · 전환            : 본문 바로가기(skip-link) top, .cl-guide-row 배경 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001s !important;
+    scroll-behavior: auto !important;
+  }
+  .view, .team-card, .install-card { animation: none; }
+  .big-btn:active,
+  .card:active,
+  .err-retry:active,
+  .fab-back:active,
+  .a2hs-tip:active,
+  .inapp-btn:active,
+  .propose-card:active,
+  .pp-new-btn:active { transform: none; }
+}

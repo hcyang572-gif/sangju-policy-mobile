@@ -76,10 +76,83 @@
     } catch (e) { return ""; }
   }
 
+  // ---------- 오류 원인 분류 ----------
+  // 무료 플랜 일시정지·오프라인 등으로 클라우드에 아예 닿지 못한 사고가 있었는데
+  // 화면엔 "불러오기 실패"만 떠서 원인 파악이 불가능했다 → 원인별로 문구를 나눈다.
+  //   conn   : 네트워크/서버 미응답(브라우저 오프라인, fetch 실패, 5xx, 프로젝트 일시정지)
+  //   perm   : 권한(RLS)·인증 거부
+  //   setup  : DB 스키마/RPC 미적용(테이블·함수 없음)
+  //   other  : 그 밖
+  function errKind(e) {
+    if (!e) return "other";
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return "conn";
+    const msg = String(e.message || e || "").toLowerCase();
+    const code = String(e.code || e.status || "");
+    if (e.name === "TypeError" && msg.indexOf("fetch") >= 0) return "conn";
+    if (/failed to fetch|networkerror|network error|load failed|timeout|timed out|econnrefused|fetch failed/.test(msg)) return "conn";
+    if (/^(5\d\d|0|429)$/.test(code)) return "conn";
+    if (/service unavailable|bad gateway|gateway timeout|temporarily unavailable|paused|infrastructure/.test(msg)) return "conn";
+    if (code === "42501" || code === "401" || code === "403" ||
+        /row-level security|permission denied|not authorized|jwt|api key/.test(msg)) return "perm";
+    if (code === "42P01" || code === "42883" || code === "PGRST202" || code === "PGRST205" ||
+        /does not exist|could not find the (table|function)|schema cache/.test(msg)) return "setup";
+    return "other";
+  }
+
+  // 원인별 안내 + 다시 시도 버튼(빈 목록 자리에 그대로 렌더)
+  function errBoxHtml(kind, retryId) {
+    const btn = retryId
+      ? `<div class="err-actions"><button id="${retryId}" class="err-retry" type="button">🔄 다시 시도</button></div>`
+      : "";
+    if (kind === "conn") {
+      return `<div class="empty err-box" role="alert">
+        <div class="err-title">⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>
+        <div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>
+        ${btn}</div>`;
+    }
+    if (kind === "perm") {
+      return `<div class="empty err-box" role="alert">
+        <div class="err-title">🔒 접근 권한이 없어 불러오지 못했습니다.</div>
+        <div class="err-desc">일시적인 설정 문제일 수 있습니다.<br>계속되면 관리 부서로 알려 주세요.</div>
+        ${btn}</div>`;
+    }
+    if (kind === "setup") {
+      return `<div class="empty err-box" role="alert">
+        <div class="err-title">🛠 정책참여 기능을 준비 중입니다.</div>
+        <div class="err-desc">DB 설정(SQL) 적용 후 이용할 수 있습니다.</div>
+        ${btn}</div>`;
+    }
+    return `<div class="empty err-box" role="alert">
+      <div class="err-title">불러오지 못했습니다.</div>
+      <div class="err-desc">잠시 후 다시 시도해 주세요.</div>
+      ${btn}</div>`;
+  }
+
+  // 목록 영역에 오류 박스를 그리고 '다시 시도' 버튼을 연결
+  function showListError(kind) {
+    $("ppList").innerHTML = errBoxHtml(kind, "ppRetry");
+    const b = $("ppRetry");
+    if (b) b.addEventListener("click", reload);
+  }
+
+  // 클라이언트 자체가 안 만들어진 경우(설정 파일 누락 등)
   function dbUnavailableMsg() {
-    return `<div class="empty">정책참여 기능을 불러올 수 없습니다.<br>
-      (DB 설정(SQL) 적용 후 이용 가능합니다.)<br>
-      잠시 후 다시 시도해 주세요.</div>`;
+    return errBoxHtml("setup", "");
+  }
+
+  // 동작(공감·등록·신고 등) 실패 시 alert 문구 — 원인별 구분
+  function actionErrMsg(e, what) {
+    const kind = errKind(e);
+    if (kind === "conn") {
+      return "⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.\n잠시 후 다시 시도해 주세요.";
+    }
+    if (kind === "perm") {
+      return "🔒 접근 권한이 없어 " + what + "하지 못했습니다.\n계속되면 관리 부서로 알려 주세요.";
+    }
+    if (kind === "setup") {
+      return "🛠 아직 준비 중인 기능입니다.\n(DB 설정(SQL) 적용 후 이용할 수 있습니다.)";
+    }
+    return what + "에 실패했습니다.\n잠시 후 다시 시도해 주세요.";
   }
 
   // ---------- 분야 목록 채우기 (지원사업 카테고리 재사용) ----------
@@ -147,7 +220,9 @@
       renderList();
     } catch (e) {
       console.warn("[정책참여] 목록 조회 실패:", e);
-      if (pstate.items.length === 0) $("ppList").innerHTML = dbUnavailableMsg();
+      // 원인(연결/권한/미설정)에 따라 안내 문구를 구분 + 다시 시도 버튼 제공
+      if (pstate.items.length === 0) showListError(errKind(e));
+      $("ppListMeta").textContent = "";
       pstate.end = true;
       $("ppMore").hidden = true;
     } finally {
@@ -282,7 +357,7 @@
       btn.classList.toggle("primary", !nowLiked);
     } catch (e) {
       console.warn("[정책참여] 공감 실패:", e);
-      alert("공감 처리에 실패했습니다.\n잠시 후 다시 시도해 주세요.\n(DB 설정 미적용 시 동작하지 않습니다.)");
+      alert(actionErrMsg(e, "공감 처리"));
     } finally {
       btn.disabled = false;
     }
@@ -350,7 +425,7 @@
       reload();
     } catch (e) {
       console.warn("[정책참여] 제안 등록 실패:", e);
-      alert("제안 등록에 실패했습니다.\n잠시 후 다시 시도해 주세요.\n(DB 설정 미적용 시 동작하지 않습니다.)");
+      alert(actionErrMsg(e, "제안 등록"));
     } finally {
       btn.disabled = false; btn.textContent = orig;
     }
@@ -385,7 +460,7 @@
       reload();
     } catch (e) {
       console.warn("[정책참여] 삭제 실패:", e);
-      alert("삭제에 실패했습니다. PIN이 맞는지 확인해 주세요.");
+      alert(errKind(e) === "conn" ? actionErrMsg(e, "삭제") : "삭제에 실패했습니다. PIN이 맞는지 확인해 주세요.");
     }
   }
 
@@ -442,7 +517,7 @@
       reload();
     } catch (e) {
       console.warn("[정책참여] 수정 실패:", e);
-      alert("수정에 실패했습니다. PIN이 맞는지 확인해 주세요.");
+      alert(errKind(e) === "conn" ? actionErrMsg(e, "수정") : "수정에 실패했습니다. PIN이 맞는지 확인해 주세요.");
     } finally {
       btn.disabled = false; btn.textContent = orig;
     }
@@ -483,7 +558,7 @@
       closeReportModal();
     } catch (e) {
       console.warn("[정책참여] 신고 실패:", e);
-      alert("신고에 실패했습니다.\n잠시 후 다시 시도해 주세요.");
+      alert(actionErrMsg(e, "신고"));
     }
   }
 

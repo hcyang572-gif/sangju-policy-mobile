@@ -84,7 +84,22 @@ async function init() {
     const res = await fetch("data.json", { cache: "no-store" });
     DATA = await res.json();
   } catch (e) {
-    $("app").innerHTML = '<p class="empty">데이터를 불러오지 못했습니다.<br>data.json 을 먼저 생성해 주세요 (build_data.py).</p>';
+    // 원인 구분: 오프라인·서버 미응답이면 «일시적 응답 없음» 안내, 그 밖은 데이터 파일 문제로 안내.
+    // (무료 플랜 일시정지로 서비스가 멈췄을 때 "불러오기 실패"만 떠서 원인 파악이 안 됐던 사고 반영)
+    const offline = (typeof navigator !== "undefined" && navigator.onLine === false);
+    const netMsg = /failed to fetch|networkerror|network error|load failed|timeout|fetch/i.test(String(e && e.message));
+    const conn = offline || netMsg;
+    $("app").innerHTML = conn
+      ? '<div class="empty err-box" role="alert">' +
+        '<div class="err-title">⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
+        '<div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>' +
+        '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>'
+      : '<div class="empty err-box" role="alert">' +
+        '<div class="err-title">🛠 사업 정보를 준비 중입니다.</div>' +
+        '<div class="err-desc">데이터 파일(data.json)을 읽지 못했습니다.<br>잠시 후 다시 시도해 주세요.</div>' +
+        '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>';
+    const rb = $("initRetry");
+    if (rb) rb.addEventListener("click", () => location.reload());
     return;
   }
   state.navStack = [{ v: "home", t: HOME_TITLE }];
@@ -700,12 +715,17 @@ function bindEvents() {
     try { localStorage.setItem(INAPP_DISMISS_KEY, "1"); } catch (err) {}
     initA2HS();   // 인앱 배너가 사라졌으니 설치띠 노출 여부 재평가
   });
-  // 푸터: 다른 브라우저로 열기 도움말(항상 접근 가능)
+  // 버전 정보 모달 › 이용 안내: 다른 브라우저로 열기(항상 접근 가능)
   $("openBrowserLink").addEventListener("click", () => {
     if (isAndroid()) { window.location.href = buildChromeIntent(); }
     else { copyCurrentUrl(); }
   });
-  $("installLink").addEventListener("click", openInstallGuide);   // 푸터: 언제든 다시 보기
+  // 버전 정보 모달 › 이용 안내: 홈 화면 추가 방법. 모달 중첩을 막기 위해 버전 모달을 먼저 닫는다.
+  $("installLink").addEventListener("click", () => {
+    const vm = $("versionModal");
+    if (vm && !vm.hidden) { vm.hidden = true; ModalA11y.close("versionModal"); }
+    openInstallGuide();
+  });
   $("installClose").addEventListener("click", closeInstallGuide);
   $("installModal").addEventListener("click", (e) => {
     if (e.target.id === "installModal") closeInstallGuide();  // 배경 클릭 닫기

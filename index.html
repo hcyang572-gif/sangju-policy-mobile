@@ -28,6 +28,8 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- 반복 영역 건너뛰기(KWCAG 2.2): 키보드 첫 Tab에서만 노출, 본문(main#app)으로 즉시 이동 -->
+  <a href="#app" class="skip-link">본문 바로가기</a>
   <header class="topbar">
     <div class="topbar-inner">
       <button id="backBtn" class="back-btn" hidden aria-label="뒤로">‹</button>
@@ -40,7 +42,8 @@
   </header>
   <div class="topline"></div>
 
-  <main id="app">
+  <!-- id는 app.js가 참조하므로 유지. tabindex="-1" 은 건너뛰기 링크 도착 시 포커스를 받기 위함 -->
+  <main id="app" tabindex="-1">
     <!-- 홈 -->
     <section id="view-home" class="view">
       <div id="newBanner" class="new-banner" hidden>
@@ -285,11 +288,8 @@
 
   <footer class="foot">
     <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
-    <div class="foot-install">📲 <button id="installLink" class="foot-link-btn" type="button">홈 화면에 앱처럼 추가하기</button></div>
-    <div class="foot-install">🌐 <button id="openBrowserLink" class="foot-link-btn" type="button">다른 브라우저(크롬·사파리)로 열기</button></div>
-    <div class="foot-url">🔗 <span class="foot-url-text">hcyang572-gif.github.io/sangju-policy-mobile</span></div>
-    <div class="foot-inquiry">오류 · 문의(개발자) <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
-    <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <button id="versionBtn" class="foot-link-btn" type="button" aria-label="현재 버전 0.0.1, 버전별 개선사항 보기">v0.0.1</button></div>
+    <div class="foot-inquiry">오류 문의 <a id="inquiryLink" href="#">hcyang572@korea.kr</a></div>
+    <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <button id="versionBtn" class="foot-link-btn" type="button" aria-label="버전 정보 및 이용 안내 보기">v0.0.2</button></div>
   </footer>
 
   <!-- 팀원 소개 모달 -->
@@ -394,10 +394,31 @@
       <div class="install-head">
         <span class="install-emoji" aria-hidden="true">📋</span>
         <div>
-          <div class="install-title" id="versionModalTitle">버전별 개선사항</div>
+          <div class="install-title" id="versionModalTitle">버전 정보 · 이용 안내</div>
           <div class="install-sub">상주시 정책 플랫폼</div>
         </div>
       </div>
+
+      <!-- 📌 이용 안내 (기존 푸터 항목을 이곳으로 통합) -->
+      <div class="cl-guide">
+        <h3 class="cl-sec-h">📌 이용 안내</h3>
+        <button id="installLink" class="cl-guide-row" type="button">
+          <span class="cl-guide-emoji" aria-hidden="true">📲</span>
+          <span class="cl-guide-txt">홈 화면에 앱처럼 추가하기</span>
+          <span class="cl-guide-go" aria-hidden="true">›</span>
+        </button>
+        <button id="openBrowserLink" class="cl-guide-row" type="button">
+          <span class="cl-guide-emoji" aria-hidden="true">🌐</span>
+          <span class="cl-guide-txt">다른 브라우저(크롬·사파리)로 열기</span>
+          <span class="cl-guide-go" aria-hidden="true">›</span>
+        </button>
+        <div class="cl-guide-row static">
+          <span class="cl-guide-emoji" aria-hidden="true">🔗</span>
+          <span class="cl-guide-txt cl-guide-url">hcyang572-gif.github.io/sangju-policy-mobile</span>
+        </div>
+      </div>
+
+      <h3 class="cl-sec-h">📋 버전별 개선사항</h3>
       <div id="changelogBody" class="changelog-body"></div>
       <button id="versionClose" class="big-btn primary full" type="button">닫기</button>
     </div>
