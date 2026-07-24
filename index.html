@@ -12,6 +12,8 @@
   <!-- PWA: 홈 화면에 추가 시 앱 이름/아이콘 -->
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
+  <!-- 파비콘 명시(없으면 브라우저가 /favicon.ico 를 찾다가 404 콘솔 오류를 남긴다) -->
+  <link rel="icon" type="image/png" href="icon-192.png" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -135,6 +137,8 @@
     <!-- 신청 -->
     <section id="view-apply" class="view" hidden>
       <h2 id="applyTitle" class="apply-title">신청하기</h2>
+      <!-- 📌 접수 안내(비고): 해당 사업에 값이 있을 때만 JS가 채운다 -->
+      <div id="applyNotice"></div>
       <p class="apply-hint">아래 내용을 작성해 제출하면 담당 부서로 바로 접수됩니다.</p>
       <label class="field-label" for="applyName">신청자 이름</label>
       <input id="applyName" class="text-input" type="text" autocomplete="name" placeholder="홍길동" />

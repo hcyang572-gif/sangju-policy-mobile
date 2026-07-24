@@ -129,7 +129,10 @@ def main():
             "팀명": str(r.get("팀명", "")).strip(),
             "연락처": str(r.get("연락처", "")).strip(),
             "담당자이메일": str(r.get("담당자 이메일", "")).strip(),
+            # 종료일: 신규 DB에는 열이 없을 수 있다(없으면 "" → 화면에서 렌더 생략).
             "종료일": str(r.get("종료일", "")).strip(),
+            # 비고: 접수 마감/재접수 시기 등 시민에게 반드시 보여야 할 안내(📌 접수 안내)
+            "비고": config.clean_text(r.get("비고", "")),
             "categories": cats,
         })
 
@@ -175,7 +178,10 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
 
+    n_note = sum(1 for p in programs if p.get("비고"))
+    n_end = sum(1 for p in programs if p.get("종료일"))
     print(f"[완료] {len(programs)}개 사업, {len(categories)}개 카테고리 → {OUT}")
+    print(f"       비고(접수 안내) 있는 사업 {n_note}건 / 종료일 있는 사업 {n_end}건")
 
 
 if __name__ == "__main__":

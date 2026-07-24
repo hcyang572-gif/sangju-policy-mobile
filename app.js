@@ -10,6 +10,18 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// 입력 디바운스 — 마지막 입력 후 ms 밀리초가 지나면 «반드시 한 번» 실행한다.
+// ★ 공무원앱(webui/app.js)의 검색 디바운스와 동일한 규약(300ms)이라 두 앱 반응이 같다.
+// ⚠ 한글(IME) 조합 중에도 input 이벤트는 계속 오므로 «건너뛰지 않고» 타이머만 미룬다.
+//    (조합 중이라고 렌더를 막으면 "청년"처럼 조합이 안 끝난 상태에서 결과가 멈춘다 — 과거 결함)
+// .cancel(): 화면 전환 등으로 대기 중인 실행이 필요 없어졌을 때 취소.
+function debounce(fn, ms) {
+  let t = null;
+  const wrapped = (...a) => { clearTimeout(t); t = setTimeout(() => { t = null; fn(...a); }, ms); };
+  wrapped.cancel = () => { clearTimeout(t); t = null; };
+  return wrapped;
+}
+
 // ---------- 담당팀별 색 구분(공무원앱과 동일 매핑) ----------
 // 팀명 문자열 → 결정적 색(연한 배경+진한 글자, 대비 4.5:1 이상). 같은 팀=같은 색.
 // ★ 공무원앱도 동일 함수를 사용하므로 임의 수정 금지(두 앱 색 일치 보장).
@@ -301,8 +313,9 @@ function openList({ title, onlyNames }) {
   listOnlyNames = onlyNames || null;
   $("topTitle").textContent = title || "사업 목록";
   $("listSearch").value = "";
+  renderListDebounced.cancel();   // 이전 화면에서 대기 중이던 검색 렌더는 버린다
   showView("list");
-  renderList();
+  renderList();                    // 목록 진입은 즉시 렌더(지연 없음)
 }
 
 function renderList() {
@@ -325,12 +338,20 @@ function renderList() {
   box.innerHTML = results.map((p) => {
     const idx = DATA.programs.indexOf(p);
     const teamName = (p.팀명 || "").trim() || "담당팀 확인 필요";
+    // 📌 접수 안내(비고): 마감/재접수 시기 등 — 있는 사업만 짧은 표식
+    const note = (p.비고 || "").trim();
+    const noteFlag = note
+      ? `<span class="note-flag"><span aria-hidden="true">📌</span> 접수 안내</span>`
+      : "";
     // 키보드 접근(KWCAG 2.2): role=button + tabindex 로 Tab 이동·Enter/Space 실행 가능
+    // 색만으로 알리지 않도록 카드 aria-label 에도 '접수 안내 있음'을 덧붙인다
     return `<div class="card" data-idx="${idx}" role="button" tabindex="0"
-      aria-label="${esc(p.사업명)} 상세 보기">
+      aria-label="${esc(p.사업명)}${note ? ", 접수 안내 있음" : ""} 상세 보기">
       <h3>${esc(p.사업명)}</h3>
       <p>${esc(p.내용 || p.대상자상세기준)}</p>
-      <span class="team" data-team="${esc(teamName)}">${esc(teamName)}</span>
+      <span class="card-meta">
+        <span class="team" data-team="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
+      </span>
     </div>`;
   }).join("");
   box.querySelectorAll(".card").forEach((el) => {
@@ -342,6 +363,10 @@ function renderList() {
     });
   });
 }
+
+// 목록 안 검색은 한 글자마다 전체를 다시 그리지 않고 300ms 모아서 한 번만 그린다.
+// (사업이 100건을 넘으면서 타자마다 재렌더는 특히 저사양 폰에서 버벅였다)
+const renderListDebounced = debounce(renderList, 300);
 
 // ---------- 상세 ----------
 let currentIdx = null;
@@ -363,9 +388,19 @@ function openDetail(idx) {
   const telHtml = tel
     ? `<a class="tel-link" href="tel:${esc(telDigits)}" aria-label="${esc(tel)} 전화 걸기"><span aria-hidden="true">📞</span> ${esc(tel)}</a>`
     : "";
+  // 📌 접수 안내(비고) — 접수 마감·재접수 시기 등. 값이 없으면 아무것도 렌더링하지 않는다.
+  // 색만으로 구분하지 않도록 아이콘(📌)+'접수 안내' 문구를 함께 두고, role=note 로 읽히게 한다.
+  const note = (p.비고 || "").trim();
+  const noteHtml = note
+    ? `<div class="notice-box" role="note" aria-label="접수 안내">
+         <p class="notice-k"><span aria-hidden="true">📌</span> 접수 안내</p>
+         <p class="notice-v">${esc(note)}</p>
+       </div>`
+    : "";
   $("detailContent").innerHTML = `
     <h2>${esc(p.사업명)}</h2>
     ${tags ? `<div class="detail-tags">${tags}</div>` : ""}
+    ${noteHtml}
     ${block("📄 사업 내용", p.내용)}
     ${block("👥 지원 대상", p.대상자상세기준)}
     ${block("📝 이용 방법", p.이용방법)}
@@ -387,6 +422,14 @@ function openApply(idx) {
   const p = DATA.programs[idx];
   $("topTitle").textContent = "신청하기";
   $("applyTitle").textContent = p.사업명;
+  // 📌 접수 안내(비고)는 '제출 직전'에 한 번 더 보여, 마감된 사업에 그냥 신청하지 않게 한다.
+  const note = (p.비고 || "").trim();
+  $("applyNotice").innerHTML = note
+    ? `<div class="notice-box" role="note" aria-label="접수 안내">
+         <p class="notice-k"><span aria-hidden="true">📌</span> 접수 안내</p>
+         <p class="notice-v">${esc(note)}</p>
+       </div>`
+    : "";
   $("applyName").value = "";
   $("applyPhone").value = "";
   $("applyMemo").value = "";
@@ -664,7 +707,11 @@ function bindEvents() {
   $("homeSearch").addEventListener("search", (e) => {
     if (e.target.value.trim()) { state.selectedCats = new Set(); openList({ title: "검색 결과" }); $("listSearch").value = e.target.value; renderList(); }
   });
-  $("listSearch").addEventListener("input", renderList);
+  // 목록 검색: 300ms 디바운스(공무원앱과 동일). 조합 중 input 도 그대로 받아 타이머만 미루므로
+  // 한글이 완성되기 전에 결과가 멈추는 일이 없고, 입력을 멈추면 300ms 뒤 반드시 한 번 렌더된다.
+  $("listSearch").addEventListener("input", renderListDebounced);
+  // IME 조합 확정(스페이스·엔터·다른 키) 직후에도 마지막 글자가 확실히 반영되도록 한 번 더 예약.
+  $("listSearch").addEventListener("compositionend", renderListDebounced);
   $("recommendRun").addEventListener("click", runRecommend);
   // 연락처는 '-' 없이 숫자만 입력
   $("applyPhone").addEventListener("input", (e) => {
