@@ -63,29 +63,35 @@ window.SangjuForms = (function () {
   }
 
   // ── §3 파일명 · 폴더명 sanitize ────────────────────────────────────
+  //  ⚠ Supabase Storage 는 «키(경로)에 한글 등 비ASCII 를 허용하지 않는다»(InvalidKey 400).
+  //     그래서 storage_path 는 «반드시 ASCII 로만» 만든다.
+  //     원본 한글 파일명은 benefit_forms.file_name 에 보존한다(화면 표시 + 다운로드 이름).
+  function _asciiHash(s) {                 // 한글 사업명 → 결정적 ASCII 폴더(djb2)
+    s = String(s || "");
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) { h = (((h << 5) + h) + s.charCodeAt(i)) >>> 0; }
+    return "b" + h.toString(36);
+  }
   function sanitizeName(name) {
     name = String(name || "");
     var dot = name.lastIndexOf(".");
     var base = dot > 0 ? name.slice(0, dot) : name;
     var ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
-    var clean = function (s) {
-      return s
-        .replace(/\s+/g, "_")
-        .replace(/[^가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9._-]/g, "")
-        .replace(/_+/g, "_")
-        .replace(/^[_.]+|[_.]+$/g, "");
-    };
-    base = clean(base).slice(0, 100) || "file";
+    // ASCII(영숫자·._-)만 남긴다. 한글 등 비ASCII 는 제거 → 다 지워지면 'file'.
+    base = base
+      .replace(/\s+/g, "_")
+      .replace(/[^A-Za-z0-9._-]/g, "")
+      .replace(/_+/g, "_")
+      .replace(/^[_.]+|[_.]+$/g, "")
+      .slice(0, 60) || "file";
     ext = ext.replace(/[^a-z0-9]/g, "");
     return ext ? base + "." + ext : base;
   }
   function sanitizeFolder(key) {
-    return (
-      String(key)
-        .replace(/\s+/g, "")
-        .replace(/[^가-힣A-Za-z0-9._-]/g, "")
-        .slice(0, 80) || "etc"
-    );
+    // benefit_key 가 한글이면 Storage 키로 못 쓴다 → 결정적 해시로 ASCII 폴더 생성.
+    // (매칭은 benefit_forms.benefit_key 컬럼으로 하므로 폴더명은 위치일 뿐 무관)
+    var ascii = String(key).replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40);
+    return ascii || _asciiHash(key);
   }
 
   // ── §4 허용 확장자 · 용량(클라이언트 강제) ─────────────────────────
@@ -185,7 +191,8 @@ window.SangjuForms = (function () {
       throw new Error(_uploadErrMsg(lastErr));
     }
 
-    var pub = sb.storage.from(BUCKET).getPublicUrl(path);
+    // 저장 경로는 ASCII 지만, 다운로드 파일명은 «원본(한글)» 이 되도록 ?download 를 붙인다.
+    var pub = sb.storage.from(BUCKET).getPublicUrl(path, { download: file.name });
     var publicUrl = (pub && pub.data && pub.data.publicUrl) || "";
 
     var row = {
