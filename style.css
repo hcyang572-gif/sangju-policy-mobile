@@ -274,6 +274,22 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .detail-block .v { font-size: 0.9375rem; white-space: pre-wrap; }
 .tel-link { color: var(--accent-text); font-weight: 700; text-decoration: none; }
 .tel-link .tel-ico { font-size: 14px; }
+/* 📎 필요서류 서식 다운로드 — 공무원이 올린 서식을 시민이 내려받는 목록.
+   파일형식·용량을 텍스트로 병기(스크린리더/저시력), 색만으로 정보 전달하지 않는다.
+   링크 글자 #A8431A on #FFFFFF = 5.66:1 (AA 충족). */
+.forms-dl-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.forms-dl-item { margin: 0; }
+.forms-dl-link {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  padding: 12px 14px; min-height: 44px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--accent-text); font-weight: 700; text-decoration: none;
+}
+.forms-dl-link:hover { border-color: var(--primary); }
+.forms-dl-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.forms-dl-name { flex: 1 1 auto; word-break: break-all; }
+.forms-dl-meta { font-size: 0.8125rem; font-weight: 600; color: var(--muted); }
+.forms-dl-go { font-size: 0.8125rem; font-weight: 700; color: var(--primary-hover); white-space: nowrap; }
 /* 📌 접수 안내(비고) 블록 — 마감·재접수 시기처럼 신청 전에 반드시 봐야 할 안내.
    색만으로 구분하지 않도록 아이콘(📌)+'접수 안내' 라벨을 항상 함께 표시한다.
    라벨 #A8431A on #FDECE4 = 5.25:1, 본문 #4A3B32 on #FDECE4 = 8.9:1 (AA 충족)

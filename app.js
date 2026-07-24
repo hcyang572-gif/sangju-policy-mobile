@@ -405,6 +405,7 @@ function openDetail(idx) {
     ${block("👥 지원 대상", p.대상자상세기준)}
     ${block("📝 이용 방법", p.이용방법)}
     ${block("📎 필요 서류", p.필요서류)}
+    <div id="formsDownload"></div>
     ${blockHtml("🏢 담당", chargeHtml)}
     ${blockHtml("☎ 연락처", telHtml)}
     ${block("📅 종료일", p.종료일)}
@@ -414,6 +415,44 @@ function openDetail(idx) {
   const teamEl = $("detailContent").querySelector(".detail-team");
   if (teamEl) applyTeamColor(teamEl, teamEl.dataset.team);
   $("detailApply").addEventListener("click", () => openApply(idx));
+  // 📎 필요서류 서식 다운로드(Supabase) — 비동기로 채운다.
+  // 등록된 서식이 없거나 저장소 미준비면 섹션 자체를 숨긴 채로 둔다(기존 화면 무손상).
+  renderFormsDownload(p, idx);
+}
+
+// 사업 상세의 «서식 다운로드» 블록을 채운다. 목록은 SangjuForms.listForms 가 정본.
+// listForms 는 실패/미준비 시 [] 를 돌려주므로(방어), 없으면 비워 둬서 안 보이게 한다.
+async function renderFormsDownload(p, idx) {
+  const host = $("formsDownload");
+  if (!host || !window.SangjuForms) return;
+  let rows = [];
+  try { rows = await SangjuForms.listForms(p); } catch (e) { rows = []; }
+  // 그 사이 다른 사업으로 이동했으면(빠른 전환) 낡은 결과를 반영하지 않는다.
+  if (currentIdx !== idx) return;
+  if (!rows || !rows.length) { host.innerHTML = ""; return; }
+  const items = rows.map((row) => {
+    const nm = String(row.file_name || "서식");
+    const ext = (nm.split(".").pop() || "").toUpperCase();
+    const size = SangjuForms.formatSize(row.size);
+    // 색·아이콘만이 아니라 파일형식·용량을 «텍스트»로 명시(스크린리더/저시력).
+    const metaTxt = (ext ? ext + " 파일" : "파일") + (size ? ", " + size : "");
+    const url = String(row.public_url || "");
+    const aria = esc(nm) + " 내려받기 (" + esc(metaTxt) + ")";
+    if (!url) return "";
+    return `<li class="forms-dl-item">
+        <a class="forms-dl-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer"
+           download="${esc(nm)}" aria-label="${aria}">
+          <span class="forms-dl-name"><span aria-hidden="true">📄</span> ${esc(nm)}</span>
+          <span class="forms-dl-meta">${esc(metaTxt)}</span>
+          <span class="forms-dl-go" aria-hidden="true">내려받기 ⬇</span>
+        </a>
+      </li>`;
+  }).join("");
+  if (!items) { host.innerHTML = ""; return; }
+  host.innerHTML = `<div class="detail-block">
+      <div class="k">📎 필요서류 서식 다운로드</div>
+      <div class="v"><ul class="forms-dl-list">${items}</ul></div>
+    </div>`;
 }
 
 // ---------- 신청 (이메일 생성) ----------
