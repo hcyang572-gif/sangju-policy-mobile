@@ -2,7 +2,7 @@
  * 경로는 모두 상대경로(self.registration.scope 기준)로 다뤄
  * GitHub Pages 하위경로(/sangju-policy-mobile/)에서도 깨지지 않게 함.
  * 캐시 버전을 올리려면 아래 CACHE 값을 바꾸면 됨(예: sangju-v2). */
-const CACHE = "sangju-v20";
+const CACHE = "sangju-v21";
 
 // scope(예: https://hcyang572-gif.github.io/sangju-policy-mobile/)를 기준으로
 // 절대 URL을 만들어 둔다. (서브경로/루트 모두 안전)
@@ -19,6 +19,7 @@ const PRECACHE = [
   "config.js",
   "version.js",
   "forms.js",
+  "apply_client.js",
   "manifest.json",
   "icon-192.png",
   "icon-512.png",

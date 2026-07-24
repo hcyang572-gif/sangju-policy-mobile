@@ -343,7 +343,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .done-box { text-align: center; padding: 40px 16px; }
 .done-check { font-size: 64px; line-height: 1; margin-bottom: 16px; }
 .done-box h2 { font-size: 1.4375rem; margin: 0 0 12px; }
-.done-program { font-size: 1.0625rem; font-weight: 700; color: var(--accent-text); background: var(--header); /* 5.25:1 */ display: inline-block; padding: 8px 16px; border-radius: 10px; margin: 0 0 18px; }
+.done-program { font-size: 1.0625rem; font-weight: 700; color: var(--accent-text); background: var(--header); /* 5.25:1 */ display: inline-block; padding: 8px 16px; border-radius: 10px; margin: 0 0 12px; }
+.done-receipt { font-size: 0.9375rem; font-weight: 700; color: var(--text); letter-spacing: 0.02em; margin: 0 0 16px; }
 .done-desc { color: var(--muted); font-size: 0.9375rem; line-height: 1.6; margin: 0 0 28px; }
 
 /* 하단 플로팅 뒤로가기 버튼(엄지 위치) */

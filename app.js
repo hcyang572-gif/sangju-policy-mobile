@@ -513,6 +513,43 @@ async function sendApply() {
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = "제출 중...";
+
+  // 접수번호(클라 생성) — Supabase 저장·완료화면 공용. PC 포맷 YYYYMMDD-HHMMSS-01.
+  const receiptNo = (window.SangjuApply && SangjuApply.genReceiptNo)
+    ? SangjuApply.genReceiptNo(1) : "";
+
+  // ── 두 경로를 «독립» 실행 ──────────────────────────────────────────────
+  //  (1) Supabase 저장 = «접수»의 정본(공무원앱 실시간 접수)  (2) 메일 = 보조 알림.
+  //  ⚠ 어느 하나가 실패해도 다른 하나로 접수되면 «완료»로 본다(둘 다 실패해야 실패 안내).
+  //  ⚠ applications 테이블이 아직 없을 수 있으므로(미실행) Supabase 실패는 삼키고
+  //     기존 메일 경로(PC 자동접수)가 접수를 이어받게 한다 — 앱이 깨지지 않게 방어.
+  let supaOK = false, mailOK = false, supaErr = null, mailErr = null;
+  let savedReceipt = receiptNo;
+
+  // (1) Supabase 직접 저장 — 개인정보(이름·연락처)가 클라우드로 전송됨(프로토타입·승인됨).
+  if (window.SangjuApply && SangjuApply.submitApplication) {
+    try {
+      const row = await SangjuApply.submitApplication({
+        receipt_no:     receiptNo,
+        benefit_name:   p.사업명,
+        benefit_key:    SangjuApply.benefitKey(p),
+        applicant_name: name,
+        phone:          phone,
+        memo:           memo,
+        team:           p.팀명 || "",
+        manager_email:  p.담당자이메일 || "",
+        source:         "모바일",
+        // status·admin_memo·created_at 은 보내지 않음(서버 기본 '접수'/트리거)
+      });
+      supaOK = true;
+      if (row && row.receipt_no) savedReceipt = row.receipt_no;
+    } catch (e) {
+      supaErr = e;
+      console.warn("[신청] Supabase 저장 실패(메일 경로로 접수 진행):", e);
+    }
+  }
+
+  // (2) 메일(Web3Forms) — 기존 로직 그대로. Supabase 성공/실패와 무관하게 항상 발송.
   try {
     const res = await fetch("https://api.web3forms.com/submit", {
       method: "POST",
@@ -521,12 +558,21 @@ async function sendApply() {
     });
     const j = await res.json();
     if (!j.success) throw new Error(j.message || "전송 실패");
-    showDone(p);
+    mailOK = true;
   } catch (e) {
-    alert("전송에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + e.message + ")");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = orig;
+    mailErr = e;
+    console.warn("[신청] 메일 전송 실패:", e);
+  }
+
+  btn.disabled = false;
+  btn.textContent = orig;
+
+  if (supaOK || mailOK) {
+    // 접수번호는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
+    showDone(p, supaOK ? savedReceipt : "");
+  } else {
+    const detail = (supaErr && supaErr.message) || (mailErr && mailErr.message) || "";
+    alert("신청 접수에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + detail + ")");
   }
 }
 
@@ -580,6 +626,8 @@ async function sendInquiry() {
     if (!j.success) throw new Error(j.message || "전송 실패");
     $("topTitle").textContent = "문의 완료";
     $("doneProgram").textContent = "문의가 접수되었습니다";
+    // 직전 신청 완료의 접수번호가 남아있지 않도록 숨긴다(문의는 접수번호가 없음)
+    if ($("doneReceipt")) { $("doneReceipt").textContent = ""; $("doneReceipt").hidden = true; }
     document.querySelector("#view-done h2").textContent = "문의해 주셔서 감사합니다";
     document.querySelector("#view-done .done-desc").innerHTML =
       "담당자에게 문의 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
@@ -594,13 +642,20 @@ async function sendInquiry() {
   }
 }
 
-function showDone(p) {
+function showDone(p, receiptNo) {
   $("topTitle").textContent = "접수 완료";
   // 문의 완료로 바뀌었던 문구를 신청 완료용으로 복원
   document.querySelector("#view-done h2").textContent = "신청이 접수되었습니다";
   document.querySelector("#view-done .done-desc").innerHTML =
     "담당 부서로 신청 내용이 전달되었습니다.<br>처리 결과는 담당자가 연락처로 안내드립니다.";
   $("doneProgram").textContent = p.사업명;
+  // 접수번호(Supabase 저장 성공 시) — 있으면 표시, 없으면 숨김
+  const rc = $("doneReceipt");
+  if (rc) {
+    const no = (receiptNo || "").trim();
+    if (no) { rc.textContent = "접수번호 " + no; rc.hidden = false; }
+    else { rc.textContent = ""; rc.hidden = true; }
+  }
   // 완료 화면 이후 뒤로가기는 홈으로 가도록 스택 정리
   state.navStack = [{ v: "home", t: HOME_TITLE }, { v: "done", t: "접수 완료" }];
   state.fwdStack = [];
