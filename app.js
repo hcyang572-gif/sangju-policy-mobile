@@ -350,7 +350,7 @@ function renderList() {
       <h3>${esc(p.사업명)}</h3>
       <p>${esc(p.내용 || p.대상자상세기준)}</p>
       <span class="card-meta">
-        <span class="team" data-team="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
+        <span class="team" data-team="${esc(teamName)}" title="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
       </span>
     </div>`;
   }).join("");

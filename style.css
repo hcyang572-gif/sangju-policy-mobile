@@ -213,12 +213,15 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   cursor: pointer;
 }
 .card:active { transform: scale(.99); }
-.card h3 { margin: 0 0 6px; font-size: 1.0625rem; }
+/* 제목은 목록에서 2줄까지만(넘치면 …). 상세에선 전문 노출(별도 요소). */
+.card h3 { margin: 0 0 6px; font-size: 1.0625rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
 .card p { margin: 0; font-size: 0.875rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card .team { display: inline-block; margin-top: 10px; font-size: 0.75rem; color: var(--accent-text); background: var(--header); padding: 3px 9px; border-radius: 8px; }
 /* 카드 하단 배지 줄(담당팀 + 📌 접수 안내 표식) */
 .card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
-.card-meta .team { margin-top: 0; }
+/* 목록 담당팀 배지: 전화번호가 든 긴 팀명도 카드를 깨지 않게 폭을 카드 폭으로 제한하고
+   넘치면 …(전체 팀명은 title 툴팁). 상세의 .detail-team 은 이 규칙 밖이라 전문 노출. */
+.card-meta .team { margin-top: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 📌 접수 안내 표식 — 색만으로 알리지 않도록 아이콘+'접수 안내' 글자를 함께 둔다.
    흰 카드 위 #A8431A 글자 6.03:1, 테두리는 장식용 #E66B3A */
 .note-flag {
