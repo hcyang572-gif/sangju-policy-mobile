@@ -23,6 +23,11 @@
   --card: #FFFFFF;
   --header: #FDECE4;
   --border: #F0E0D5;
+  /* 입력칸(사용자 입력 요소) 경계 전용 — 흰 3.39 · 크림 3.21 (3:1 이상 충족).
+     --border 는 카드 구분선 등 «장식» 경계라 그대로 두고, 입력칸만 진하게 한다. */
+  --border-input: #A9846A;
+  /* 오류 문구·필수 표시 — 흰 7.24 · 크림 6.87 (AA 충족). 팀 배지 팔레트와 같은 계열 */
+  --err-text: #A52714;
   /* 보조 텍스트: 흰 5.74 · 크림 5.41 · 헤더칩 5.00 (AA 충족) */
   --muted: #7A6152;
   /* 비활성·빈상태 텍스트: 흰 5.36 · 크림 5.06 (AA 충족) */
@@ -132,6 +137,18 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .view { animation: fade .18s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
+/* 2026 시정구호 이미지 — 홈 첫 화면 상단.
+   · 배경(--bg, 크림색) 위에 얹는다. 구호 원본이 빨강·청록이라 밝은 배경이어야 또렷하다.
+     ⚠ 어두운 배경 위에 올리지 말 것(검은 글자 획이 묻힌다).
+   · max-width:100% + height:auto 로 어떤 폭에서도 넘치지 않는다.
+   · width/height 속성을 HTML에 함께 둬서 로드 전에도 자리를 잡는다(레이아웃 밀림 방지).
+   · 2줄형은 가로:세로 ≈ 4.9:1 이라 360px 폭에서 약 73px — 글자가 읽히는 크기.
+   · 상상주 로고(헤더)와 싸우지 않도록 위아래 여백만 주고 크기는 폭에 맡긴다. */
+.slogan { display: block; margin: 2px 0 14px; }
+.slogan img { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+/* 큰 화면에서는 1줄형이 오므로 조금 더 넓게 허용(가로:세로 ≈ 9.8:1) */
+@media (min-width: 600px) { .slogan img { max-width: 720px; } }
+
 .lead { font-size: 1.0625rem; color: var(--muted); margin: 4px 0 16px; }
 
 /* 신규 사업 알림 배너 */
@@ -158,7 +175,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   width: 100%;
   padding: 14px 16px;
   font-size: 1rem;
-  border: 1.5px solid var(--border);
+  border: 1.5px solid var(--border-input);   /* 입력칸이므로 3:1 이상(위 .text-input 주석 참조) */
   border-radius: 12px;
   background: var(--card);
   color: var(--text);
@@ -328,7 +345,10 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   width: 100%;
   padding: 13px 14px;
   font-size: 1rem;
-  border: 1.5px solid var(--border);
+  /* ⚠ --border(#F0E0D5)는 흰 배경에서 1.29:1 이라 저시력 이용자가 «어디에 입력하는지»
+     알 수 없었다(KWCAG 명도대비 — 사용자 입력 요소 경계는 3:1 이상).
+     --border-input(#A9846A)은 흰 3.39:1 / 크림 3.21:1 로 둘 다 충족하는 곶감톤. */
+  border: 1.5px solid var(--border-input);
   border-radius: 11px;
   background: var(--card);
   color: var(--text);
@@ -336,6 +356,41 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-family: inherit;
 }
 .text-input:focus { border-color: var(--primary); }
+/* 오류가 있는 칸은 «색만»으로 알리지 않는다 — 아래 .field-err 문구가 함께 뜬다 */
+.text-input[aria-invalid="true"] { border-color: var(--err-text); border-width: 2px; }
+
+/* 입력 오류 문구 — 해당 칸 바로 아래. role="alert" 라 화면낭독기가 즉시 읽는다. */
+.field-err {
+  margin: 6px 0 0; font-size: 0.875rem; font-weight: 700;
+  color: var(--err-text);            /* 흰 배경 7.24:1 */
+  line-height: 1.45;
+}
+.field-err::before { content: "⚠ "; }
+.req { color: var(--err-text); font-weight: 800; }
+
+/* ⚖ 개인정보 수집·이용 동의 상자 */
+.consent-box {
+  margin: 20px 0 4px; padding: 14px; border: 1.5px solid var(--border-input);
+  border-radius: 12px; background: var(--card);
+}
+.consent-legend { font-weight: 800; font-size: 0.9375rem; padding: 0 6px; color: var(--text); }
+.consent-dl { margin: 6px 0 0; font-size: 0.875rem; line-height: 1.55; }
+.consent-dl dt { font-weight: 800; color: var(--text); margin-top: 8px; }
+.consent-dl dd { margin: 2px 0 0; color: var(--text); }
+.consent-refuse { margin: 12px 0 0; font-size: 0.8125rem; color: var(--text); font-weight: 700; }
+.consent-check { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; }
+/* 체크박스는 손가락·시각 모두를 위해 크게. accent-color 로 테마색 적용(기본 위젯 유지 = 낭독기 호환) */
+.consent-check input[type="checkbox"] {
+  flex: 0 0 auto; width: 24px; height: 24px; margin: 0; accent-color: var(--primary-hover);
+}
+.consent-check label { font-size: 0.9375rem; line-height: 1.5; color: var(--text); cursor: pointer; }
+.consent-more { margin: 12px 0 0; font-size: 0.8125rem; color: var(--text); }
+/* 문단 안에서 링크처럼 보이는 버튼(시맨틱은 button 유지 → 키보드·낭독기 정상) */
+.link-btn {
+  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+  color: var(--accent-text); font-weight: 800; text-decoration: underline;
+}
+
 .apply-note { font-size: 0.8125rem; color: var(--muted); margin-top: 12px; text-align: center; }
 .apply-note.left { text-align: left; margin-top: 6px; } /* PIN 안내 등 좌측 정렬 변형(인라인 style 대체) */
 
@@ -498,7 +553,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .inapp-btn:active { transform: scale(.98); }
 .inapp-btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.7); }
 .inapp-close {
-  font-size: 14px; color: rgba(255,255,255,.85); padding: 2px 4px; flex-shrink: 0;
+  /* rgba(255,255,255,.85) 는 배경과 섞여 3.82:1 이었다 → 불투명 흰색으로 4.71:1 확보 */
+  font-size: 14px; color: #fff; padding: 2px 4px; flex-shrink: 0;
   cursor: pointer; background: none; border: none; font-family: inherit; line-height: 1.4;
   /* 손가락 조작 최소 크기 24x24 CSS px 확보(실측 18.6x21 / 19.4x23.6 로 미달이었음).
      inline-flex 중앙정렬로 늘어난 영역 안에서도 x 표시가 가운데 오게 한다. */
@@ -544,7 +600,9 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .rt-banner {
   display: flex; align-items: center; gap: 8px;
   background: var(--header);
-  border: 1.5px solid var(--primary);
+  /* 경계 시인성: --primary(#E66B3A)는 --header(#FDECE4) 위에서 2.80:1 로 저시력
+     이용자에게 테두리가 거의 안 보였다 → --primary-hover(#C2501F)로 3.9:1 확보 */
+  border: 1.5px solid var(--primary-hover);
   border-radius: 12px;
   padding: 11px 12px;
   margin-bottom: 12px;
@@ -558,6 +616,14 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   background: var(--primary-hover); color: #fff;   /* 흰글자 4.71:1 */
 }
 .rt-banner-btn:active { background: var(--primary-press); }
+/* 알림 닫기(✕) — 본문과 같은 글자색으로 대비 확보(4.5:1↑), 터치 목표 32px 이상 */
+.rt-banner-close {
+  flex-shrink: 0; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 0.9375rem; font-weight: 700;
+  color: var(--text); border-radius: 8px; padding: 6px 8px;
+  min-width: 32px; min-height: 32px;
+}
+.rt-banner-close:active { background: rgba(0, 0, 0, .06); }
 
 /* ───────────── 정책참여(시민 제안) Phase A ───────────── */
 /* 홈에서 정책참여를 '지원사업'과 다른 갈래로 분리: 구분선 + 섹션라벨 + 청록 카드 */
@@ -807,7 +873,19 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   margin: 16px 0 8px;
 }
 .privacy-h:first-child { margin-top: 4px; }
+/* 처리방침 서두 안내 — 「운영 개시 시 확정」 항목이 누락이 아니라
+   «운영 주체·방식이 정해지면 채울 자리»임을 먼저 밝힌다.
+   본문색(--text)을 그대로 써서 대비 확보(색만으로 구분하지 않음). */
+.privacy-notice {
+  margin: 10px 0 4px; padding: 12px 14px;
+  background: var(--header); border: 1.5px solid var(--primary-hover);
+  border-radius: 12px;
+}
+.privacy-notice p { margin: 0; font-size: 0.875rem; line-height: 1.6; color: var(--text); }
+
 .privacy-ul { margin: 0 0 6px; padding-left: 20px; }
+/* 항목 아래 부연(※) — 본문색 유지로 대비 확보, 크기만 한 단계 작게 */
+.privacy-sub { display: inline-block; margin-top: 3px; font-size: 0.9375em; color: var(--text); }
 .privacy-ul li { font-size: 0.90625rem; line-height: 1.7; color: var(--text); margin-bottom: 4px; }
 .privacy-ul li b { color: var(--text); }
 .privacy-mail { color: var(--accent-text); font-weight: 700; text-decoration: underline; }

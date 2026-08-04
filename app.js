@@ -48,6 +48,9 @@ function applyTeamColor(el, name) {
 const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done",
   "propose", "pdetail", "pwrite", "privacy"];
 
+// 첫 렌더가 끝났는지 — showView 의 초점 이동을 «두 번째 화면부터» 적용하기 위한 표시
+let _viewReady = false;
+
 // 오류 문의가 전달될 주소(표시용). 실제 발송은 폼메일→Gmail→자동접수가 이 주소로 전달.
 const SUPPORT_EMAIL = "hcyang572@korea.kr";
 
@@ -70,7 +73,16 @@ function showView(name, push = true) {
   if (window.Proposals && window.Proposals.syncNotice) {
     try { window.Proposals.syncNotice(); } catch (e) { /* 무시 */ }
   }
+  // 사업 정보 갱신 알림 띠도 화면(작성 중 여부)에 따라 다시 계산한다.
+  try { syncUpdateBanner(); } catch (e) { /* 무시 */ }
   window.scrollTo(0, 0);
+  // 화면이 바뀌면 초점을 새 화면(본문)으로 옮긴다 — KWCAG 6.1.2 «초점 이동».
+  // 이 앱은 한 페이지 안에서 화면만 갈아끼우므로, 그냥 두면 «방금 누른 카드»가
+  // 사라지면서 초점이 <body> 로 떨어진다(다음 Tab 이 문서 처음부터 시작).
+  // ※ 초기 렌더(첫 홈 진입)에서는 옮기지 않는다 — 페이지를 연 직후 초점을 뺏으면
+  //   낭독기가 «건너뛰기 링크»부터 읽지 못한다.
+  if (_viewReady) { try { focusMain(); } catch (e) { /* 무시 */ } }
+  _viewReady = true;
 }
 
 function _updateNavButtons() {
@@ -95,30 +107,356 @@ function goForward() {
   showView(next.v, false);
 }
 
-// ---------- 데이터 로딩 ----------
-async function init() {
+// ════════════════════════════════════════════════════════════════════════
+//  데이터 로딩 — 클라우드(Supabase benefits) «우선» + data.json 폴백
+//  ----------------------------------------------------------------------
+//  PC 관리앱에서 「홈페이지 연동」을 하면 그 결과가 Supabase benefits 로 올라간다.
+//  예전에는 시민앱이 data.json(정적 파일)만 읽어서, 연동 결과가 화면에 보이기까지
+//  «엑셀 → 자동배포 폴링(60초) → build_data → push → GitHub Pages 빌드»로
+//  2~3분이 걸렸다. 이제는 benefits 를 먼저 읽어 «즉시» 최신을 보여준다.
+//
+//  ⚠ 폴백은 «정상 동작»이다 — 클라우드 실패(네트워크·권한·0건·지연)는 시민에게
+//     오류로 보이지 않는다. 조용히 data.json 으로 그린다.
+//  ⚠ 0건은 성공으로 보지 않는다(표가 비었는데 화면까지 비면 사고) → 폴백.
+//  ⚠ 시민앱은 benefits 에 «읽기»만 한다. 절대 쓰지 않는다.
+//  ⚠ 서비스워커(sw.js)는 타 출처 요청을 가로채지 않으므로 Supabase 응답은
+//     캐시에 갇히지 않는다(= 항상 최신).
+// ════════════════════════════════════════════════════════════════════════
+
+const CLOUD_TIMEOUT_MS = 3500;   // 클라우드 조회 최대 대기(넘으면 폴백이 이긴다)
+const FIRST_PAINT_MS = 1200;     // 첫 화면을 클라우드로 그리려고 기다리는 시간
+const RECHECK_MIN_MS = 30000;    // 재확인 최소 간격(과도한 조회 방지)
+
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// data.json 을 읽지 못한 «드문» 경우에만 쓰는 기본값.
+// ⚠ build_data.py 의 ALWAYS_SHOW / situation_map 과 «동일하게» 유지할 것.
+const FALLBACK_ALWAYS_SHOW = ["🏡 귀농·귀촌"];
+const FALLBACK_SITUATION_MAP = [
+  ["임신 중이거나 출산 예정", "👶 임신·출산"],
+  ["영유아·미취학 아동 자녀가 있음", "🧸 영유아·보육"],
+  ["초·중·고 학생 자녀가 있음", "📚 청소년·교육"],
+  ["자녀가 2명 이상(다자녀 가구)", "👨‍👩‍👧‍👦 다자녀·가족"],
+  ["한부모·조손 가정", "👩‍👦 한부모·조손"],
+  ["1인 가구", "👤 1인가구"],
+  ["다문화·외국인 가정", "🌏 다문화·외국인"],
+  ["가구원 중 장애가 있음", "♿ 장애인"],
+  ["기초생활수급·차상위·저소득", "💰 저소득·기초수급"],
+  ["농업·축산·임업 종사", "🌾 농림축수산업"],
+  ["귀농·귀촌 (예정 또는 정착)", "🏡 귀농·귀촌"],
+  ["소상공인·창업 준비 중", "🏪 소상공인·기업"],
+  ["구직 중·취업 준비 중", "💼 일자리·구직"],
+  ["무주택·주거 지원이 필요", "🏠 주거·부동산"],
+  ["국가유공자·보훈 대상", "🎖️ 보훈·유공자"],
+  ["여성(경력단절 등)", "👩 여성"],
+  ["건강·의료 지원이 필요", "🏥 건강·의료"],
+];
+
+// ── 공용 Supabase 클라이언트 ────────────────────────────────────────────
+// forms.js·apply_client.js 가 각자 만들던 클라이언트를 하나로 모아 쓴다
+// (같은 URL·anon key. GoTrue 인스턴스 중복 경고도 줄어든다).
+let _cloudSb = null;
+function cloudClient() {
+  if (_cloudSb) return _cloudSb;
+  try {
+    const url = window.SUPABASE_URL || "";
+    const key = window.SUPABASE_ANON_KEY || "";
+    if (!window.supabase || !url || !key) return null;
+    _cloudSb = window.supabase.createClient(url, key);
+    try { window.SangjuForms && SangjuForms.useClient(_cloudSb); } catch (e) {}
+    try { window.SangjuApply && SangjuApply.useClient(_cloudSb); } catch (e) {}
+    return _cloudSb;
+  } catch (e) {
+    console.warn("[사업정보] Supabase 초기화 실패(내장 데이터로 동작):", e);
+    return null;
+  }
+}
+
+// ── 텍스트 정돈 — PC config.clean_text 와 «같은 규칙» ────────────────────
+// '자세히 보기: http…' 안내문구·URL 제거 + 공백/빈 줄 정돈.
+// build_data.py 는 이미 정돈된 값을 data.json 에 넣지만, Supabase 에는
+// 정돈 전 원문이 올라올 수 있다(migrate.py 는 비고를 정돈하지 않음).
+// clean_text 는 «멱등»이라 이미 정돈된 값에 다시 적용해도 결과가 같다.
+const _URL_DETAIL_RE = /자세히\s*보기\s*:?\s*https?:\/\/\S+\s*/g;
+const _URL_RE = /https?:\/\/\S+/g;
+function cleanText(s) {
+  if (s == null) return "";
+  let t = String(s).replace(_URL_DETAIL_RE, "").replace(_URL_RE, "");
+  t = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  t = t.split("\n").map((ln) => ln.replace(/[ \t]+/g, " ").trim()).join("\n");
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+// 빈값 표기 정규화 — 엑셀/DB에서 넘어온 'nan'·'null' 문자열을 빈칸으로.
+function txt(v) {
+  const s = String(v == null ? "" : v).trim();
+  return ["nan", "none", "null", "undefined"].indexOf(s.toLowerCase()) >= 0 ? "" : s;
+}
+
+// ── 중복 정리 — PC _dedupe_keep_latest / build_data.dedupe_keep_latest 동일 규칙 ──
+// 같은 사업명이 여러 건이면 «정책번호가 큰 것 → 나중 행» 1건만 남긴다.
+function _normName(s) { return String(s == null ? "" : s).replace(/\s+/g, "").trim(); }
+function _pidOf(r) {
+  const p = String(r && r.policy_no != null ? r.policy_no : "").trim();
+  if (!p) return -1;
+  const n = Number(p);
+  return Number.isFinite(n) ? Math.trunc(n) : -1;
+}
+function dedupeKeepLatest(rows) {
+  const best = new Map();
+  rows.forEach((r, i) => {
+    const key = _normName(r.name);
+    if (!key) return;
+    const pid = _pidOf(r);
+    const prev = best.get(key);
+    if (!prev || pid > prev.pid || (pid === prev.pid && i > prev.i)) best.set(key, { pid, i, r });
+  });
+  const seen = new Set();
+  const out = [];
+  rows.forEach((r) => {
+    const key = _normName(r.name);
+    if (!key) { out.push(r); return; }
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(best.get(key).r);
+  });
+  return out;
+}
+
+// ── 스키마 어댑터 — benefits 행 → data.json 아이템과 «동일한 형태» ────────
+// 화면·검색·맞춤추천·상세·신청 코드는 아래 형태만 알면 되므로 한 줄도 바뀌지 않는다.
+//
+// 기관명·종료일(supabase/add_org_end_columns.sql, 2026-08-04):
+//   · 기관명 → org_name,  종료일 → end_date (PC앱이 'YYYY-MM-DD' 로 정규화해 넣는다.
+//     data.json 과 같은 형식이므로 «여기서 추가 변환하지 않는다» — 못 읽은 값은 원문 보존)
+//   · ⚠ DDL 은 사람이 직접 실행하는 원칙이라 «아직 컬럼이 없을 수» 있다.
+//     그때는 응답에 키 자체가 없으므로 txt() 가 빈 문자열을 돌려주고,
+//     화면은 해당 줄을 통째로 생략한다(= 지금까지와 같은 모습, 깨지지 않음).
+//   · 값을 지어내지 않는다. 컬럼이 없으면 빈 값이 정답이다.
+function adaptCloudRow(r) {
+  return {
+    "사업명": txt(r.name),
+    "내용": cleanText(txt(r.content)),
+    "대상자상세기준": cleanText(txt(r.target)),
+    "이용방법": cleanText(txt(r.method)),
+    "필요서류": cleanText(txt(r.documents)),
+    "기관명": txt(r.org_name),          // 컬럼 미생성 시 "" (화면에서 생략)
+    "팀명": txt(r.team),
+    "연락처": txt(r.contact),
+    "담당자이메일": txt(r.manager_email),
+    "종료일": txt(r.end_date),          // 컬럼 미생성 시 "" (화면에서 생략)
+    "비고": cleanText(txt(r.note)),
+    "categories": Array.isArray(r.categories) ? r.categories.filter(Boolean) : [],
+  };
+}
+
+// 분야 칩 목록 — build_data.py 와 «동일» (사업에 붙은 분야 ∪ 항상 보일 분야, 기호 제외 정렬)
+function _catSortKey(s) { return String(s).replace(/[^가-힣A-Za-z0-9]/g, ""); }
+function buildCategoryList(programs, alwaysShow) {
+  const found = new Set();
+  (programs || []).forEach((p) => (p.categories || []).forEach((c) => found.add(c)));
+  (alwaysShow || []).forEach((c) => found.add(c));
+  return Array.from(found).sort((a, b) => {
+    const ka = _catSortKey(a), kb = _catSortKey(b);
+    return ka < kb ? -1 : (ka > kb ? 1 : 0);
+  });
+}
+
+// ── 내용 서명 — «화면에 보이는 내용»이 달라졌는지 판정용 ──────────────────
+// ⚠ 기관명·종료일은 «일부러» 뺀다. benefits 의 org_name·end_date 컬럼은 사람이
+//    SQL 을 실행해야 생기므로, 실행 전에는 클라우드 값이 비어 있고 data.json 에는
+//    값이 있다. 이걸 비교에 넣으면 내용이 그대로인데도 «갱신되었습니다» 띠가
+//    계속 뜬다(오탐). 두 값만 바뀌는 경우는 드물어 실익보다 손해가 크다.
+function _hash(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h.toString(36);
+}
+function dataSignature(programs) {
+  const list = programs || [];
+  const body = list.map((p) => [
+    p.사업명, p.내용, p.대상자상세기준, p.이용방법, p.필요서류,
+    p.팀명, p.연락처, p.담당자이메일, p.비고, (p.categories || []).join(","),
+  ].join("")).join("");
+  return list.length + ":" + _hash(body);
+}
+
+// ── 조회 ────────────────────────────────────────────────────────────────
+// 내장 데이터(data.json). 실패해도 throw 하지 않고 null 을 준다.
+async function loadLocalData() {
   try {
     const res = await fetch("data.json", { cache: "no-store" });
-    DATA = await res.json();
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    if (!j || !Array.isArray(j.programs) || !j.programs.length) return null;
+    return j;
   } catch (e) {
-    // 원인 구분: 오프라인·서버 미응답이면 «일시적 응답 없음» 안내, 그 밖은 데이터 파일 문제로 안내.
-    // (무료 플랜 일시정지로 서비스가 멈췄을 때 "불러오기 실패"만 떠서 원인 파악이 안 됐던 사고 반영)
-    const offline = (typeof navigator !== "undefined" && navigator.onLine === false);
-    const netMsg = /failed to fetch|networkerror|network error|load failed|timeout|fetch/i.test(String(e && e.message));
-    const conn = offline || netMsg;
-    $("app").innerHTML = conn
-      ? '<div class="empty err-box" role="alert">' +
-        '<div class="err-title">⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
-        '<div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>' +
-        '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>'
-      : '<div class="empty err-box" role="alert">' +
-        '<div class="err-title">🛠 사업 정보를 준비 중입니다.</div>' +
-        '<div class="err-desc">데이터 파일(data.json)을 읽지 못했습니다.<br>잠시 후 다시 시도해 주세요.</div>' +
-        '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>';
-    const rb = $("initRetry");
-    if (rb) rb.addEventListener("click", () => location.reload());
-    return;
+    console.warn("[사업정보] data.json 을 읽지 못했습니다:", e);
+    return null;
   }
+}
+
+// 클라우드(benefits). 정렬은 공무원앱(cloudui)과 «동일» — seq(빈값 뒤) → id.
+// 타임아웃(CLOUD_TIMEOUT_MS)을 반드시 건다. 실패/0건이면 null.
+async function loadCloudData() {
+  const sb = cloudClient();
+  if (!sb) return null;
+  let ctrl = null;
+  try {
+    let q = sb.from("benefits").select("*").order("seq", { nullsFirst: false }).order("id");
+    if (typeof AbortController !== "undefined" && typeof q.abortSignal === "function") {
+      ctrl = new AbortController();
+      q = q.abortSignal(ctrl.signal);
+    }
+    const timeout = delay(CLOUD_TIMEOUT_MS).then(() => {
+      try { if (ctrl) ctrl.abort(); } catch (e) {}
+      return { __timeout: true };
+    });
+    const res = await Promise.race([Promise.resolve(q), timeout]);
+    if (!res || res.__timeout) {
+      console.warn("[사업정보] 클라우드 응답 지연 — 내장 데이터로 표시합니다.");
+      return null;
+    }
+    if (res.error) throw res.error;
+    const rows = res.data || [];
+    if (!rows.length) return null;            // 0건은 성공으로 보지 않는다 → 폴백
+    const programs = dedupeKeepLatest(rows).map(adaptCloudRow).filter((p) => p.사업명);
+    if (!programs.length) return null;
+    return { programs: programs, sig: dataSignature(programs) };
+  } catch (e) {
+    console.warn("[사업정보] 클라우드 조회 실패 — 내장 데이터로 표시합니다:", e);
+    return null;
+  }
+}
+
+// 클라우드 사업목록 + 내장 데이터의 정적 설정(항상 보일 분야·상황 목록)을 합친다.
+function buildCloudData(local, programs) {
+  const always = (local && local.always_show && local.always_show.length)
+    ? local.always_show : FALLBACK_ALWAYS_SHOW;
+  const situations = (local && Array.isArray(local.situation_map) && local.situation_map.length)
+    ? local.situation_map : FALLBACK_SITUATION_MAP;
+  return {
+    generated: (local && local.generated) || "",
+    always_show: always,
+    situation_map: situations,
+    categories: buildCategoryList(programs, always),
+    programs: programs,
+    source: "cloud",
+  };
+}
+
+function showInitError(e) {
+  // 원인 구분: 오프라인·서버 미응답이면 «일시적 응답 없음» 안내, 그 밖은 데이터 파일 문제로 안내.
+  // (무료 플랜 일시정지로 서비스가 멈췄을 때 "불러오기 실패"만 떠서 원인 파악이 안 됐던 사고 반영)
+  const offline = (typeof navigator !== "undefined" && navigator.onLine === false);
+  const netMsg = /failed to fetch|networkerror|network error|load failed|timeout|fetch/i.test(String(e && e.message));
+  const conn = offline || netMsg;
+  $("app").innerHTML = conn
+    ? '<div class="empty err-box" role="alert">' +
+      '<div class="err-title">⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
+      '<div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>' +
+      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>'
+    : '<div class="empty err-box" role="alert">' +
+      '<div class="err-title">🛠 사업 정보를 준비 중입니다.</div>' +
+      '<div class="err-desc">데이터 파일(data.json)을 읽지 못했습니다.<br>잠시 후 다시 시도해 주세요.</div>' +
+      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>';
+  const rb = $("initRetry");
+  if (rb) rb.addEventListener("click", () => location.reload());
+}
+
+// ── 갱신 «알림»(자동 교체 아님) ──────────────────────────────────────────
+// v0.0.4 원칙: 새 내용이 생겨도 화면을 저절로 바꾸지 않는다. 띠로 알리고,
+// 시민이 «새로고침»을 누를 때만 반영한다(KWCAG 6.2.2 자동 변경 금지).
+let displaySig = "";        // 지금 화면에 그려진 사업 정보의 서명
+let updatePending = false;  // 아직 반영하지 않은 갱신이 있는가
+let updateMsg = "사업 정보가 새로 갱신되었습니다";
+let lastCloudCheck = 0;
+let cloudChecking = false;
+
+// 초점을 «문서 맨 처음»으로 되돌린다 — KWCAG 2.2 「6.4.3 초점 이동과 표시」.
+// 알림 띠를 닫으면 초점을 쥐고 있던 닫기 버튼이 사라지는데, 그대로 두면 초점이
+// <body> 로 떨어져 «다음 Tab 이 문서 처음부터» 시작한다(키보드 이용자 혼란).
+// → 본문(#app, tabindex="-1")으로 옮겨 다음 Tab 이 본문에서 이어지게 한다.
+// ★ 공무원앱 webui/app.js focusDocumentStart() 와 같은 규약.
+function focusMain() {
+  const m = $("app");
+  if (!m || !m.focus) return;
+  try { m.focus({ preventScroll: true }); } catch (e) { try { m.focus(); } catch (e2) {} }
+}
+
+// 갱신 알림 켜기(화면은 그대로 — 시민이 «새로고침»을 누를 때만 반영)
+function noticeUpdate(msg) {
+  updatePending = true;
+  if (msg) updateMsg = msg;
+  syncUpdateBanner();
+}
+
+// 신청서 작성·문의·제안 작성 중이거나 모달이 열려 있으면 띠를 띄우지 않는다(작업 방해 금지)
+function updateBusy() {
+  const busyViews = ["apply", "inquiry", "pwrite", "done"];
+  if (busyViews.some((v) => { const el = $("view-" + v); return el && !el.hidden; })) return true;
+  return ["teamModal", "versionModal", "installModal", "pinModal", "reportModal"]
+    .some((id) => { const m = $(id); return m && !m.hidden; });
+}
+
+function syncUpdateBanner() {
+  const box = $("dataRtBanner");
+  if (!box) return;
+  const show = updatePending && !updateBusy();
+  if (show) $("dataRtText").textContent = updateMsg;
+  box.hidden = !show;
+}
+
+// 클라우드를 다시 조회해 «내용이 달라졌으면» 알림만 켠다(화면은 그대로).
+async function recheckCloud(force) {
+  if (cloudChecking) return;
+  const now = Date.now();
+  if (!force && now - lastCloudCheck < RECHECK_MIN_MS) return;
+  lastCloudCheck = now;
+  cloudChecking = true;
+  try {
+    const cloud = await loadCloudData();
+    if (cloud && cloud.sig !== displaySig) noticeUpdate("사업 정보가 새로 갱신되었습니다");
+  } finally {
+    cloudChecking = false;
+  }
+}
+
+// 최신성 반영 방식: «상시 연결(Realtime)» 이 아니라 «재진입·포커스 시 재조회(폴링)».
+//  · 시민앱은 오래 열어두는 앱이 아니고, 화면 복귀 시 한 번만 확인하면 충분하다.
+//  · 상시 WebSocket 은 배터리·데이터·동시접속을 계속 소모한다(공무원앱만 사용).
+function initFreshness() {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) recheckCloud(false);
+  });
+  window.addEventListener("focus", () => recheckCloud(false));
+  window.addEventListener("online", () => recheckCloud(true));
+}
+
+async function init() {
+  // ⏱ 첫 화면 예산은 «init 진입 시점»부터 잰다(절대 예산).
+  //    예전에는 await localP 뒤에 타이머를 걸어서, 실제 대기가
+  //    «data.json 로드 시간 + 1.2초»가 됐다(느린 회선에서 첫 화면이 그만큼 늦어짐).
+  const budget = delay(FIRST_PAINT_MS).then(() => ({ ready: false, v: null }));
+  const localP = loadLocalData();   // 동일 출처(빠름) — 실패해도 null
+  const cloudP = loadCloudData();   // 타임아웃 내장 — 실패/0건이면 null
+
+  const local = await localP;
+  // 클라우드가 «충분히 빨리» 오면 그걸로 첫 화면을 그린다(가장 최신).
+  // 늦으면 기다리지 않고 내장 데이터로 먼저 그린다 — 빈 화면을 오래 보이지 않게.
+  const first = await Promise.race([
+    cloudP.then((v) => ({ ready: true, v: v })),
+    budget,
+  ]);
+  let cloud = first.ready ? first.v : null;
+  // 폴백이 아예 없으면(내장 데이터도 못 읽음) 클라우드를 끝까지 기다린다.
+  if (!cloud && !local) cloud = await cloudP;
+
+  if (cloud) DATA = buildCloudData(local, cloud.programs);
+  else if (local) DATA = local;
+  else { showInitError(new Error("데이터를 불러오지 못했습니다")); return; }
+
+  displaySig = dataSignature(DATA.programs);
+
   state.navStack = [{ v: "home", t: HOME_TITLE }];
   state.fwdStack = [];
   renderCategoryChips();
@@ -128,6 +466,14 @@ async function init() {
   checkNewPrograms();
   initInApp();
   initA2HS();
+  initFreshness();
+
+  // 내장 데이터로 먼저 그린 경우: 늦게 도착한 클라우드는 «알림»만 띄운다.
+  if (!cloud) {
+    cloudP.then((late) => {
+      if (late && late.sig !== displaySig) noticeUpdate("사업 정보가 새로 갱신되었습니다");
+    });
+  }
 }
 
 // ---------- 홈 화면에 추가(앱처럼 쓰기) 안내 ----------
@@ -344,12 +690,16 @@ function renderList() {
       ? `<span class="note-flag"><span aria-hidden="true">📌</span> 접수 안내</span>`
       : "";
     // 키보드 접근(KWCAG 2.2): role=button + tabindex 로 Tab 이동·Enter/Space 실행 가능
-    // 색만으로 알리지 않도록 카드 aria-label 에도 '접수 안내 있음'을 덧붙인다
+    // ⚠ 예전에는 aria-label 로 이름만 읽어줘서, 화면낭독기 이용자에게는 카드 안의
+    //    «내용 요약·담당팀·접수 안내»가 통째로 가려졌다(aria-label 이 하위 텍스트를 덮음).
+    // → aria-labelledby(제목) + aria-describedby(요약·담당·안내)로 바꿔
+    //    보이는 정보를 그대로 읽게 한다. 색만으로 알리지 않도록 '접수 안내 있음'은 글자로도 둔다.
+    const tid = `cardT${idx}`, did = `cardD${idx}`, mid = `cardM${idx}`;
     return `<div class="card" data-idx="${idx}" role="button" tabindex="0"
-      aria-label="${esc(p.사업명)}${note ? ", 접수 안내 있음" : ""} 상세 보기">
-      <h3>${esc(p.사업명)}</h3>
-      <p>${esc(p.내용 || p.대상자상세기준)}</p>
-      <span class="card-meta">
+      aria-labelledby="${tid}" aria-describedby="${did} ${mid}">
+      <h3 id="${tid}">${esc(p.사업명)}</h3>
+      <p id="${did}">${esc(p.내용 || p.대상자상세기준)}</p>
+      <span class="card-meta" id="${mid}">
         <span class="team" data-team="${esc(teamName)}" title="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
       </span>
     </div>`;
@@ -472,7 +822,29 @@ function openApply(idx) {
   $("applyName").value = "";
   $("applyPhone").value = "";
   $("applyMemo").value = "";
+  // ⚖ 동의는 «신청할 때마다» 새로 받는다(이전 신청의 체크가 남아 있으면 안 된다).
+  $("applyConsent").checked = false;
+  clearApplyErrors();
   showView("apply");
+}
+
+// ── 입력 오류 표시 (KWCAG 7.3.1 «오류 정정») ──────────────────────────────
+// 예전에는 alert() 한 줄로 "이름과 연락처를 입력해 주세요"만 띄워서
+//  · 어느 칸이 잘못됐는지 알 수 없고  · 초점이 옮겨가지 않아 다시 찾아 들어가야 했다.
+// → 이제 «해당 칸 옆»에 오류를 붙이고(aria-describedby 로 연결·role=alert 로 낭독),
+//   aria-invalid 로 오류 상태를 알리고, 첫 오류 칸으로 «초점»을 옮긴다.
+function setFieldError(inputId, errId, msg) {
+  const input = $(inputId), err = $(errId);
+  if (err) { err.textContent = msg || ""; err.hidden = !msg; }
+  if (input) {
+    if (msg) input.setAttribute("aria-invalid", "true");
+    else input.removeAttribute("aria-invalid");
+  }
+}
+function clearApplyErrors() {
+  setFieldError("applyName", "applyNameErr", "");
+  setFieldError("applyPhone", "applyPhoneErr", "");
+  setFieldError("applyConsent", "applyConsentErr", "");
 }
 
 async function sendApply() {
@@ -480,8 +852,31 @@ async function sendApply() {
   const name = $("applyName").value.trim();
   const phone = $("applyPhone").value.trim();
   const memo = $("applyMemo").value.trim();
-  if (!name || !phone) {
-    alert("이름과 연락처를 입력해 주세요.");
+
+  // 검증 — 위에서부터 순서대로 확인하고, «첫 번째» 오류 칸으로 초점을 옮긴다.
+  clearApplyErrors();
+  let firstBad = null;
+  if (!name) {
+    setFieldError("applyName", "applyNameErr", "신청자 이름을 입력해 주세요.");
+    firstBad = firstBad || "applyName";
+  }
+  if (!phone) {
+    setFieldError("applyPhone", "applyPhoneErr", "연락처를 입력해 주세요.");
+    firstBad = firstBad || "applyPhone";
+  } else if (phone.length < 10) {
+    setFieldError("applyPhone", "applyPhoneErr", "연락처를 다시 확인해 주세요. (- 없이 숫자 10~11자리)");
+    firstBad = firstBad || "applyPhone";
+  }
+  // ⚖ 개인정보 수집·이용 동의(필수) — 미동의면 «수집 자체»를 하지 않는다.
+  //    구 PC앱 apply_view.py 의 차단 로직과 같은 규칙. 절대 건너뛰지 말 것.
+  if (!$("applyConsent").checked) {
+    setFieldError("applyConsent", "applyConsentErr",
+      "개인정보 수집·이용에 동의하셔야 신청할 수 있습니다.");
+    firstBad = firstBad || "applyConsent";
+  }
+  if (firstBad) {
+    const el = $(firstBad);
+    if (el && el.focus) { try { el.focus({ preventScroll: false }); } catch (e) { el.focus(); } }
     return;
   }
   const key = window.WEB3FORMS_KEY || "";
@@ -712,11 +1107,16 @@ const ModalA11y = (function () {
   }
 
   // 모달 닫기 후 호출: 리스너 제거 + 호출 버튼으로 포커스 복귀
+  // ★ 모달이 열려 있는 동안은 갱신 알림 띠를 억제하므로(작업 방해 금지),
+  //   닫히는 «이 시점»에 다시 계산해야 한다. 안 하면 모달을 닫아도 띠가
+  //   다음 화면 이동 때까지 안 뜬다. 다섯 모달의 닫기 경로가 모두 이 함수를
+  //   지나므로 여기 한 곳에서 처리한다(app.js 3개 + proposals.js 2개).
   function close(modalId) {
     const opener = teardown(modalId);
     if (opener && typeof opener.focus === "function") {
       try { opener.focus(); } catch (e) {}
     }
+    try { syncUpdateBanner(); } catch (e) { /* 무시 */ }
   }
 
   return { open, close };
@@ -810,8 +1210,19 @@ function bindEvents() {
   // 연락처는 '-' 없이 숫자만 입력
   $("applyPhone").addEventListener("input", (e) => {
     e.target.value = e.target.value.replace(/[^0-9]/g, "");
+    setFieldError("applyPhone", "applyPhoneErr", "");   // 고치는 즉시 오류 표시 해제
   });
-  $("applySend").addEventListener("click", sendApply);
+  // 제출은 form 의 submit 으로 받는다 — 버튼 클릭·Enter·휴대폰 자판 «완료» 모두 동작.
+  // (버튼이 type="submit" 이라 click 리스너를 따로 달면 두 번 실행된다)
+  $("applyForm").addEventListener("submit", (e) => { e.preventDefault(); sendApply(); });
+  // 입력을 고치면 그 칸의 오류 표시를 즉시 지운다(고쳤는데 빨간 글씨가 남지 않게)
+  $("applyName").addEventListener("input", () => setFieldError("applyName", "applyNameErr", ""));
+  $("applyConsent").addEventListener("change", () => {
+    if ($("applyConsent").checked) setFieldError("applyConsent", "applyConsentErr", "");
+  });
+  // 신청 폼 안에서 처리방침 열기 — 돌아오면 작성 중이던 내용이 남아 있어야 하므로
+  // 화면 전환(showView)만 하고 폼은 초기화하지 않는다.
+  $("applyPrivacyLink").addEventListener("click", openPrivacy);
   $("inquiryLink").addEventListener("click", (e) => { e.preventDefault(); openInquiry(); });
   $("inquirySend").addEventListener("click", sendInquiry);
   // 개인정보 처리방침 (푸터 링크 → 전용 화면, '처음으로'로 복귀)
@@ -837,7 +1248,20 @@ function bindEvents() {
     state.selectedCats = new Set();
     openList({ title: "새로 추가된 사업", onlyNames: newProgramNames });
   });
-  $("newBannerClose").addEventListener("click", () => { $("newBanner").hidden = true; });
+  // 닫으면 버튼이 사라지므로 초점을 본문으로 옮긴다(초점 유실 방지 — KWCAG 6.4.3)
+  $("newBannerClose").addEventListener("click", () => {
+    $("newBanner").hidden = true;
+    focusMain();
+  });
+  // 사업 정보 갱신 알림 띠 — «새로고침»을 눌러야 반영(자동 교체 없음)
+  const dataRtBtn = $("dataRtBtn");
+  if (dataRtBtn) dataRtBtn.addEventListener("click", () => location.reload());
+  const dataRtClose = $("dataRtClose");
+  if (dataRtClose) dataRtClose.addEventListener("click", () => {
+    updatePending = false;
+    syncUpdateBanner();
+    focusMain();   // 닫기 버튼이 사라지므로 초점을 본문으로(초점 유실 방지)
+  });
   // 팀원 소개 모달 (포커스 트랩·Esc·복귀 적용)
   const closeTeam = () => { $("teamModal").hidden = true; ModalA11y.close("teamModal"); };
   $("teamBtn").addEventListener("click", () => { $("teamModal").hidden = false; ModalA11y.open("teamModal", closeTeam); });
@@ -927,6 +1351,10 @@ if ("serviceWorker" in navigator) {
           sw.addEventListener("statechange", () => {
             if (sw.state === "installed" && navigator.serviceWorker.controller) {
               console.log("[PWA] 새 버전 준비됨 — 새로고침하면 최신으로 갱신됩니다.");
+              // 예전엔 콘솔에만 알려서, 이미 방문한 이용자는 «앱을 두 번 열어야»
+              // 새 버전이 적용됐다. 이제 갱신 알림 띠로 알려 «한 번»에 끝낸다.
+              // (자동 새로고침은 하지 않는다 — 보던 화면이 저절로 바뀌면 안 됨)
+              try { noticeUpdate("앱이 새 버전으로 준비되었습니다"); } catch (e) {}
             }
           });
         });

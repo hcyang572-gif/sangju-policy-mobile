@@ -2,6 +2,19 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <!-- ═══ 콘텐츠 보안 정책(CSP) ═══════════════════════════════════════════
+       외부에서 주입된 코드가 실행되거나, 허용하지 않은 곳으로 자료가 새어나가는 것을 막는다.
+       ⚠ «맨 앞»에 둘 것 — 이 태그보다 먼저 선언된 자원에는 정책이 적용되지 않는다.
+       ⚠ 이 앱은 인라인 <script>·<style>·style= 속성·on*= 핸들러가 «0건»이라
+          'unsafe-inline' 없이 적용된다. 앞으로도 인라인을 새로 넣지 말 것(넣으면 차단됨).
+          JS 에서 el.style.x = y (CSSOM) 는 CSP 대상이 아니므로 팀 색상 표시는 정상 동작한다.
+       허용한 외부 3곳(그 외 전부 차단):
+         · cdn.jsdelivr.net  — supabase-js 라이브러리(script-src)
+         · nalpuhtdruovzulcagtj.supabase.co — 사업목록·정책참여·신청 저장(https + 실시간 wss)
+         · api.web3forms.com — 신청·문의 메일 전달
+       worker-src 'self' 는 서비스워커(sw.js), form-action 'self' 는 폼이 외부로
+       제출되지 않도록, object-src·frame-src 'none' 은 플러그인·iframe 금지. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self'; font-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'; connect-src 'self' https://nalpuhtdruovzulcagtj.supabase.co wss://nalpuhtdruovzulcagtj.supabase.co https://api.web3forms.com" />
   <!-- 저시력자 화면확대 허용(KWCAG 2.2): maximum-scale·user-scalable=no 사용 금지 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#E66B3A" />
@@ -46,6 +59,17 @@
 
   <!-- id는 app.js가 참조하므로 유지. tabindex="-1" 은 건너뛰기 링크 도착 시 포커스를 받기 위함 -->
   <main id="app" tabindex="-1">
+    <!-- 사업 정보 갱신 알림 띠(모든 화면 공통):
+         공무원이 「홈페이지 연동」 등으로 사업 정보를 바꿔도 보고 있는 화면을
+         저절로 바꾸지 않는다. 여기서 알리고, «새로고침»을 누를 때만 반영한다.
+         (자동 변경이 없으므로 «정지 기능»이 따로 필요 없다 — KWCAG 6.2.2) -->
+    <div id="dataRtBanner" class="rt-banner" role="status" aria-live="polite" hidden>
+      <span aria-hidden="true">🔔</span>
+      <span id="dataRtText" class="rt-banner-text"></span>
+      <button id="dataRtBtn" class="rt-banner-btn" type="button">새로고침</button>
+      <button id="dataRtClose" class="rt-banner-close" type="button" aria-label="알림 닫기">✕</button>
+    </div>
+
     <!-- 홈 -->
     <section id="view-home" class="view">
       <div id="newBanner" class="new-banner" hidden>
@@ -55,10 +79,19 @@
           <button id="newBannerClose" type="button" aria-label="닫기">✕</button>
         </span>
       </div>
+      <!-- 2026 시정구호 — 이미지에 담긴 «글»이 곧 내용이므로 장식 이미지가 아니다.
+           aria-hidden 을 쓰지 말고 alt 에 전문을 넣는다(대체텍스트 필수, KWCAG 5.1.1).
+           반응형: 좁은 화면은 2줄형(글자가 더 큼), 600px 이상은 1줄형.
+           picture+source(media) 라 브라우저가 «필요한 파일 하나만» 내려받는다. -->
+      <picture class="slogan">
+        <source media="(min-width: 600px)" srcset="assets/slogan-wide.png" width="1201" height="122">
+        <img src="assets/slogan-stack.png" width="901" height="183"
+             alt="이상을 꿈꾸고, 현실로 만드는, 대한민국의 중심 상주입니다.">
+      </picture>
       <p class="lead">상주시 지원사업을 쉽게 찾아보세요</p>
       <!-- 인앱 브라우저(카톡·네이버 등) 안내: 진짜 브라우저로 열어야 설치 가능 -->
       <div id="inappBanner" class="inapp-banner" hidden>
-        <span class="inapp-emoji">📲</span>
+        <span class="inapp-emoji" aria-hidden="true">📲</span>
         <div class="inapp-body">
           <div id="inappText" class="inapp-text"></div>
           <div class="inapp-actions">
@@ -82,13 +115,13 @@
         <input id="homeSearch" type="search" placeholder="🔍 사업명·내용으로 검색" aria-label="사업명·내용으로 검색" />
       </div>
       <div class="big-actions">
-        <button class="big-btn" data-go="all">📋<span>전체 사업 보기</span></button>
-        <button class="big-btn primary" data-go="recommend">🙋<span>나에게 맞는 사업 찾기</span></button>
+        <button class="big-btn" data-go="all"><span aria-hidden="true">📋</span><span>전체 사업 보기</span></button>
+        <button class="big-btn primary" data-go="recommend"><span aria-hidden="true">🙋</span><span>나에게 맞는 사업 찾기</span></button>
       </div>
 
       <!-- 정책참여: 지원사업과 다른 갈래임을 색·구분선으로 명확히 분리 -->
       <div class="home-divider" role="separator" aria-hidden="true"></div>
-      <h2 class="section-label propose-label">🗳 시민 정책참여</h2>
+      <h2 class="section-label propose-label"><span aria-hidden="true">🗳</span> 시민 정책참여</h2>
       <!-- 접근명(aria-label)을 따로 두지 않는다. 카드 안 «보이는 글자»가 그대로 접근명이 되어야
            «정책참여 눌러» 같은 음성 명령이 매칭된다(장식 아이콘·화살표는 aria-hidden 이라 제외됨). -->
       <button class="propose-card" data-go="propose" type="button">
@@ -140,13 +173,45 @@
       <!-- 📌 접수 안내(비고): 해당 사업에 값이 있을 때만 JS가 채운다 -->
       <div id="applyNotice"></div>
       <p class="apply-hint">아래 내용을 작성해 제출하면 담당 부서로 바로 접수됩니다.</p>
-      <label class="field-label" for="applyName">신청자 이름</label>
-      <input id="applyName" class="text-input" type="text" autocomplete="name" placeholder="홍길동" />
-      <label class="field-label" for="applyPhone">연락처</label>
-      <input id="applyPhone" class="text-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" placeholder="01000000000 (- 없이 숫자만)" />
-      <label class="field-label" for="applyMemo">문의사항 (선택)</label>
-      <textarea id="applyMemo" class="text-input" rows="4" placeholder="궁금한 점이나 추가로 전달할 내용"></textarea>
-      <button id="applySend" class="big-btn primary full">✋ 신청서 제출하기</button>
+      <!-- form 시맨틱: 화면낭독기가 «입력 양식»으로 인식하고, 휴대폰 자판의 «완료»로도 제출된다.
+           novalidate — 브라우저 기본 풍선말은 낭독기 지원이 고르지 않아, 아래 자체 오류 안내를 쓴다. -->
+      <form id="applyForm" novalidate>
+        <label class="field-label" for="applyName">신청자 이름 <span class="req">(필수)</span></label>
+        <input id="applyName" class="text-input" type="text" autocomplete="name" placeholder="홍길동"
+               required aria-required="true" aria-describedby="applyNameErr" />
+        <p id="applyNameErr" class="field-err" role="alert" hidden></p>
+
+        <label class="field-label" for="applyPhone">연락처 <span class="req">(필수)</span></label>
+        <input id="applyPhone" class="text-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11"
+               placeholder="01000000000 (- 없이 숫자만)"
+               required aria-required="true" aria-describedby="applyPhoneErr" />
+        <p id="applyPhoneErr" class="field-err" role="alert" hidden></p>
+
+        <label class="field-label" for="applyMemo">문의사항 (선택)</label>
+        <textarea id="applyMemo" class="text-input" rows="4" placeholder="궁금한 점이나 추가로 전달할 내용"></textarea>
+
+        <!-- ⚖ 개인정보 수집·이용 동의 (개인정보 보호법 §15) — 없으면 수집 자체가 위법.
+             구 PC앱 apply_view.py 의 «고지문 + 필수 동의 체크 + 미체크 시 차단»을 그대로 복원한다.
+             처리방침 «링크»만으로는 부족하다 → 항목·목적·보유기간을 폼에서 바로 읽게 둔다. -->
+        <fieldset class="consent-box">
+          <legend class="consent-legend">개인정보 수집·이용 동의 <span class="req">(필수)</span></legend>
+          <dl class="consent-dl">
+            <dt>수집 항목</dt><dd>성명, 연락처(휴대전화), (작성 시) 문의사항</dd>
+            <dt>이용 목적</dt><dd>신청하신 지원사업의 접수·처리 및 결과 안내(담당자 연락)</dd>
+            <dt>보유 기간</dt><dd>처리 목적 달성 시까지. 관계 법령에 정한 기간이 있으면 그 기간 동안 보관 후 파기</dd>
+          </dl>
+          <p class="consent-refuse">동의를 거부하실 수 있으나, 동의하지 않으면 신청 접수가 불가능합니다.</p>
+          <div class="consent-check">
+            <input id="applyConsent" type="checkbox" required aria-required="true"
+                   aria-describedby="applyConsentErr" />
+            <label for="applyConsent">위 내용을 확인했으며, 개인정보 수집·이용에 <b>동의합니다.</b></label>
+          </div>
+          <p id="applyConsentErr" class="field-err" role="alert" hidden></p>
+          <p class="consent-more">자세한 내용은 <button type="button" id="applyPrivacyLink" class="link-btn">개인정보 처리방침</button>에서 확인하실 수 있습니다.</p>
+        </fieldset>
+
+        <button id="applySend" type="submit" class="big-btn primary full"><span aria-hidden="true">✋</span> 신청서 제출하기</button>
+      </form>
       <p class="apply-note">※ 제출하면 담당 부서로 바로 접수됩니다.</p>
     </section>
 
@@ -158,14 +223,14 @@
       <textarea id="inquiryMemo" class="text-input" rows="6" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
       <label class="field-label" for="inquiryContact">연락처 (선택)</label>
       <input id="inquiryContact" class="text-input" type="text" placeholder="회신받을 연락처나 이메일" />
-      <button id="inquirySend" class="big-btn primary full">📨 문의 보내기</button>
+      <button id="inquirySend" class="big-btn primary full"><span aria-hidden="true">📨</span> 문의 보내기</button>
       <p class="apply-note">※ 보내면 hcyang572@korea.kr 로 전달됩니다.</p>
     </section>
 
     <!-- 신청 완료 -->
     <section id="view-done" class="view" hidden>
       <div class="done-box">
-        <div class="done-check">✅</div>
+        <div class="done-check" aria-hidden="true">✅</div>
         <h2>신청이 접수되었습니다</h2>
         <p id="doneProgram" class="done-program"></p>
         <p id="doneReceipt" class="done-receipt" role="status" aria-live="polite" hidden></p>
@@ -179,7 +244,7 @@
     <!-- 정책참여: 제안 목록 -->
     <section id="view-propose" class="view" hidden>
       <div class="propose-hero">
-        <h2 class="propose-hero-title">🗳 시민 정책제안</h2>
+        <h2 class="propose-hero-title"><span aria-hidden="true">🗳</span> 시민 정책제안</h2>
         <div class="propose-hero-sub">"이런 정책 어때요?" 시민이 직접 제안해요</div>
       </div>
       <p class="legal-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
@@ -211,7 +276,7 @@
 
     <!-- 정책참여: 제안 작성 -->
     <section id="view-pwrite" class="view" hidden>
-      <h2 id="pwriteTitle" class="apply-title">🗳 정책 제안하기</h2>
+      <h2 id="pwriteTitle" class="apply-title"><span aria-hidden="true">🗳</span> 정책 제안하기</h2>
       <p class="apply-hint">닉네임으로 자유롭게 제안하세요. 실명·연락처는 적지 마세요.</p>
 
       <label class="field-label" for="pwCategory">제안 분야</label>
@@ -230,7 +295,7 @@
       <input id="pwRegion" class="text-input" type="text" maxlength="20" placeholder="예: 무양동 (선택)" />
 
       <label class="field-label" for="pwPin">수정용 PIN (숫자 4자리) <span class="req">*</span></label>
-      <input id="pwPin" class="text-input" type="tel" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="예: 1234 (본인 수정/삭제용)" />
+      <input id="pwPin" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="예: 1234 (본인 수정/삭제용)" />
       <p class="apply-note left">※ PIN은 본인 글 수정·삭제에만 쓰입니다.<br>
         PIN을 잊으셨나요? <button id="pwPinHelp" class="foot-link-btn" type="button">오류 문의</button>로 연락 주시면 확인 후 도와드립니다.</p>
 
@@ -248,15 +313,25 @@
     <!-- △△△ 정책참여 끝 △△△ -->
 
     <!-- 개인정보 처리방침 (개인정보보호법 제30조) -->
-    <!-- ⚠ 본 처리방침의 [ ] 항목(보유기간·국외이전·보호책임자 성명/직위·시행일)은 담당 부서 확정 후 갱신 필요 -->
+    <!-- ⚠ 「운영 개시 시 확정」으로 표시된 항목(보유기간·위탁계약·국외이전·보호책임자·시행일)은
+         운영 주체·운영 방식이 정해진 뒤 채운다. 표현은 공무원앱(cloudui)과 «같아야» 한다. -->
     <section id="view-privacy" class="view" hidden>
       <h2 class="apply-title">개인정보 처리방침</h2>
       <p class="apply-hint">상주시 정책 플랫폼(시민용 모바일)은 「개인정보 보호법」에 따라 이용자의 개인정보를 보호하기 위해 다음과 같이 처리방침을 둡니다.</p>
+      <!-- 미확정 항목이 «누락»이 아니라 «운영이 정해지면 채울 자리»임을 먼저 밝힌다.
+           role="note" 로 부가 설명임을 화면낭독기에도 전달한다. -->
+      <div class="privacy-notice" role="note" aria-label="처리방침 안내">
+        <p>본 서비스는 <b>연구 과제의 결과물</b>로서, <b>운영 주체와 운영 방식이 확정된 뒤</b>에
+        「운영 개시 시 확정」으로 표시된 항목을 확정하여 기재합니다.</p>
+      </div>
 
       <div class="privacy-doc">
         <h3 class="privacy-h">1. 수집하는 개인정보 항목</h3>
         <ul class="privacy-ul">
-          <li><b>지원사업 신청 시</b> — 이름, 연락처(휴대전화), (작성 시) 문의사항</li>
+          <li><b>지원사업 신청 시</b> — 이름, 연락처(휴대전화), (작성 시) 문의사항, 신청한 사업명<br>
+            <span class="privacy-sub">※ 접수 과정에서 <b>접수번호</b>가 자동 생성되며, 담당 부서가 <b>처리상태·처리메모</b>를 함께 기록합니다.<br>
+            ※ <b>신청자의 이메일 주소는 수집하지 않습니다.</b> 결과 안내는 위 연락처로 담당자가 연락드립니다.<br>
+            ※ 이 모바일 앱에는 <b>파일 첨부 기능이 없습니다.</b></span></li>
           <li><b>정책참여(시민 제안)</b> — 닉네임, (선택) 동네, 제안 내용 / 공감 시 기기식별값(localStorage) / 본인확인용 PIN(임의 숫자, 개인정보 아님)</li>
           <li><b>오류·문의</b> — 문의 내용, (선택) 연락처</li>
         </ul>
@@ -271,34 +346,45 @@
         <h3 class="privacy-h">3. 개인정보의 보유·이용 기간</h3>
         <ul class="privacy-ul">
           <li>처리 목적 달성 시까지 보유하며, 관계 법령에 정한 기간이 있는 경우 해당 기간 동안 보관합니다.</li>
+          <li>구체적인 보유기간: <b>운영 개시 시 확정</b> (확정 전까지는 위 원칙에 따라 처리 목적 달성 즉시 파기)</li>
         </ul>
 
-        <h3 class="privacy-h">4. 개인정보 처리의 위탁 및 제3자 제공</h3>
+        <h3 class="privacy-h">4. 개인정보의 파기 절차 및 방법</h3>
         <ul class="privacy-ul">
-          <li>신청·문의 메일 발송을 위해 <b>Web3Forms</b>(폼메일 서비스)를 이용합니다.</li>
-          <li>정책제안 데이터 저장을 위해 <b>Supabase</b>(클라우드 데이터베이스)를 이용합니다.</li>
-          <li>위 서비스 중 일부는 국외 서버를 사용할 수 있으며, 이 경우 「개인정보 국외이전 고지·동의」 절차에 따릅니다.</li>
+          <li><b>파기 절차</b> — 보유기간이 지나거나 처리 목적이 달성되면, 담당 부서가 해당 자료를 확인해 지체 없이 파기합니다.</li>
+          <li><b>파기 방법</b> — 클라우드 데이터베이스에 저장된 신청·제안 자료는 담당자가 관리 화면에서 <b>삭제</b>하여 복구할 수 없도록 파기합니다. 부서 내부에 내려받아 보관한 파일(접수대장 등)은 <b>복원이 불가능한 방법으로 영구 삭제</b>하고, 종이로 출력한 문서가 있으면 <b>분쇄하거나 소각</b>합니다.</li>
+          <li>다른 법령에 따라 보존해야 하는 자료는 그 기간 동안 다른 자료와 분리하여 보관한 뒤 파기합니다.</li>
         </ul>
 
-        <h3 class="privacy-h">5. 개인정보 보호책임자</h3>
+        <h3 class="privacy-h">5. 개인정보 처리의 위탁 및 제3자 제공</h3>
         <ul class="privacy-ul">
-          <li>책임자: (담당 부서 확정 후 표기)</li>
+          <li>신청서를 제출하면 <b>두 경로가 동시에</b> 처리됩니다 — ① 아래 Supabase에 접수 자료로 저장, ② 아래 Web3Forms를 통해 담당 부서 메일로 전달. (한쪽이 실패해도 다른 쪽으로 접수됩니다)</li>
+          <li><b>Supabase</b>(클라우드 데이터베이스) — <b>지원사업 신청 내역(이름·연락처·문의사항·접수번호·처리상태·처리메모)</b>과 정책제안 데이터의 저장·실시간 동기화 업무를 위탁합니다.</li>
+          <li><b>Web3Forms</b>(폼메일 서비스) — 신청·문의 내용을 담당 부서 메일로 <b>전달</b>하는 업무를 위탁합니다.</li>
+          <li>수탁자는 위 <b>2곳</b>이며, 위탁 업무 외의 목적으로 개인정보를 이용할 수 없도록 관리·감독합니다. 위탁계약 체결 여부·내용: <b>운영 개시 시 확정</b></li>
+          <li>위 서비스 중 일부는 국외 서버를 사용할 수 있으며, 이 경우 「개인정보 국외이전 고지·동의」 절차에 따릅니다. 국외 이전 여부·국가·보호조치: <b>운영 개시 시 확정</b></li>
+          <li>이용자의 개인정보를 위 위탁 목적 외의 제3자에게 제공하지 않습니다.</li>
+        </ul>
+
+        <h3 class="privacy-h">6. 개인정보 보호책임자</h3>
+        <ul class="privacy-ul">
+          <li>책임자(성명·직위·부서): <b>운영 개시 시 확정</b></li>
           <li>연락처: <a class="privacy-mail" href="mailto:hcyang572@korea.kr">hcyang572@korea.kr</a></li>
         </ul>
 
-        <h3 class="privacy-h">6. 정보주체의 권리·의무 및 행사 방법</h3>
+        <h3 class="privacy-h">7. 정보주체의 권리·의무 및 행사 방법</h3>
         <ul class="privacy-ul">
           <li>이용자는 개인정보의 열람·정정·삭제·처리정지를 요구할 수 있으며, 위 연락처로 신청할 수 있습니다.</li>
         </ul>
 
-        <h3 class="privacy-h">7. 개인정보의 안전성 확보 조치</h3>
+        <h3 class="privacy-h">8. 개인정보의 안전성 확보 조치</h3>
         <ul class="privacy-ul">
           <li>HTTPS 암호화 전송, 접근 권한 관리, 수집 항목 최소화 등의 조치를 시행합니다.</li>
         </ul>
 
-        <h3 class="privacy-h">8. 시행일</h3>
+        <h3 class="privacy-h">9. 시행일</h3>
         <ul class="privacy-ul">
-          <li>본 방침은 게시일부터 시행합니다.</li>
+          <li>본 방침의 시행일: <b>운영 개시일</b></li>
         </ul>
       </div>
 
@@ -310,18 +396,18 @@
   <button id="fabBack" class="fab-back" hidden aria-label="뒤로가기">‹ 뒤로</button>
 
   <footer class="foot">
-    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear">⚙ 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
+    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear"><span aria-hidden="true">⚙</span> 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
     <div class="foot-inquiry">오류 문의 <button id="inquiryLink" class="foot-mail-btn" type="button">hcyang572@korea.kr</button></div>
     <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <button id="versionBtn" class="foot-link-btn" type="button" aria-label="v0.0.2 — 버전 정보 및 이용 안내 보기">v0.0.2</button></div>
   </footer>
 
   <!-- 팀원 소개 모달 -->
   <div id="teamModal" class="modal-backdrop" hidden>
-    <div class="team-card" role="dialog" aria-modal="true">
+    <div class="team-card" role="dialog" aria-modal="true" aria-labelledby="teamModalTitle">
       <div class="team-card-head">
-        <span class="team-gear">⚙</span>
+        <span class="team-gear" aria-hidden="true">⚙</span>
         <div>
-          <div class="team-card-title">톱니바퀴</div>
+          <div class="team-card-title" id="teamModalTitle">톱니바퀴</div>
           <div class="team-card-sub">제6기 미래상주 희망연구팀</div>
         </div>
       </div>
@@ -339,25 +425,25 @@
 
   <!-- 홈 화면에 추가(앱처럼 쓰기) 안내 모달 -->
   <div id="installModal" class="modal-backdrop" hidden>
-    <div class="install-card" role="dialog" aria-modal="true">
+    <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="installModalTitle">
       <div class="install-head">
-        <span class="install-emoji">📲</span>
+        <span class="install-emoji" aria-hidden="true">📲</span>
         <div>
-          <div class="install-title">앱처럼 설치하기</div>
+          <div class="install-title" id="installModalTitle">앱처럼 설치하기</div>
           <div class="install-sub">홈 화면에 추가하면 한 번에 열려요</div>
         </div>
       </div>
       <div class="install-guide">
         <div class="install-os">
-          <div class="install-os-name">🍎 아이폰 (Safari)</div>
+          <div class="install-os-name"><span aria-hidden="true">🍎</span> 아이폰 (Safari)</div>
           <ol>
-            <li>아래 <b>공유 버튼</b> <span class="ico">⬆️</span> 누르기</li>
+            <li>아래 <b>공유 버튼</b> <span class="ico" aria-hidden="true">⬆️</span> 누르기</li>
             <li><b>‘홈 화면에 추가’</b> 선택</li>
             <li>오른쪽 위 <b>‘추가’</b> 누르기</li>
           </ol>
         </div>
         <div class="install-os">
-          <div class="install-os-name">🤖 안드로이드 (Chrome)</div>
+          <div class="install-os-name"><span aria-hidden="true">🤖</span> 안드로이드 (Chrome)</div>
           <ol>
             <li>오른쪽 위 <b>⋮ 메뉴</b> 누르기</li>
             <li><b>‘홈 화면에 추가’</b> 또는 <b>‘앱 설치’</b> 선택</li>
@@ -371,19 +457,19 @@
 
   <!-- 정책참여: 본인 수정/삭제(PIN) 모달 -->
   <div id="pinModal" class="modal-backdrop" hidden>
-    <div class="install-card" role="dialog" aria-modal="true">
+    <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="pinModalTitle">
       <div class="install-head">
-        <span class="install-emoji">🔒</span>
+        <span class="install-emoji" aria-hidden="true">🔒</span>
         <div>
-          <div class="install-title">본인 확인</div>
+          <div class="install-title" id="pinModalTitle">본인 확인</div>
           <div class="install-sub">작성 시 정한 4자리 PIN을 입력하세요</div>
         </div>
       </div>
-      <input id="pinInput" class="text-input" type="tel" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="PIN 4자리" aria-label="PIN 4자리 입력" />
+      <input id="pinInput" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" aria-label="PIN 4자리 입력" />
       <p class="apply-note left">PIN을 잊으셨나요? <button id="pinHelp" class="foot-link-btn" type="button">오류 문의</button>로 연락 주시면 확인 후 도와드립니다.</p>
       <div class="pp-modal-actions">
-        <button id="pinEdit" class="big-btn full" type="button">✏ 수정</button>
-        <button id="pinDelete" class="big-btn full pp-danger" type="button">🗑 삭제</button>
+        <button id="pinEdit" class="big-btn full" type="button"><span aria-hidden="true">✏</span> 수정</button>
+        <button id="pinDelete" class="big-btn full pp-danger" type="button"><span aria-hidden="true">🗑</span> 삭제</button>
       </div>
       <button id="pinCancel" class="big-btn primary full">취소</button>
     </div>
@@ -391,11 +477,11 @@
 
   <!-- 정책참여: 신고 모달 -->
   <div id="reportModal" class="modal-backdrop" hidden>
-    <div class="install-card" role="dialog" aria-modal="true">
+    <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
       <div class="install-head">
-        <span class="install-emoji">🚩</span>
+        <span class="install-emoji" aria-hidden="true">🚩</span>
         <div>
-          <div class="install-title">제안 신고</div>
+          <div class="install-title" id="reportModalTitle">제안 신고</div>
           <div class="install-sub">부적절한 내용을 알려주세요</div>
         </div>
       </div>
@@ -425,7 +511,7 @@
 
       <!-- 📌 이용 안내 (기존 푸터 항목을 이곳으로 통합) -->
       <div class="cl-guide">
-        <h3 class="cl-sec-h">📌 이용 안내</h3>
+        <h3 class="cl-sec-h"><span aria-hidden="true">📌</span> 이용 안내</h3>
         <button id="installLink" class="cl-guide-row" type="button">
           <span class="cl-guide-emoji" aria-hidden="true">📲</span>
           <span class="cl-guide-txt">홈 화면에 앱처럼 추가하기</span>
@@ -442,7 +528,7 @@
         </div>
       </div>
 
-      <h3 class="cl-sec-h">📋 버전별 개선사항</h3>
+      <h3 class="cl-sec-h"><span aria-hidden="true">📋</span> 버전별 개선사항</h3>
       <div id="changelogBody" class="changelog-body"></div>
       <button id="versionClose" class="big-btn primary full" type="button">닫기</button>
     </div>
@@ -451,8 +537,18 @@
   <!-- 공통 버전·개선사항 단일 소스(앱 스크립트보다 먼저 로드) -->
   <script src="version.js"></script>
   <script src="config.js"></script>
-  <!-- 정책참여 라이브 read/write 용 Supabase 클라이언트 (공무원앱과 동일 버전) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase 클라이언트 (사업목록 하이브리드 조회·정책참여·서식·신청접수)
+       ※ 세 앱(모바일웹·cloudui·webui) 모두 «같은 버전·같은 해시»를 쓴다. 하나만 바꾸지 말 것.
+       · 버전 고정: @2 (뜬 범위)는 CDN이 언제든 다른 코드를 내려줄 수 있어 2.112.0 으로 못박음.
+       · integrity(SRI): 내려받은 파일이 1비트라도 다르면 브라우저가 «실행을 거부»한다.
+         해시는 실제 파일에서 계산했다(2026-08-04, sha384). 버전을 올리면 해시도 «반드시» 다시 계산할 것.
+       · crossorigin="anonymous": SRI 검증에 필요(jsDelivr 는 ACAO:* 응답 확인함). 쿠키는 보내지 않는다.
+       · referrerpolicy="no-referrer": 시민이 어느 페이지를 보는지 외부 CDN에 알리지 않는다.
+       · 이 스크립트가 막혀도(오프라인·CDN 장애·해시 불일치) 앱은 멈추지 않는다 —
+         사업목록은 data.json 으로 폴백하고, 서식·정책참여만 조용히 비활성된다. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.0"
+          integrity="sha384-De+l/Df7qym5QBDVocD3+gW1S7IjR3epf+6KbRDjB3FCCzM/LqVTwqckT6FhFar8"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- 서식 스토리지 공용 헬퍼(세 앱 공통). app.js 보다 먼저 로드 -->
   <script src="forms.js"></script>
   <!-- 신청 접수 공용 헬퍼(세 앱 공통·byte-identical). app.js 보다 먼저 로드 -->

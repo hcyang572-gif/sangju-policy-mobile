@@ -2,7 +2,7 @@
  * 경로는 모두 상대경로(self.registration.scope 기준)로 다뤄
  * GitHub Pages 하위경로(/sangju-policy-mobile/)에서도 깨지지 않게 함.
  * 캐시 버전을 올리려면 아래 CACHE 값을 바꾸면 됨(예: sangju-v2). */
-const CACHE = "sangju-v21";
+const CACHE = "sangju-v22";
 
 // scope(예: https://hcyang572-gif.github.io/sangju-policy-mobile/)를 기준으로
 // 절대 URL을 만들어 둔다. (서브경로/루트 모두 안전)
@@ -26,6 +26,11 @@ const PRECACHE = [
   "qr.png",
   "assets/sangsang1.png",
   "assets/gotgam.png",
+  // 2026 시정구호(홈 첫 화면) — 오프라인에서도 깨지지 않게 미리 담는다.
+  // 두 형태를 다 담는 이유: 설치 후 가로/세로 전환이나 태블릿에서 폭이 바뀌면
+  // 반대쪽 파일이 필요해지는데, 그때 오프라인이면 이미지가 사라진다.
+  "assets/slogan-stack.png",
+  "assets/slogan-wide.png",
 ];
 
 // 설치: 핵심 자원을 미리 담되, 하나가 실패해도 install 전체가 실패하지 않게

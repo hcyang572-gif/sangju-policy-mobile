@@ -28,8 +28,10 @@ OUT = os.path.join(HERE, "data.json")
 
 
 def _excel_path():
-    """PC 앱이 마지막으로 연동한 DB(last_excel_path.txt) 우선, 없으면 기본 파일.
-    → PC가 다른 엑셀을 연동해도 모바일이 같은 DB로 빌드되도록 한다."""
+    """빌드에 쓸 엑셀 경로.
+    순서 ① PC 앱이 마지막으로 연동한 DB(last_excel_path.txt)
+         ② 기준 엑셀(config.BASELINE_DB_FILE) ③ 상위 폴더의 기본 파일.
+    → PC앱·자동배포·클라우드 동기화가 모두 «같은 DB» 를 보도록 맞춘다."""
     try:
         cfg = os.path.join(APP_ROOT, "last_excel_path.txt")
         if os.path.exists(cfg):
@@ -39,6 +41,9 @@ def _excel_path():
                 return p
     except Exception:
         pass
+    base = getattr(config, "BASELINE_DB_FILE", "")
+    if base and os.path.exists(base):
+        return base
     return os.path.join(APP_ROOT, "상주시 지원사업 목록.xlsx")
 
 

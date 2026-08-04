@@ -3,20 +3,22 @@
 //  규약 출처: _workspace/신청접수_클라이언트_규약.md  (🟢 data-engineer)
 //  백엔드: supabase/applications.sql (테이블·RLS·Realtime, 양호창님이 대시보드 실행)
 //
-//  ⚠ 세 앱(cloudui·모바일웹·webui) 공통. 이 파일은 «byte-identical» 로 각 앱에 둔다.
-//     규칙(매칭키·접수번호·insert 페이로드·상태값)을 바꾸면 규약문서 + SQL 주석 +
-//     세 앱의 apply_client.js 를 «동시에» 갱신하고 검수 담당에게 알린다.
+//  ⚠⚠ 이 사본은 «시민앱(모바일웹) 전용»입니다 — 다른 두 앱과 «일부러» 다릅니다.
+//     예전에는 세 앱(cloudui·모바일웹·webui)에 byte-identical 로 두었지만,
+//     2026-08-04 🟡 egov-compliance 지적으로 시민앱에서만 관리자용 함수
+//     (listApplications·updateApplication·deleteApplication·subscribeApplications)를
+//     «삭제»했습니다. 공개 웹앱에 개인정보 조회 경로를 두지 않기 위함입니다.
+//     → cloudui/apply_client.js 와 내용이 다른 것이 «정상»입니다.
+//       «동기화가 안 됐네» 하고 되돌리지 마세요(자세한 사유는 아래 ⛔ 주석).
+//     공통 규칙(매칭키·접수번호·insert 페이로드·상태값)을 바꿀 때는 여전히
+//     규약문서 + SQL 주석 + 세 앱을 «동시에» 갱신하고 검수 담당에게 알린다.
 //
 //  노출: window.SangjuApply = {
-//    useClient, benefitKey, genReceiptNo,
-//    submitApplication, listApplications, updateApplication, deleteApplication,
-//    subscribeApplications, errKind, TABLE, STATUSES
-//  }
+//    useClient, benefitKey, genReceiptNo, submitApplication, errKind, TABLE, STATUSES
+//  }   ← 시민앱이 실제로 쓰는 것만. 조회·수정·삭제·구독은 노출하지 않는다.
 //
 //  방어 원칙: applications.sql 이 아직 실행 안 됐으면(테이블 없음·PGRST205)
-//    · listApplications 는 «원인 있는 오류» 를 throw → 공무원앱이 안내(showLoadError)
 //    · submitApplication 실패는 throw → 시민앱이 안내(메일 전송과 «독립»)
-//    · subscribeApplications 는 실패해도 조용히 무시(앱 무손상)
 //  → 어떤 경우에도 앱의 다른 기능(사업목록·정책제안·메일신청)은 멀쩡해야 한다.
 //
 //  ⚠ 상태값은 «접수 / 심사중 / 승인 / 반려» 4값(PC config.APPLICATION_STATUSES 와 동일).
@@ -51,19 +53,12 @@ window.SangjuApply = (function () {
     }
   }
 
-  // ── 매칭 키 — forms.js benefitKey / migrate.py._key_of 와 «값이 같아야» 함 ──
-  //   정책번호 있으면 그 값(정규화 '100049.0'→'100049'), 없으면 공백 제거 사업명.
-  //   cloud benefits 는 {policy_no,name}, 모바일 data.json 은 {정책번호?,사업명} — 둘 다 읽음.
+  // ── 매칭 키 — forms.js benefitKey 와 «값이 같아야» 함 ──
+  //   «공백을 모두 제거한 사업명». ★ 절대 정책번호를 쓰지 말 것 (2026-08-04 확정)
+  //   이미 쌓인 benefit_key 가 전부 사업명 기준이라, 바꾸면 기존 서식·접수 연결이 끊긴다.
+  //   cloud benefits 는 {name}, 모바일 data.json 은 {사업명} — 둘 다 읽음.
   function benefitKey(b) {
     b = b || {};
-    var rawPid = b.policy_no != null ? b.policy_no
-               : (b.정책번호 != null ? b.정책번호 : "");
-    var pid = String(rawPid).trim();
-    if (pid && ["nan", "none"].indexOf(pid.toLowerCase()) === -1) {
-      var n = Number(pid);
-      if (Number.isFinite(n)) return String(Math.trunc(n)); // 100049.0 → 100049
-      return pid;
-    }
     var nm = b.name != null ? b.name : (b.사업명 != null ? b.사업명 : "");
     return String(nm).replace(/\s+/g, "");
   }
@@ -109,53 +104,22 @@ window.SangjuApply = (function () {
     return res.data;
   }
 
-  // ── 공무원 조회 — 최신순 전체. 실패는 throw(호출부가 원인별 안내) ──
-  async function listApplications() {
-    var sb = client();
-    if (!sb) return [];
-    var res = await sb.from(TABLE).select("*").order("created_at", { ascending: false });
-    if (res.error) throw res.error;
-    return res.data || [];
-  }
-
-  // ── 공무원 상태변경 · 처리메모 — patch = {status?, admin_memo?} ──
-  //   허용 필드만 추린다. updated_at 은 서버 트리거가 갱신(클라가 넣지 않음).
-  async function updateApplication(id, patch) {
-    var sb = client();
-    if (!sb) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
-    patch = patch || {};
-    var upd = {};
-    if (patch.status !== undefined) upd.status = patch.status;
-    if (patch.admin_memo !== undefined) upd.admin_memo = patch.admin_memo;
-    var res = await sb.from(TABLE).update(upd).eq("id", id).select().single();
-    if (res.error) throw res.error;
-    return res.data;
-  }
-
-  // ── 공무원 삭제(오접수 정리) ──
-  async function deleteApplication(id) {
-    var sb = client();
-    if (!sb) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
-    var res = await sb.from(TABLE).delete().eq("id", id);
-    if (res.error) throw res.error;
-  }
-
-  // ── 실시간 구독(공무원앱) — proposals-rt 와 동일 방식 ──
-  //   새 접수·변경이 오면 cb() 호출(화면 자동 교체가 아니라 «알림» 목적). 실패는 무시.
-  function subscribeApplications(cb) {
-    var sb = client();
-    if (!sb) return null;
-    try {
-      return sb.channel("applications-rt")
-        .on("postgres_changes",
-            { event: "*", schema: "public", table: TABLE },
-            function () { try { if (cb) cb(); } catch (e) {} })
-        .subscribe();
-    } catch (e) {
-      console.warn("[신청접수] 실시간 구독 실패(무시):", e);
-      return null;
-    }
-  }
+  // ┌──────────────────────────────────────────────────────────────────┐
+  // │ ⛔ 여기에 «조회·수정·삭제·구독» 함수를 다시 넣지 마세요.          │
+  // │    listApplications / updateApplication / deleteApplication /     │
+  // │    subscribeApplications 는 이 시민앱 사본에서 «의도적으로»      │
+  // │    삭제했습니다(2026-08-04, 🟡 egov-compliance 지적).             │
+  // │    cloudui/apply_client.js 에는 그대로 있고 앞으로도 있어야 합니다.│
+  // │    → 두 사본이 다른 것이 «정상»입니다. 동기화하지 마세요.        │
+  // └──────────────────────────────────────────────────────────────────┘
+  // 왜: applications 에는 신청자 이름·연락처·문의내용(개인정보)이 들어 있습니다.
+  //     시민앱은 «공개» 웹앱이라 여기 있는 함수는 누구나 브라우저 콘솔에서
+  //     호출할 수 있습니다. 실제로 RLS 임시 개방(rls_temp_open.sql) 상태에서는
+  //     anon 키만으로 접근이 되어, 노출해 두면 콘솔 한 줄로 전체 접수 명단을
+  //     읽을 수 있었습니다(개인정보 보호법 §29 안전조치 의무 위반 소지).
+  //     시민앱에 필요한 건 «신청 제출»(submitApplication) 하나뿐입니다.
+  // ⚠ RLS 를 정식(로그인 공무원만)으로 되돌려도 이 사본은 원복하지 않습니다.
+  //    «필요한 것만 노출»이 원칙이고, 시민앱은 이 함수들을 쓸 일이 없습니다.
 
   // ── 오류 원인 분류(호출부 안내·다시시도 판단용) ──
   //   conn=연결/서버 · perm=권한(RLS) · setup=테이블 미생성 · other=그밖
@@ -182,10 +146,8 @@ window.SangjuApply = (function () {
     benefitKey: benefitKey,
     genReceiptNo: genReceiptNo,
     submitApplication: submitApplication,
-    listApplications: listApplications,
-    updateApplication: updateApplication,
-    deleteApplication: deleteApplication,
-    subscribeApplications: subscribeApplications,
+    // ⛔ listApplications·updateApplication·deleteApplication·subscribeApplications 는
+    //    시민앱에서 의도적으로 «노출하지 않습니다»(위 ⛔ 주석 참조). 되살리지 마세요.
     errKind: errKind
   };
 })();
