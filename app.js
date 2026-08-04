@@ -172,19 +172,117 @@ function cloudClient() {
   }
 }
 
-// ── 텍스트 정돈 — PC config.clean_text 와 «같은 규칙» ────────────────────
-// '자세히 보기: http…' 안내문구·URL 제거 + 공백/빈 줄 정돈.
-// build_data.py 는 이미 정돈된 값을 data.json 에 넣지만, Supabase 에는
-// 정돈 전 원문이 올라올 수 있다(migrate.py 는 비고를 정돈하지 않음).
-// clean_text 는 «멱등»이라 이미 정돈된 값에 다시 적용해도 결과가 같다.
-const _URL_DETAIL_RE = /자세히\s*보기\s*:?\s*https?:\/\/\S+\s*/g;
-const _URL_RE = /https?:\/\/\S+/g;
-function cleanText(s) {
+// ── 텍스트 정돈 — config.py tidy_text 와 «같은 규칙»(단일 출처는 config.py) ──
+// 공백/빈 줄 정돈만 하고 «URL 은 살린다». 시민앱은 웹이라 본문 속 주소가 곧
+// 신청하러 가는 문이다(정부24·복지로·상주시 누리집). 예전에는 PC 표시용 규칙인
+// config.clean_text 를 그대로 써서 URL 을 지웠는데, 그러면 정보가 사라질 뿐 아니라
+// 「정부24(https://www.gov.kr) 접수」가 「정부24( 접수」로 남아 문장이 깨졌다.
+// 링크로 바꾸는 일은 화면 직전의 linkifyHtml() 이 맡는다(XSS 방지 포함).
+// 이 함수는 «멱등»이라 이미 정돈된 값(data.json)에 다시 적용해도 결과가 같다.
+//
+// healOrphanParens: 예전 규칙으로 «이미 망가진» 값이 Supabase 에 남아 있어도
+//   시민에게 깨진 문장을 보이지 않게 한다(클라우드 재동기화 전까지의 안전망).
+//   ★ config.py heal_orphan_parens 와 «글자 그대로 같은 규칙» — 브라우저에서 돌아야 해서
+//     어쩔 수 없이 두는 사본이다. config.py 를 고치면 여기도 반드시 같이 고칠 것.
+//   ⚠ 먼저 «본문 전체»의 괄호 짝을 센다. 줄 단위로만 보면 여러 줄에 걸친 정상 괄호
+//     (「…전입한 자 (」 + 다음 줄 「※ 단, …신청가능)」)에서 여는 괄호만 지워 버려
+//     멀쩡한 문장을 되레 깨뜨린다(2026-08-04 검수 지적, 실데이터 1건).
+function healOrphanParens(text) {
+  const t = String(text);
+  if ((t.match(/\(/g) || []).length === (t.match(/\)/g) || []).length) return t;
+  return t.split("\n").map((ln) => {
+    const open = (ln.match(/\(/g) || []).length;
+    const close = (ln.match(/\)/g) || []).length;
+    if (open <= close) return ln;                 // 괄호가 짝이면 손대지 않는다
+    return ln.replace(/\(\s*$/, "")               // 줄 끝에 남은 여는 괄호
+             .replace(/\(\s+/g, " ")              // 「( 접수」 → 「 접수」
+             .replace(/[ \t]{2,}/g, " ").trim();
+  }).join("\n");
+}
+function tidyText(s) {
   if (s == null) return "";
-  let t = String(s).replace(_URL_DETAIL_RE, "").replace(_URL_RE, "");
-  t = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  let t = String(s).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   t = t.split("\n").map((ln) => ln.replace(/[ \t]+/g, " ").trim()).join("\n");
-  return t.replace(/\n{3,}/g, "\n\n").trim();
+  return healOrphanParens(t.replace(/\n{3,}/g, "\n\n").trim());
+}
+
+// ── 본문 속 주소를 «안전한 링크»로 ───────────────────────────────────────
+// 원칙(전자정부 웹품질 지침·KWCAG 2.2):
+//  · XSS 방지 — 데이터 문자열은 전부 esc() 로 이스케이프하고, 링크는 «우리가 만든»
+//    <a> 태그로만 만든다. href 에 넣는 주소는 정규식이 http/https 로 시작하는
+//    것만 잡으므로 javascript:·data: 같은 스킴은 애초에 들어올 수 없다(이중 확인).
+//  · 새 창 열림을 알린다 — 눈에 보이는 ↗ 표식 + 화면낭독기용 '(새 창 열림)' 문구.
+//  · 링크 이름만으로 목적지를 안다 — 「여기를 클릭」 금지. 주소의 호스트를 그대로 쓴다
+//    (예: www.gov.kr). '자세히 보기: 주소' 형태는 「자세히 보기 (호스트)」 버튼으로.
+const _URL_SCAN_RE = /(자세히\s*보기\s*[:：]?\s*)?(https?:\/\/[^\s<>"']+)/g;
+
+// 주소 뒤에 붙은 문장부호를 떼어 본문으로 되돌린다.
+// 「정부24(https://www.gov.kr) 접수」의 ') 접수' 나 「…kr)로 신청」의 ')로 신청' 처럼
+// 괄호 앞에서 끊어 주지 않으면 주소에 한글·닫는 괄호가 섞여 링크가 깨진다.
+function splitUrlTail(raw) {
+  let url = raw;
+  let depth = 0;
+  for (let i = 0; i < url.length; i++) {
+    const c = url[i];
+    if (c === "(") depth++;
+    else if (c === ")") {
+      if (depth === 0) { return [url.slice(0, i), url.slice(i)]; }  // 짝 없는 ')' 에서 끊는다
+      depth--;
+    }
+  }
+  let tail = "";
+  while (url.length && ".,;:!?·\"'」』”’".indexOf(url[url.length - 1]) >= 0) {
+    tail = url[url.length - 1] + tail;
+    url = url.slice(0, -1);
+  }
+  return [url, tail];
+}
+
+// 링크에 보일 이름 — 주소의 호스트(예: www.gov.kr, ihappycare.kr:4050).
+// ⚠ new URL() 은 한글 도메인을 punycode(xn--…)로 바꿔 읽을 수 없게 만든다 → 직접 자른다.
+function urlHost(u) {
+  const m = /^https?:\/\/([^/?#]+)/i.exec(u);
+  return m ? m[1] : u;
+}
+
+// 목록 카드의 «요약 한 줄»용 — 카드 자체가 role="button" 이라 그 안에 링크를 넣을 수
+// 없다(버튼 안의 링크는 키보드·보조기기에서 동작이 어긋난다). 그래서 요약에서는
+// 긴 주소를 호스트만 남긴 «글자»로 줄인다. 상세 화면에서 진짜 링크로 보여 주므로
+// 정보가 사라지지 않는다.
+function previewText(s) {
+  const text = String(s == null ? "" : s);
+  _URL_SCAN_RE.lastIndex = 0;
+  return text.replace(_URL_SCAN_RE, (whole, detail, raw) => {
+    const [url, tail] = splitUrlTail(raw);
+    if (!/^https?:\/\//i.test(url)) return whole;
+    return (detail ? "자세히 보기: " : "") + urlHost(url) + tail;
+  });
+}
+
+// 여러 줄 텍스트 → 이스케이프된 HTML(+ 링크). 반환값만 innerHTML 에 넣는다.
+function linkifyHtml(s) {
+  const text = String(s == null ? "" : s);
+  let out = "";
+  let last = 0;
+  _URL_SCAN_RE.lastIndex = 0;
+  let m;
+  while ((m = _URL_SCAN_RE.exec(text)) !== null) {
+    const [url, tail] = splitUrlTail(m[2]);
+    // 이중 확인: 우리가 href 에 넣는 값은 반드시 http(s) 로 시작한다.
+    if (!/^https?:\/\//i.test(url)) continue;
+    const detail = !!m[1];                       // '자세히 보기: 주소' 형태인가
+    out += esc(text.slice(last, m.index));
+    const href = esc(url);
+    const label = detail ? `🔗 자세히 보기 (${urlHost(url)})` : urlHost(url);
+    out += `<a class="${detail ? "link-btn" : "ext-link"}" href="${href}"`
+      + ` target="_blank" rel="noopener noreferrer" title="${href}">`
+      + `${esc(label)}<span aria-hidden="true"> ↗</span>`
+      + `<span class="sr-only"> (새 창 열림)</span></a>`;
+    out += esc(tail);
+    last = m.index + m[0].length;
+  }
+  out += esc(text.slice(last));
+  return out;
 }
 // 빈값 표기 정규화 — 엑셀/DB에서 넘어온 'nan'·'null' 문자열을 빈칸으로.
 function txt(v) {
@@ -235,16 +333,16 @@ function dedupeKeepLatest(rows) {
 function adaptCloudRow(r) {
   return {
     "사업명": txt(r.name),
-    "내용": cleanText(txt(r.content)),
-    "대상자상세기준": cleanText(txt(r.target)),
-    "이용방법": cleanText(txt(r.method)),
-    "필요서류": cleanText(txt(r.documents)),
+    "내용": tidyText(txt(r.content)),
+    "대상자상세기준": tidyText(txt(r.target)),
+    "이용방법": tidyText(txt(r.method)),
+    "필요서류": tidyText(txt(r.documents)),
     "기관명": txt(r.org_name),          // 컬럼 미생성 시 "" (화면에서 생략)
     "팀명": txt(r.team),
     "연락처": txt(r.contact),
     "담당자이메일": txt(r.manager_email),
     "종료일": txt(r.end_date),          // 컬럼 미생성 시 "" (화면에서 생략)
-    "비고": cleanText(txt(r.note)),
+    "비고": tidyText(txt(r.note)),
     "categories": Array.isArray(r.categories) ? r.categories.filter(Boolean) : [],
   };
 }
@@ -698,7 +796,7 @@ function renderList() {
     return `<div class="card" data-idx="${idx}" role="button" tabindex="0"
       aria-labelledby="${tid}" aria-describedby="${did} ${mid}">
       <h3 id="${tid}">${esc(p.사업명)}</h3>
-      <p id="${did}">${esc(p.내용 || p.대상자상세기준)}</p>
+      <p id="${did}">${esc(previewText(p.내용 || p.대상자상세기준))}</p>
       <span class="card-meta" id="${mid}">
         <span class="team" data-team="${esc(teamName)}" title="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
       </span>
@@ -724,7 +822,10 @@ function openDetail(idx) {
   currentIdx = idx;
   const p = DATA.programs[idx];
   $("topTitle").textContent = "사업 상세";
-  const block = (k, v) => v ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : "";
+  // 본문 칸(내용·대상·이용방법·필요서류)은 linkifyHtml 로 «이스케이프 + 주소만 링크».
+  // 그 밖의 칸(종료일 등)은 순수 텍스트라 esc 만 쓴다.
+  const block = (k, v) => v ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${linkifyHtml(v)}</div></div>` : "";
+  const blockText = (k, v) => v ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : "";
   const blockHtml = (k, html) => html ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${html}</div></div>` : "";
   const tags = (p.categories || []).map((c) => `<span class="t">${esc(c)}</span>`).join("");
   // 담당: 팀명이 없으면 '담당팀 확인 필요'. 팀명은 팀별 색 배지로 표시(색은 렌더 후 주입).
@@ -744,7 +845,7 @@ function openDetail(idx) {
   const noteHtml = note
     ? `<div class="notice-box" role="note" aria-label="접수 안내">
          <p class="notice-k"><span aria-hidden="true">📌</span> 접수 안내</p>
-         <p class="notice-v">${esc(note)}</p>
+         <p class="notice-v">${linkifyHtml(note)}</p>
        </div>`
     : "";
   $("detailContent").innerHTML = `
@@ -758,7 +859,7 @@ function openDetail(idx) {
     <div id="formsDownload"></div>
     ${blockHtml("🏢 담당", chargeHtml)}
     ${blockHtml("☎ 연락처", telHtml)}
-    ${block("📅 종료일", p.종료일)}
+    ${blockText("📅 종료일", p.종료일)}
     <button class="big-btn primary full" id="detailApply">✋ 신청하기</button>
   `;
   showView("detail");
@@ -816,7 +917,7 @@ function openApply(idx) {
   $("applyNotice").innerHTML = note
     ? `<div class="notice-box" role="note" aria-label="접수 안내">
          <p class="notice-k"><span aria-hidden="true">📌</span> 접수 안내</p>
-         <p class="notice-v">${esc(note)}</p>
+         <p class="notice-v">${linkifyHtml(note)}</p>
        </div>`
     : "";
   $("applyName").value = "";

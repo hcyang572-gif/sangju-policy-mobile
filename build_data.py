@@ -85,6 +85,19 @@ def dedupe_keep_latest(records):
     return out
 
 
+# ── 표시 텍스트 정돈 — «URL 은 살린다» ────────────────────────────────────
+# ⚠ config.clean_text 는 공백 정돈에 더해 «본문 속 URL 까지 지운다». 그 규칙은 구
+#   customtkinter 앱(data_io.py)이 아직 쓰므로 함수 자체는 건드리지 않는다.
+#   시민앱은 «웹»이라 URL 이 곧 신청하러 가는 문이다. 지우면 정보가 사라질 뿐 아니라
+#   「정부24(https://www.gov.kr) 접수」가 「정부24( 접수」로 남아 문장이 깨진다.
+#   → 빌드는 config.tidy_text 를 쓴다(URL 은 살리고 공백·빈 줄만 정돈 + 고아 괄호 치유).
+#     화면에서 안전한 링크로 바꾸는 일은 app.js 의 linkifyHtml() 이 맡는다.
+#   ★ 정돈 규칙은 «config.py 단일 출처». 여기에 사본을 두지 않는다(2026-08-04 검수 반영).
+#     브라우저에서 도는 app.js 의 tidyText()/healOrphanParens() 만 불가피한 사본이며,
+#     config.py 를 고치면 app.js 도 같이 고쳐야 한다(세 경로가 같은 화면을 내야 한다).
+tidy_text = config.tidy_text
+
+
 def categorize(record):
     """PC 앱 rebuild_categories_from_db 와 동일한 규칙으로 한 사업의 카테고리 키 목록을 만든다."""
     cats = []
@@ -126,10 +139,11 @@ def main():
             found.add(c)
         programs.append({
             "사업명": str(r.get("사업명", "")).strip(),
-            "내용": config.clean_text(r.get("내용", "")),
-            "대상자상세기준": config.clean_text(r.get("대상자 상세기준", "")),
-            "이용방법": config.clean_text(r.get("이용방법", "")),
-            "필요서류": config.clean_text(r.get("필요서류", "")),
+            # ⚠ config.clean_text 가 아니라 tidy_text — 본문 속 신청 URL 을 살린다(위 주석 참조)
+            "내용": tidy_text(r.get("내용", "")),
+            "대상자상세기준": tidy_text(r.get("대상자 상세기준", "")),
+            "이용방법": tidy_text(r.get("이용방법", "")),
+            "필요서류": tidy_text(r.get("필요서류", "")),
             "기관명": str(r.get("기관명", "")).strip(),
             "팀명": str(r.get("팀명", "")).strip(),
             "연락처": str(r.get("연락처", "")).strip(),
@@ -137,7 +151,7 @@ def main():
             # 종료일: 신규 DB에는 열이 없을 수 있다(없으면 "" → 화면에서 렌더 생략).
             "종료일": str(r.get("종료일", "")).strip(),
             # 비고: 접수 마감/재접수 시기 등 시민에게 반드시 보여야 할 안내(📌 접수 안내)
-            "비고": config.clean_text(r.get("비고", "")),
+            "비고": tidy_text(r.get("비고", "")),
             "categories": cats,
         })
 
@@ -185,8 +199,14 @@ def main():
 
     n_note = sum(1 for p in programs if p.get("비고"))
     n_end = sum(1 for p in programs if p.get("종료일"))
+    # 신청 URL 보존 검증 — 0 이면 어딘가에서 다시 URL 을 지우고 있다는 신호다.
+    url_re = re.compile(r"https?://")
+    n_url = sum(len(url_re.findall(" ".join(
+        str(p.get(k, "")) for k in ("내용", "대상자상세기준", "이용방법", "필요서류", "비고"))))
+        for p in programs)
     print(f"[완료] {len(programs)}개 사업, {len(categories)}개 카테고리 → {OUT}")
     print(f"       비고(접수 안내) 있는 사업 {n_note}건 / 종료일 있는 사업 {n_end}건")
+    print(f"       본문 속 신청 URL {n_url}개 보존(화면에서 링크로 표시)")
 
 
 if __name__ == "__main__":

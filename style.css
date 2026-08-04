@@ -107,6 +107,10 @@ body { width: 100%; margin: 0; padding-bottom: 60px; }
 }
 /* 헤더 내부 콘텐츠: flex 정렬 + 본문(main)과 동일한 폭 정책으로 센터링 */
 .topbar-inner {
+  /* 로고를 줄여도 헤더 높이(54px)를 그대로 유지한다.
+     아래 .topline(sticky top:58px)·.search-box.sticky(top:61px)가 이 높이를 전제로 하므로
+     로고 크기와 무관하게 내부 콘텐츠 높이를 30px로 고정해 둔다. */
+  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -127,8 +131,11 @@ body { width: 100%; margin: 0; padding-bottom: 60px; }
   cursor: pointer;
 }
 .back-btn:active { background: var(--header); }
-/* 상상주도 CI 로고: 크림 배경 위에 바로(흰 칩 제거) */
-.topbar-logo { height: 30px; width: auto; object-fit: contain; display: block; flex-shrink: 0; }
+/* 상상주도 CI 로고: 크림 배경 위에 바로(흰 칩 제거)
+   · 2026 시정구호 이미지가 홈 상단에 크게 들어가므로, 로고는 «보조 표식» 크기로 둔다(30px → 22px).
+   · 링크·버튼이 아닌 순수 이미지라 44×44 터치 대상 규정 대상이 아니다(누를 수 없음).
+   · 공무원앱(cloudui) .brand-logo 와 같은 22px — 두 앱의 감각을 맞춘다. */
+.topbar-logo { height: 22px; width: auto; object-fit: contain; display: block; flex-shrink: 0; }
 /* 헤더 아래 곶감색 라인 — 일체감 위해 아주 은은하게(2px·반투명, 브랜드 정체성만 남김) */
 .topline { height: 2px; background: rgba(230,107,58,.35); position: sticky; top: 58px; z-index: 19; }
 
@@ -291,6 +298,25 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .detail-block .v { font-size: 0.9375rem; white-space: pre-wrap; }
 .tel-link { color: var(--accent-text); font-weight: 700; text-decoration: none; }
 .tel-link .tel-ico { font-size: 14px; }
+/* 🔗 본문 속 신청 주소(정부24·복지로·상주시 누리집 등) — 시민이 눌러서 바로 갈 수 있게.
+   · 글자 #A8431A on #FFFFFF = 5.66:1 / on #FDECE4(접수 안내 박스) = 5.25:1 (AA 충족)
+   · 색만으로 링크임을 알리지 않도록 «밑줄 + ↗ 표식»을 항상 함께 둔다.
+   · 새 창으로 열리므로 ↗(시각) + .sr-only '(새 창 열림)'(보조기기)로 알린다. */
+.ext-link {
+  color: var(--accent-text); font-weight: 700;
+  text-decoration: underline; text-underline-offset: 3px;
+  word-break: break-all;
+}
+.ext-link:focus-visible, .link-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+/* '자세히 보기: 주소' 는 문장이 아니라 «가는 문»이므로 누르기 쉬운 칩으로 (터치 44px 확보) */
+.link-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin: 4px 0; padding: 10px 14px; min-height: 44px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--accent-text); font-weight: 700; text-decoration: none;
+  word-break: break-all;
+}
+.link-btn:hover { border-color: var(--primary); }
 /* 📎 필요서류 서식 다운로드 — 공무원이 올린 서식을 시민이 내려받는 목록.
    파일형식·용량을 텍스트로 병기(스크린리더/저시력), 색만으로 정보 전달하지 않는다.
    링크 글자 #A8431A on #FFFFFF = 5.66:1 (AA 충족). */
