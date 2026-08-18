@@ -1,44 +1,63 @@
 /* ═══════════════════════════════════════════════════════════════
-   공통 접근성 팔레트 (시민앱 · 공무원앱(cloudui) · PC앱(webui) 3종 동일 값)
+   시안 A 「감빛 온기」 팔레트 (Warm Persimmon) — 2026-08-19 확정
+   시민앱 · 공무원앱(cloudui) · PC앱(webui) 3종 공통 토큰
    ─────────────────────────────────────────────────────────────
-   토큰 대응표 (이름은 각 앱 기존 체계 유지, 값만 일치)
-     역할                     값        시민앱            cloudui           대비(흰 기준)
-     장식·테두리 전용         #E66B3A   --primary         --gotgam          3.22 (흰글자 배경 금지)
-     흰 글자 얹는 배경 전용   #C2501F   --primary-hover   --gotgam-d        4.71
-     밝은 배경 위 주황 글자   #A8431A   --accent-text     --gotgam-t        6.03
-     보조 텍스트              #7A6152   --muted           --sub             5.74
-     비활성·빈상태 텍스트     #6F6A63   --disabled        (직접값)          5.36
-     경계선                   #F0E0D5   --border          --line            (비텍스트)
-   ⚠ #E66B3A 위에 흰 글자를 얹으면 3.22:1 로 AA(4.5) 미달 → 반드시 --primary-hover 사용
+   토큰 대응표 (이름은 각 앱 기존 체계 유지, 값만 시안 A 로 교체)
+     역할                     값        시민앱            cloudui        흰/크림/헤더칩 대비
+     주조(테두리·강조)        #B84A1C   --primary         --gotgam       5.21 / 4.79 / 4.53
+     흰 글자 얹는 배경        #B84A1C   --primary-hover   --gotgam-d     흰 글자 5.21
+     눌림(:active) 배경       #93380F   --primary-press   —              흰 글자 7.46
+     밝은 배경 위 주황 글자   #A8431A   --accent-text     --gotgam-t     6.03 / 5.55 / 5.25
+     보조(면·그래프 전용)     #E8A33D   --secondary       —              2.16 / 1.98 / 1.88 ⚠ 글자색 금지
+     청록 포인트              #0E7C86   --civic           —              흰 글자 4.95
+     청록 진하게              #0A5F68   --civic-dark      —              7.37 / 6.78 / 6.42
+     보조 텍스트              #6E5A4C   --muted           --sub          6.50 / 5.98 / 5.66
+     비활성·빈상태 텍스트     #6F6A63   --disabled        (직접값)       5.36 / 4.93 / 4.67
+     오류·필수 표시           #A52714   --err-text        —              7.24 / 6.66 / 6.31
+     완료 초록(흰 글자 배경)  #2E7D32   --ok-bg           —              흰 글자 5.13
+     입력칸 경계              #A9846A   --border-input    —              3.39 / 3.12 (비텍스트 3:1↑)
+     장식 경계선              #EADCCE   --border          --line         1.34 (비텍스트·장식 전용)
+     바탕 크림                #FDF4EC   --bg              —              (기준면)
+     강조면(헤더칩·안내상자)  #FBEDE0   --header          —              (기준면)
+     글자                     #33241C   --text            —              14.89 / 13.71 / 12.97
+   ※ 수치는 WCAG 2.x 상대휘도식으로 직접 계산한 실측값(소수 둘째 자리 반올림)이다.
+     «흰» = #FFFFFF(카드) · «크림» = --bg #FDF4EC · «헤더칩» = --header #FBEDE0 위 대비.
+   ⚠ --secondary(#E8A33D)는 «면·테두리·그래프 색»에만 쓴다. 글자색으로 쓰면 1.98:1 로 AA 미달.
+   ⚠ 흰 글자를 얹는 배경은 #B84A1C 이상만(밝은 주황 #E66B3A 계열 위 흰 글자 금지).
    ═══════════════════════════════════════════════════════════════ */
 :root {
-  --bg: #FFF7F0;
-  --text: #4A3B32;
-  /* 장식·테두리 전용. 흰 글자 배경으로 쓰지 말 것(3.22:1) */
-  --primary: #E66B3A;
-  /* 흰 글자를 얹는 배경 전용(흰 대비 4.71:1, AA 충족) — 버튼·칩·배지 배경 */
-  --primary-hover: #C2501F;
-  /* 눌림(:active) 배경 — 흰 대비 6.03:1 */
-  --primary-press: #A8431A;
+  --bg: #FDF4EC;
+  --text: #33241C;
+  /* 주조(감빛 주홍) — 테두리·강조·흰 글자 배경 모두 안전(5.21:1) */
+  --primary: #B84A1C;
+  /* 흰 글자를 얹는 배경 전용(흰 대비 5.21:1, AA 충족) — 버튼·칩·배지 배경 */
+  --primary-hover: #B84A1C;
+  /* 눌림(:active) 배경 — 흰 대비 7.46:1 */
+  --primary-press: #93380F;
+  /* 보조(감빛 노랑) — «도넛·막대 그래프의 면»과 테두리 전용.
+     ⚠ 글자색 금지: 흰 2.16 · 크림 1.98 로 AA(4.5) 크게 미달. 흰 글자를 얹는 배경으로도 쓰지 말 것.
+     현재 시민앱에는 그래프가 없어 참조처가 없다. 공무원앱·PC앱의 도넛에서 쓰인다. */
+  --secondary: #E8A33D;
   --card: #FFFFFF;
-  --header: #FDECE4;
-  --border: #F0E0D5;
-  /* 입력칸(사용자 입력 요소) 경계 전용 — 흰 3.39 · 크림 3.21 (3:1 이상 충족).
+  --header: #FBEDE0;
+  --border: #EADCCE;
+  /* 입력칸(사용자 입력 요소) 경계 전용 — 흰 3.39 · 크림 3.12 (3:1 이상 충족).
      --border 는 카드 구분선 등 «장식» 경계라 그대로 두고, 입력칸만 진하게 한다. */
   --border-input: #A9846A;
-  /* 오류 문구·필수 표시 — 흰 7.24 · 크림 6.87 (AA 충족). 팀 배지 팔레트와 같은 계열 */
+  /* 오류 문구·필수 표시 — 흰 7.24 · 크림 6.66 (AA 충족). 팀 배지 팔레트와 같은 계열 */
   --err-text: #A52714;
-  /* 보조 텍스트: 흰 5.74 · 크림 5.41 · 헤더칩 5.00 (AA 충족) */
-  --muted: #7A6152;
-  /* 비활성·빈상태 텍스트: 흰 5.36 · 크림 5.06 (AA 충족) */
+  /* 보조 텍스트: 흰 6.50 · 크림 5.98 (AA 충족) */
+  --muted: #6E5A4C;
+  /* 비활성·빈상태 텍스트: 흰 5.36 · 크림 4.93 (AA 충족) */
   --disabled: #6F6A63;
-  /* 밝은 배경 위 주황 글자 전용: 흰 6.03 · 크림 5.69 · 헤더칩 5.25 (AA 충족) */
+  /* 밝은 배경 위 주황 글자 전용: 흰 6.03 · 크림 5.55 · 헤더칩 5.25 (AA 충족) */
   --accent-text: #A8431A;
   /* 흰 글자를 얹는 초록 배경(반영·공감 완료): 흰 대비 5.13:1 */
   --ok-bg: #2E7D32;
-  /* 정책참여 전용 청록(상상주도 톤): 흰글자 5.52:1·연청록부제 4.64:1·라벨 7.10:1 (AA 충족) */
-  --civic: #00747F;
-  --civic-dark: #00626B;
+  /* 정책참여 전용 청록(상상주도 톤, 시안 A 포인트): 흰 글자 4.95:1 (AA 충족) */
+  /* ⚠ 이 면 위 «연한» 글자는 4.5 를 넘기기 어렵다 — .propose-card-desc 참조 */
+  --civic: #0E7C86;
+  --civic-dark: #0A5F68;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -59,7 +78,7 @@
   left: 8px; top: -60px;
   z-index: 999;
   padding: 10px 16px;
-  background: var(--primary-hover);   /* 흰 글자 4.71:1 */
+  background: var(--primary-hover);   /* 흰 글자 5.21:1 */
   color: #fff;
   font-size: 0.9375rem; font-weight: 800;
   border-radius: 0 0 10px 10px;
@@ -89,19 +108,33 @@ html, body {
   color: var(--text);
   font-family: "Malgun Gothic", "맑은 고딕", system-ui, -apple-system, sans-serif;
   line-height: 1.5;
+  /* «일반 앱처럼» ① 당김 새로고침·고무줄 스크롤 억제 (설치 여부와 무관하게 적용) */
+  overscroll-behavior: none;
 }
+/* «일반 앱처럼» ② 동적 뷰포트 — 주소창이 접히고 펴져도 화면 높이가 튀지 않는다.
+   dvh 를 모르는 브라우저를 위해 vh 를 먼저 두고 dvh 로 덮어쓴다. */
+body { min-height: 100vh; }
+@supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 
 /* 공무원앱(cloudui) 구조와 동일: body/헤더는 전체폭(edge-to-edge), 콘텐츠 래퍼(main)만 max-width 센터링.
    모바일(<768px)에선 화면이 560px 이하라 현행과 동일하게 보임(헤더=화면폭, 본문=화면폭). */
-body { width: 100%; margin: 0; padding-bottom: 60px; }
+/* «일반 앱처럼» ③ 노치·둥근 모서리·홈 인디케이터 안전영역.
+   index.html 의 viewport-fit=cover 와 짝을 이룬다(확대 금지는 쓰지 않는다). */
+body {
+  width: 100%; margin: 0;
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
 
 /* 상단바 — 공무원앱(cloudui) 구조: 배경/sticky는 전체폭(.topbar), 내부 콘텐츠만 센터링(.topbar-inner).
    페이지 배경(크림)과 일체화: 흰색 제거, 그림자 없이 한 덩어리처럼 */
 .topbar {
   position: sticky;
   top: 0;
+  padding-top: env(safe-area-inset-top);   /* 설치형 앱: OS 상태바에 제목이 물리지 않게 */
   z-index: 20;
-  background: var(--bg);   /* 크림(#FFF7F0) — 본문 배경과 동일해 일체감, sticky 시 본문 비침 방지(불투명) */
+  background: var(--bg);   /* 크림(#FDF4EC) — 본문 배경과 동일해 일체감, sticky 시 본문 비침 방지(불투명) */
   color: var(--text);
   box-shadow: none;        /* 그림자 제거로 헤더-본문 경계 없앰 */
 }
@@ -117,14 +150,33 @@ body { width: 100%; margin: 0; padding-bottom: 60px; }
   width: 100%;
   padding: 12px 16px;
 }
-.topbar-titles { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-/* 제목: 곶감 주황 굵게(대형·굵은글씨 3:1 충족) / 부제: muted 진회색(크림 배경 대비 ≈5.3:1, AA 충족) */
-.topbar h1 { font-size: 1.1875rem; margin: 0; font-weight: 800; color: var(--accent-text); } /* 크림 5.69:1 */
+.topbar-titles { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+/* 「시민 참여형」 — 대표 제목(#topTitle)보다 반드시 작게(약 0.6배). 줄 전체를 차지해 제목이 아랫줄로 온다.
+   app.js 는 #topTitle·#topSub 만 바꾸므로 이 두 요소는 화면이 바뀌어도 그대로 남는다. */
+.brand-eyebrow {
+  /* 제목 «앞»에 붙인다(BRIEF: 윗줄 또는 앞). 윗줄로 올리면 헤더가 20px 높아져
+     .topline(top:58px)·.search-box.sticky(top:61px)의 sticky 기준이 어긋난다. */
+  flex: 0 0 auto;
+  font-size: 0.6875rem; font-weight: 800; letter-spacing: .02em;
+  color: var(--accent-text);      /* 크림 5.55:1 */
+  line-height: 1.2;
+  white-space: nowrap;
+}
+/* 용도 구분 배지 — 세 앱 공통 규약(시민용 #B84A1C · 공무원용 #0E7C86 · 공무원 PC용 #2F6B3A).
+   제목 «뒤(오른쪽)» 고정. 흰 글자 5.21:1 (AA 충족) */
+.brand-tag {
+  flex: 0 0 auto; margin-left: auto; align-self: center;
+  background: var(--primary-hover); color: #fff;
+  font-size: 0.6875rem; font-weight: 800; line-height: 1;
+  padding: 6px 10px; border-radius: 999px; white-space: nowrap;
+}
+/* 제목: 곶감 주황 굵게(대형·굵은글씨 3:1 충족) / 부제: muted 진회색(크림 배경 대비 5.98:1, AA 충족) */
+.topbar h1 { font-size: 1.1875rem; margin: 0; font-weight: 800; color: var(--accent-text); } /* 크림 5.55:1 */
 .topsub { font-size: 0.78125rem; font-weight: 700; color: var(--muted); }
 .back-btn {
   background: transparent;
   border: none;
-  color: var(--accent-text);   /* 크림 5.69:1 */
+  color: var(--accent-text);   /* 크림 5.55:1 */
   width: 34px; height: 34px;
   border-radius: 50%;
   font-size: 26px; line-height: 1;
@@ -137,7 +189,7 @@ body { width: 100%; margin: 0; padding-bottom: 60px; }
    · 공무원앱(cloudui) .brand-logo 와 같은 22px — 두 앱의 감각을 맞춘다. */
 .topbar-logo { height: 22px; width: auto; object-fit: contain; display: block; flex-shrink: 0; }
 /* 헤더 아래 곶감색 라인 — 일체감 위해 아주 은은하게(2px·반투명, 브랜드 정체성만 남김) */
-.topline { height: 2px; background: rgba(230,107,58,.35); position: sticky; top: 58px; z-index: 19; }
+.topline { height: 2px; background: rgba(184,74,28,.40); position: sticky; top: 58px; z-index: 19; }
 
 /* 콘텐츠 래퍼 — cloudui .content와 동일: 전체폭 안에서 max-width 센터링(큰 화면 @media에서 폭 지정) */
 main { width: 100%; margin: 0 auto; padding: 16px; }
@@ -151,10 +203,12 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
    · width/height 속성을 HTML에 함께 둬서 로드 전에도 자리를 잡는다(레이아웃 밀림 방지).
    · 2줄형은 가로:세로 ≈ 4.9:1 이라 360px 폭에서 약 73px — 글자가 읽히는 크기.
    · 상상주 로고(헤더)와 싸우지 않도록 위아래 여백만 주고 크기는 폭에 맡긴다. */
-.slogan { display: block; margin: 2px 0 14px; }
-.slogan img { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+.slogan { display: block; margin: 2px 0 18px; }
+/* 헤더 제목 바로 아래에서 «폭의 92%»로 크게 — 크림 바탕 위라 구호의 빨강·청록이 선명하다.
+   (main 좌우 padding 16px 를 빼면 390px 폰에서 358px ≈ 화면 폭의 92%) */
+.slogan img { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; }
 /* 큰 화면에서는 1줄형이 오므로 조금 더 넓게 허용(가로:세로 ≈ 9.8:1) */
-@media (min-width: 600px) { .slogan img { max-width: 720px; } }
+@media (min-width: 600px) { .slogan img { max-width: 820px; } }
 
 .lead { font-size: 1.0625rem; color: var(--muted); margin: 4px 0 16px; }
 
@@ -173,7 +227,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   border: none; cursor: pointer; font-weight: 700;
   border-radius: 8px; padding: 7px 12px; font-size: 0.875rem;
 }
-#newBannerView { background: var(--primary-hover); color: #fff; } /* 흰글자 4.71:1 */
+#newBannerView { background: var(--primary-hover); color: #fff; } /* 흰글자 5.21:1 */
 #newBannerClose { background: transparent; color: var(--muted); padding: 7px 8px; }
 .section-title { font-size: 1rem; margin: 22px 0 10px; }
 
@@ -209,7 +263,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 }
 .big-btn span { font-size: 1.0625rem; }
 .big-btn:active { transform: scale(.98); }
-.big-btn.primary { background: var(--primary-hover); color: #fff; border-color: var(--primary-hover); } /* 흰글자 4.71:1 */
+.big-btn.primary { background: var(--primary-hover); color: #fff; border-color: var(--primary-hover); } /* 흰글자 5.21:1 */
 .big-btn.full { width: 100%; flex-direction: row; justify-content: center; margin-top: 20px; }
 
 /* 카테고리 칩 */
@@ -223,7 +277,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   color: var(--text);
   cursor: pointer;
 }
-.chip.active { background: var(--primary-hover); color: #fff; border-color: var(--primary-hover); } /* 흰글자 4.71:1 */
+.chip.active { background: var(--primary-hover); color: #fff; border-color: var(--primary-hover); } /* 흰글자 5.21:1 */
 
 /* 목록 카드 — 모바일은 1열, 넓어지면 auto-fill로 열 수 자동 증가(아래 @media에서 활성).
    기본(모바일 <768px)은 1열 유지 위해 단일 컬럼으로 둠 */
@@ -247,7 +301,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
    넘치면 …(전체 팀명은 title 툴팁). 상세의 .detail-team 은 이 규칙 밖이라 전문 노출. */
 .card-meta .team { margin-top: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 📌 접수 안내 표식 — 색만으로 알리지 않도록 아이콘+'접수 안내' 글자를 함께 둔다.
-   흰 카드 위 #A8431A 글자 6.03:1, 테두리는 장식용 #E66B3A */
+   흰 카드 위 #A8431A 글자 6.03:1, 테두리는 주조 #B84A1C */
 .note-flag {
   display: inline-block;
   font-size: 0.75rem; font-weight: 700;
@@ -265,12 +319,12 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 /* 오류 안내 박스 — 원인(연결/권한/미설정)에 따라 문구가 달라지고 «다시 시도»를 제공 */
 .err-box { padding: 34px 16px; }
 .err-title { font-size: 1rem; font-weight: 800; color: var(--text); margin-bottom: 8px; line-height: 1.5; }
-.err-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.7; }   /* 크림 5.41:1 */
+.err-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.7; }   /* 크림 5.98:1 */
 .err-actions { margin-top: 16px; }
 .err-retry {
   font-family: inherit; font-size: 0.9375rem; font-weight: 800;
   padding: 11px 20px; border: none; border-radius: 10px;
-  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 4.71:1 */
+  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 5.21:1 */
 }
 .err-retry:active { background: var(--primary-press); transform: scale(.97); }
 
@@ -299,7 +353,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .tel-link { color: var(--accent-text); font-weight: 700; text-decoration: none; }
 .tel-link .tel-ico { font-size: 14px; }
 /* 🔗 본문 속 신청 주소(정부24·복지로·상주시 누리집 등) — 시민이 눌러서 바로 갈 수 있게.
-   · 글자 #A8431A on #FFFFFF = 5.66:1 / on #FDECE4(접수 안내 박스) = 5.25:1 (AA 충족)
+   · 글자 #A8431A on #FFFFFF = 6.03:1 / on #FBEDE0(접수 안내 박스) = 5.25:1 (AA 충족)
    · 색만으로 링크임을 알리지 않도록 «밑줄 + ↗ 표식»을 항상 함께 둔다.
    · 새 창으로 열리므로 ↗(시각) + .sr-only '(새 창 열림)'(보조기기)로 알린다. */
 .ext-link {
@@ -319,7 +373,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .link-btn:hover { border-color: var(--primary); }
 /* 📎 필요서류 서식 다운로드 — 공무원이 올린 서식을 시민이 내려받는 목록.
    파일형식·용량을 텍스트로 병기(스크린리더/저시력), 색만으로 정보 전달하지 않는다.
-   링크 글자 #A8431A on #FFFFFF = 5.66:1 (AA 충족). */
+   링크 글자 #A8431A on #FFFFFF = 6.03:1 (AA 충족). */
 .forms-dl-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .forms-dl-item { margin: 0; }
 .forms-dl-link {
@@ -335,8 +389,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .forms-dl-go { font-size: 0.8125rem; font-weight: 700; color: var(--primary-hover); white-space: nowrap; }
 /* 📌 접수 안내(비고) 블록 — 마감·재접수 시기처럼 신청 전에 반드시 봐야 할 안내.
    색만으로 구분하지 않도록 아이콘(📌)+'접수 안내' 라벨을 항상 함께 표시한다.
-   라벨 #A8431A on #FDECE4 = 5.25:1, 본문 #4A3B32 on #FDECE4 = 8.9:1 (AA 충족)
-   왼쪽 굵은 띠는 장식 전용색(#E66B3A)이라 글자를 얹지 않는다. */
+   라벨 #A8431A on #FBEDE0 = 5.25:1, 본문 #33241C on #FBEDE0 = 12.97:1 (AA 충족)
+   왼쪽 굵은 띠는 주조색(#B84A1C)이라 글자를 얹지 않는다. */
 .notice-box {
   margin: 0 0 16px;
   padding: 12px 14px;
@@ -371,9 +425,9 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   width: 100%;
   padding: 13px 14px;
   font-size: 1rem;
-  /* ⚠ --border(#F0E0D5)는 흰 배경에서 1.29:1 이라 저시력 이용자가 «어디에 입력하는지»
+  /* ⚠ --border(#EADCCE)는 흰 배경에서 1.34:1 이라 저시력 이용자가 «어디에 입력하는지»
      알 수 없었다(KWCAG 명도대비 — 사용자 입력 요소 경계는 3:1 이상).
-     --border-input(#A9846A)은 흰 3.39:1 / 크림 3.21:1 로 둘 다 충족하는 곶감톤. */
+     --border-input(#A9846A)은 흰 3.39:1 / 크림 3.12:1 로 둘 다 충족하는 곶감톤. */
   border: 1.5px solid var(--border-input);
   border-radius: 11px;
   background: var(--card);
@@ -394,7 +448,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .field-err::before { content: "⚠ "; }
 .req { color: var(--err-text); font-weight: 800; }
 
-/* 입력칸 도움말 — 라벨 아래 설명(aria-describedby 로 연결). 흰 5.74:1 · 크림 5.41:1 (AA 충족) */
+/* 입력칸 도움말 — 라벨 아래 설명(aria-describedby 로 연결). 흰 6.50:1 · 크림 5.98:1 (AA 충족) */
 .field-help { margin: 6px 0 0; font-size: 0.8125rem; color: var(--muted); line-height: 1.55; }
 
 /* ⚖ 개인정보 수집·이용 동의 상자 */
@@ -451,7 +505,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .status-card-icon { font-size: 24px; line-height: 1; flex-shrink: 0; }
 .status-card-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .status-card-title { font-size: 1.0625rem; font-weight: 700; color: var(--accent-text); }  /* 흰 6.03:1 */
-.status-card-desc  { font-size: 0.8125rem; color: var(--muted); line-height: 1.45; }        /* 흰 5.74:1 */
+.status-card-desc  { font-size: 0.8125rem; color: var(--muted); line-height: 1.45; }        /* 흰 6.50:1 */
 .status-card-arrow { font-size: 24px; color: var(--accent-text); flex-shrink: 0; }
 
 /* 🔑 조회코드 상자(신청 완료 화면) — 적어 두지 않으면 다른 기기에서 볼 수 없으므로 강조한다 */
@@ -469,14 +523,14 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .code-copy-btn {
   min-height: 44px; padding: 10px 18px; font-size: 0.9375rem; font-weight: 700;
   border: 1.5px solid var(--primary-hover); border-radius: 10px;
-  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 4.71:1 */
+  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 5.21:1 */
 }
 .code-copy-btn:active { background: var(--primary-press); }
 .code-copy-msg { margin: 10px 0 0; font-size: 0.8125rem; color: var(--muted); line-height: 1.5; }
 
 /* 도구줄 — 「지금 새로고침」과 ⏸ 정지(KWCAG 2.2 «정지 기능 제공») */
 .ms-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 12px; }
-.ms-updated { font-size: 0.8125rem; color: var(--muted); margin-right: auto; }   /* 흰 5.74:1 */
+.ms-updated { font-size: 0.8125rem; color: var(--muted); margin-right: auto; }   /* 흰 6.50:1 */
 .ms-tool-btn {
   min-height: 44px; padding: 8px 14px; font-size: 0.84375rem; font-weight: 700;   /* 손가락 조작 최소 44px */
   border: 1.5px solid var(--border-input); border-radius: 10px;
@@ -545,7 +599,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .fab-back {
   position: fixed;
   right: 16px;   /* 화면 우측 고정(전체폭 레이아웃이라 컨테이너 보정 불필요) */
-  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom));   /* 홈 인디케이터에 가리지 않게 */
   z-index: 50;
   display: inline-flex;
   align-items: center;
@@ -554,14 +608,14 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-size: 1rem;
   font-weight: 700;
   color: #fff;
-  background: var(--primary-hover);   /* 흰글자 4.71:1 */
+  background: var(--primary-hover);   /* 흰글자 5.21:1 */
   border: none;
   border-radius: 999px;
   box-shadow: 0 5px 16px rgba(0, 0, 0, .28);
   cursor: pointer;
   font-family: inherit;
 }
-.fab-back:active { background: var(--primary-press); transform: scale(.95); } /* 흰글자 6.03:1 */
+.fab-back:active { background: var(--primary-press); transform: scale(.95); } /* 흰글자 7.46:1 */
 
 .foot { text-align: center; font-size: 0.75rem; color: var(--muted); padding: 20px 16px 78px; line-height: 1.9; }
 .foot-team { font-size: 0.8125rem; font-weight: 700; color: var(--text); }
@@ -611,7 +665,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-size: 0.75rem; font-weight: 700; color: var(--muted);
   background: var(--header); border-radius: 7px; padding: 4px 0;
 }
-.team-list .role-lead { color: #fff; background: var(--primary-hover); } /* 흰글자 4.71:1 */
+.team-list .role-lead { color: #fff; background: var(--primary-hover); } /* 흰글자 5.21:1 */
 .team-list .role-mgr { color: #fff; background: var(--ok-bg); } /* 흰글자 5.13:1 */
 .team-list .m-name { font-size: 1.0625rem; font-weight: 700; color: var(--text); }
 .team-list .m-dept { margin-left: auto; font-size: 0.8125rem; color: var(--muted); }
@@ -673,7 +727,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   width: 100%;
   margin: 0 0 14px;
   padding: 12px 12px;
-  background: var(--primary-hover);   /* 흰글자 4.71:1 */
+  background: var(--primary-hover);   /* 흰글자 5.21:1 */
   border-radius: 12px;
   color: #fff;
   text-align: left;
@@ -692,7 +746,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .inapp-btn:active { transform: scale(.98); }
 .inapp-btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.7); }
 .inapp-close {
-  /* rgba(255,255,255,.85) 는 배경과 섞여 3.82:1 이었다 → 불투명 흰색으로 4.71:1 확보 */
+  /* rgba(255,255,255,.85) 는 배경과 섞여 낮았다 → 불투명 흰색으로 5.21:1 확보 */
   font-size: 14px; color: #fff; padding: 2px 4px; flex-shrink: 0;
   cursor: pointer; background: none; border: none; font-family: inherit; line-height: 1.4;
   /* 손가락 조작 최소 크기 24x24 CSS px 확보(실측 18.6x21 / 19.4x23.6 로 미달이었음).
@@ -739,8 +793,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .rt-banner {
   display: flex; align-items: center; gap: 8px;
   background: var(--header);
-  /* 경계 시인성: --primary(#E66B3A)는 --header(#FDECE4) 위에서 2.80:1 로 저시력
-     이용자에게 테두리가 거의 안 보였다 → --primary-hover(#C2501F)로 3.9:1 확보 */
+  /* 경계 시인성: 옛 --primary(#E66B3A)는 --header 위에서 2.80:1 이라 저시력 이용자에게
+     테두리가 거의 안 보였다. 지금 --primary(#B84A1C)는 --header(#FBEDE0) 위 4.53:1 로 충분하다. */
   border: 1.5px solid var(--primary-hover);
   border-radius: 12px;
   padding: 11px 12px;
@@ -752,7 +806,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   flex-shrink: 0; border: none; cursor: pointer; font-family: inherit;
   font-weight: 700; font-size: 0.875rem; border-radius: 8px; padding: 7px 12px;
   min-height: 24px;
-  background: var(--primary-hover); color: #fff;   /* 흰글자 4.71:1 */
+  background: var(--primary-hover); color: #fff;   /* 흰글자 5.21:1 */
 }
 .rt-banner-btn:active { background: var(--primary-press); }
 /* 알림 닫기(✕) — 본문과 같은 글자색으로 대비 확보(4.5:1↑), 터치 목표 32px 이상 */
@@ -776,7 +830,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-weight: 800;
   margin: 0 2px 10px;
 }
-.propose-label { color: var(--civic-dark); }   /* 흰 배경 위 7.10:1 */
+.propose-label { color: var(--civic-dark); }   /* 흰 배경 위 7.37:1 */
 
 .propose-card {
   display: flex;
@@ -794,8 +848,10 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .propose-card:active { transform: scale(.98); }
 .propose-card-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
 .propose-card-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.propose-card-title { font-size: 1.0625rem; font-weight: 700; color: #fff; }      /* 5.52:1 */
-.propose-card-desc  { font-size: 0.8125rem; color: #D7F0F3; }                     /* 4.64:1 */
+.propose-card-title { font-size: 1.0625rem; font-weight: 700; color: #fff; }      /* 청록 면 위 4.95:1 */
+/* ⚠ --civic 이 #00747F→#0E7C86 로 밝아지면서 옛 #D7F0F3 은 4.16:1(AA 미달)이 되었다.
+   #EFF9FA 로 올려 4.62:1 확보. 이 면 위 글자는 반드시 이 값 이상으로 유지할 것. */
+.propose-card-desc  { font-size: 0.8125rem; color: #EFF9FA; }                     /* 청록 면 위 4.62:1 */
 .propose-card-arrow { font-size: 24px; color: #D7F0F3; flex-shrink: 0; }
 
 /* 정책참여 헤더 */
@@ -826,7 +882,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   flex-shrink: 0;
   padding: 11px 16px; font-size: 0.9375rem; font-weight: 800;
   border: none; border-radius: 10px;
-  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 4.71:1 */
+  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 5.21:1 */
   font-family: inherit;
 }
 .pp-new-btn:active { transform: scale(.97); }
@@ -844,8 +900,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   font-size: 0.75rem; font-weight: 800; color: #fff;
   padding: 3px 9px; border-radius: 8px; white-space: nowrap;
 }
-.pp-badge.st-accept { background: var(--muted); } /* 흰 글씨 5.74:1 */
-.pp-badge.st-review { background: #C2501F; } /* 흰 글씨 4.71:1 */
+.pp-badge.st-accept { background: var(--muted); } /* 흰 글씨 6.50:1 */
+.pp-badge.st-review { background: var(--primary-hover); } /* 흰 글씨 5.21:1 — 옛 팔레트 #C2501F 하드코딩을 토큰으로 */
 .pp-badge.st-done { background: #2E7D32; } /* 흰 글씨 5.13:1 */
 .pp-badge.st-reject { background: #B5483A; }
 .pp-badge.st-hold { background: #8A7320; } /* 명도대비 보정(흰 글씨 4.6:1, AA 충족) */
@@ -882,7 +938,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .pd-reply-title { font-size: 0.875rem; font-weight: 800; color: #2E7D32; margin-bottom: 6px; } /* 연초록 배경 4.70:1 */
 .pd-reply-body { font-size: 0.9375rem; line-height: 1.6; white-space: pre-wrap; }
 .pd-actions { display: grid; gap: 10px; margin-top: 18px; }
-.pp-ghost { color: var(--muted); } /* 흰 5.74:1 */
+.pp-ghost { color: var(--muted); } /* 흰 6.50:1 */
 .pp-danger { color: #fff; background: #B5483A; border-color: #B5483A; } /* 흰글자 5.31:1 */
 
 /* 작성 폼: 동의·허니팟 */
@@ -991,7 +1047,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .cl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .cl-ver {
   font-size: 0.8125rem; font-weight: 800; color: #fff;
-  background: var(--primary-hover); border-radius: 7px; padding: 3px 9px;   /* 흰글자 4.71:1 */
+  background: var(--primary-hover); border-radius: 7px; padding: 3px 9px;   /* 흰글자 5.21:1 */
 }
 .cl-date { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
 .cl-title { font-size: 0.9375rem; font-weight: 800; color: var(--text); margin-bottom: 8px; }
@@ -1029,6 +1085,29 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .privacy-ul li b { color: var(--text); }
 .privacy-mail { color: var(--accent-text); font-weight: 700; text-decoration: underline; }
 
+/* ═══════════════════════════════════════════════════════════════
+   눌림 반응(파동) + 햅틱 — tap.js 가 붙인다
+   ─────────────────────────────────────────────────────────────
+   · 파동은 «본문 위에 뜨는 고정 레이어»로 그린다 → 누른 요소의 position·overflow 를
+     건드리지 않아 기존 레이아웃(.fab-back 의 position:fixed 등)이 절대 깨지지 않는다.
+   · 인라인 <style>·style= 을 쓰지 않는다(CSP). tap.js 는 el.style.left(CSSOM)만 쓴다.
+   · prefers-reduced-motion:reduce 에서는 파동·진동을 만들지 않는다(아래 블록 + tap.js 양쪽).
+   ═══════════════════════════════════════════════════════════════ */
+.tap-ripple {
+  position: fixed;
+  z-index: 9999;
+  width: 20px; height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  background: rgba(184, 74, 28, .30);   /* 주조 #B84A1C */
+  pointer-events: none;
+  transform: scale(0);
+  animation: tapRipple .45s cubic-bezier(.2, .6, .3, 1) forwards;
+}
+@keyframes tapRipple { to { transform: scale(6); opacity: 0; } }
+/* 누르고 있는 동안 살짝 어둡게 — 레이아웃에 영향이 없는 filter 만 쓴다 */
+.is-pressed { filter: brightness(.94); }
+
 /* ───────────── 움직임 최소화(OS "동작 줄이기" 존중) ─────────────
  * KWCAG 2.2 «깜빡임과 번쩍임 사용 제한» / 전자정부 웹품질 지침(사용자 제어).
  * PC앱(webui/style.css)·공무원앱(cloudui/style.css)과 동일 규약.
@@ -1055,4 +1134,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   .propose-card:active,
   .status-card:active,
   .pp-new-btn:active { transform: none; }
+  /* 눌림 파동(tap.js)·눌림 어둡게 — 동작 줄이기에서는 아예 표시하지 않는다 */
+  .tap-ripple { display: none; }
+  .is-pressed { filter: none; }
 }

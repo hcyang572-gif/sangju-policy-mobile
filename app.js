@@ -1,4 +1,4 @@
-// 상주시 정책 플랫폼 — 모바일 웹앱 (서버 없는 정적 MVP)
+// 상주시 정책플랫폼 — 모바일 웹앱 (서버 없는 정적 MVP)
 // data.json(빌드 산출물)을 읽어 검색·맞춤추천·상세·신청(이메일)을 제공한다.
 
 "use strict";
@@ -54,7 +54,7 @@ let _viewReady = false;
 // 오류 문의가 전달될 주소(표시용). 실제 발송은 폼메일→Gmail→자동접수가 이 주소로 전달.
 const SUPPORT_EMAIL = "hcyang572@korea.kr";
 
-const HOME_TITLE = "상주시 정책 플랫폼";
+const HOME_TITLE = "상주시 정책플랫폼";
 
 // 내비 스택 항목은 {v: 화면이름, t: 제목}. 뒤로/이후 시 제목까지 복원한다.
 function showView(name, push = true) {
@@ -1069,7 +1069,7 @@ async function sendApply() {
   const form = {
     access_key: key,
     subject: `[모바일신청] ${p.사업명} - ${name}`,
-    from_name: "상주시 정책 플랫폼(모바일)",
+    from_name: "상주시 정책플랫폼(모바일)",
     "사업명": p.사업명,
     "신청자": name,
     "연락처": phone,
@@ -1223,8 +1223,8 @@ async function sendInquiry() {
   const payload = { type: "inquiry", 문의내용: memo, 연락처: contact, 전달주소: SUPPORT_EMAIL };
   const form = {
     access_key: key,
-    subject: "[오류문의] 상주시 정책 플랫폼(모바일)",
-    from_name: "상주시 정책 플랫폼(모바일)",
+    subject: "[오류문의] 상주시 정책플랫폼(모바일)",
+    from_name: "상주시 정책플랫폼(모바일)",
     "문의내용": memo,
     "연락처": contact || "(없음)",
     payload: "@@SJSTART@@" + JSON.stringify(payload) + "@@SJEND@@",

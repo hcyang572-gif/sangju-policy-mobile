@@ -1,4 +1,4 @@
-// 상주시 정책 플랫폼 — 정책참여(시민 제안) Phase A
+// 상주시 정책플랫폼 — 정책참여(시민 제안) Phase A
 // Supabase 라이브 read/write. 익명 제안·공감·본인수정/삭제(PIN)·신고.
 // app.js 의 전역 헬퍼($, esc, showView, DATA, state)를 그대로 사용한다.
 // 기존 지원사업(data.json) 기능과 완전히 분리되어 있어 서로 영향 없음.

@@ -1,6 +1,6 @@
 {
   "id": "/sangju-policy-mobile/",
-  "name": "상주정책(시민용)",
+  "name": "상주시 정책플랫폼(시민용)",
   "short_name": "상주정책(시민용)",
   "description": "상주시 지원사업을 쉽게 찾고 신청하는 시민용 앱",
   "lang": "ko",
@@ -8,8 +8,8 @@
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#E66B3A",
-  "background_color": "#FFF7F0",
+  "theme_color": "#B84A1C",
+  "background_color": "#FDF4EC",
   "icons": [
     {
       "src": "icon-192.png",

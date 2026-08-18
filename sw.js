@@ -1,11 +1,12 @@
-/* 상주시 정책 플랫폼 — 서비스워커 (PWA 설치 가능 + 오프라인 로딩)
+/* 상주시 정책플랫폼 — 서비스워커 (PWA 설치 가능 + 오프라인 로딩)
  * 경로는 모두 상대경로(self.registration.scope 기준)로 다뤄
  * GitHub Pages 하위경로(/sangju-policy-mobile/)에서도 깨지지 않게 함.
  * 캐시 버전을 올리려면 아래 CACHE 값을 바꾸면 됨(예: sangju-v2). */
 // ⚠ v25: 「내 신청 현황」 화면 신설(index.html·app.js·style.css·apply_client.js).
 //    index.html·app.js 는 cache-first 라 «캐시 버전을 올리지 않으면» 기존 이용자에게
 //    새 화면이 없는 구버전이 계속 제공된다(진입점이 영영 안 보임).
-const CACHE = "sangju-v28";   // v28: 🔑 조회코드 «되찾기» 창구 신설(이름+연락처 뒷4자리 → 조회코드만)
+const CACHE = "sangju-v29";   // v29: 🎨 시안 A「감빛 온기」 적용(팔레트·헤더 제목/배지·시정구호 확대·눌림 파동 tap.js) + 표기 「상주시 정책플랫폼」 통일
+// v28: 🔑 조회코드 «되찾기» 창구 신설(이름+연락처 뒷4자리 → 조회코드만)
 // v27: 신청이 클라우드에 저장되지 않던 문제 수정(개인정보 테이블에 RETURNING 금지)
 
 // scope(예: https://hcyang572-gif.github.io/sangju-policy-mobile/)를 기준으로
@@ -22,6 +23,7 @@ const PRECACHE = [
   "proposals.js",
   "config.js",
   "version.js",
+  "tap.js",
   "forms.js",
   "apply_client.js",
   "manifest.json",
