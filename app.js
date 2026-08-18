@@ -46,7 +46,7 @@ function applyTeamColor(el, name) {
 }
 
 const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done",
-  "propose", "pdetail", "pwrite", "privacy"];
+  "mystatus", "propose", "pdetail", "pwrite", "privacy"];
 
 // 첫 렌더가 끝났는지 — showView 의 초점 이동을 «두 번째 화면부터» 적용하기 위한 표시
 let _viewReady = false;
@@ -522,6 +522,52 @@ async function recheckCloud(force) {
 // 최신성 반영 방식: «상시 연결(Realtime)» 이 아니라 «재진입·포커스 시 재조회(폴링)».
 //  · 시민앱은 오래 열어두는 앱이 아니고, 화면 복귀 시 한 번만 확인하면 충분하다.
 //  · 상시 WebSocket 은 배터리·데이터·동시접속을 계속 소모한다(공무원앱만 사용).
+// 실시간 반영(2026-08-18) — 공무원앱·PC앱에서 사업을 고치면 시민 화면도 몇 초 안에 따라온다.
+//  · 위 방침(재진입·포커스 시 재조회)은 «화면을 안 보고 있을 때» 를 위한 것이고,
+//    이건 «보고 있는 동안» 을 위한 것이다. 셋을 나란히 놓고 쓰는 자리에서 시민앱만
+//    반응이 없으면 연동이 안 되는 것처럼 보인다.
+//  · 얌전하게 쓴다:
+//    ① 이벤트가 한꺼번에 쏟아져도(한 번 동기화에 수십 행) 1.5초로 «묶어서» 한 번만 처리한다.
+//    ② 실제로 내용이 달라졌을 때만 움직인다(서명 비교).
+//    ③ 읽기만 하는 화면이면 스스로 새로고침하고, 신청서·문의를 «쓰는 중»이면
+//       화면을 건드리지 않고 알림 띠만 올린다 — 입력하던 내용이 날아가면 안 된다.
+//  · 정책제안(proposals)은 proposals.js 가 이미 따로 구독한다(중복 구독하지 않는다).
+const RT_QUIET_VIEWS = ["home", "list", "recommend", "detail"];
+let _rtTimer = null, _rtReloading = false;
+
+function _currentView() {
+  const top = state.navStack[state.navStack.length - 1];
+  return top ? top.v : "home";
+}
+
+async function _onBenefitsChanged() {
+  if (_rtReloading) return;
+  try {
+    const cloud = await loadCloudData();
+    if (!cloud || cloud.sig === displaySig) return;   // 실제 변화가 있을 때만
+    if (RT_QUIET_VIEWS.indexOf(_currentView()) >= 0) {
+      _rtReloading = true;
+      location.reload();
+    } else {
+      noticeUpdate("사업 정보가 새로 갱신되었습니다");
+    }
+  } catch (e) { /* 조용히 넘긴다 — 다음 이벤트나 재진입 때 다시 본다 */ }
+}
+
+function initBenefitsRealtime() {
+  const sb = cloudClient();
+  if (!sb || !sb.channel) return;                     // 클라우드 미설정이면 예전대로 동작
+  try {
+    sb.channel("benefits-rt-citizen")
+      .on("postgres_changes", { event: "*", schema: "public", table: "benefits" }, () => {
+        clearTimeout(_rtTimer);
+        _rtTimer = setTimeout(_onBenefitsChanged, 1500);   // 몰아치는 이벤트를 한 번으로
+      })
+      .subscribe();
+  } catch (e) {
+    console.warn("[실시간] 사업 구독 실패 — 재진입 시 재조회로 동작합니다:", e);
+  }
+}
 function initFreshness() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) recheckCloud(false);
@@ -565,6 +611,8 @@ async function init() {
   initInApp();
   initA2HS();
   initFreshness();
+  initBenefitsRealtime();
+  initMyStatus();   // 서버에 조회 함수가 있을 때만 «내 신청 현황» 진입점을 보인다(실패해도 무해)
 
   // 내장 데이터로 먼저 그린 경우: 늦게 도착한 클라우드는 «알림»만 띄운다.
   if (!cloud) {
@@ -662,6 +710,33 @@ async function copyCurrentUrl() {
     } catch (e2) { alert("주소: " + url); return; }
   }
   alert("주소를 복사했어요. 브라우저(크롬·사파리)에 붙여넣어 열어주세요.");
+}
+
+// 🔑 조회코드 복사 — 결과는 alert 대신 «상자 안 안내문»으로 알린다(작업 흐름을 끊지 않게).
+async function copyLookupCode() {
+  const code = ($("doneCode") ? $("doneCode").textContent : "").trim();
+  const msg = $("doneCodeMsg");
+  if (!code) return;
+  let ok = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(code);
+      ok = true;
+    } else { throw new Error("no clipboard api"); }
+  } catch (e) {
+    try {
+      const t = document.createElement("input");
+      t.value = code; document.body.appendChild(t);
+      t.select(); document.execCommand("copy");
+      document.body.removeChild(t);
+      ok = true;
+    } catch (e2) { ok = false; }
+  }
+  if (msg) {
+    msg.textContent = ok
+      ? "조회코드를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
+      : "복사하지 못했습니다. 화면의 코드를 직접 적어 주세요.";
+  }
 }
 
 // 지난 방문 이후 새로 추가된 사업을 감지해 홈에 알림 배너를 띄운다(localStorage 기반).
@@ -1013,6 +1088,24 @@ async function sendApply() {
   // 접수번호(클라 생성) — Supabase 저장·완료화면 공용. PC 포맷 YYYYMMDD-HHMMSS-01.
   const receiptNo = (window.SangjuApply && SangjuApply.genReceiptNo)
     ? SangjuApply.genReceiptNo(1) : "";
+  // 🔑 조회코드(클라 생성) — 나중에 «내 신청 현황»을 여는 열쇠.
+  //    ⚠ 메일(Web3Forms) 본문에는 «넣지 않는다». 메일 경로(PC 자동접수)는 엑셀 접수대장에
+  //      기록할 뿐 Supabase 행을 만들지 않아, 그 코드로는 조회되지 않는다.
+  //      → 코드는 Supabase 저장이 «성공했을 때만» 기기에 보관하고 화면에 보여 준다.
+  //    ⚠ genLookupCode 는 안전한 난수를 만들 수 없으면 «오류를 낸다»(Math.random 폴백 없음).
+  //      그때는 신청을 진행하지 않고 멈춘다 — 예측 가능한 코드로 남의 신청이 열리면 안 된다.
+  let lookupCode = "";
+  if (window.SangjuApply && SangjuApply.genLookupCode) {
+    try {
+      lookupCode = SangjuApply.genLookupCode(10);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = orig;
+      alert((e && e.message) ||
+        "이 브라우저에서는 안전한 조회코드를 만들 수 없어 신청을 진행할 수 없습니다.");
+      return;
+    }
+  }
 
   // ── 두 경로를 «독립» 실행 ──────────────────────────────────────────────
   //  (1) Supabase 저장 = «접수»의 정본(공무원앱 실시간 접수)  (2) 메일 = 보조 알림.
@@ -1035,13 +1128,36 @@ async function sendApply() {
         team:           p.팀명 || "",
         manager_email:  p.담당자이메일 || "",
         source:         "모바일",
-        // status·admin_memo·created_at 은 보내지 않음(서버 기본 '접수'/트리거)
+        lookup_code:    lookupCode || null,   // 빈 문자열이면 null 로 — 서버 정책이 '없거나 8~32자'만 받는다
+        // status·admin_memo·citizen_reply·created_at 은 보내지 않음(서버 기본 '접수'/트리거)
       });
+      // ✅ 저장 성공 판정 = «throw 없이 끝났는가». «서버가 행을 돌려줬는가»가 아니다.
+      //    submitApplication 은 개인정보 테이블에 RETURNING(.select()) 을 쓰지 않으므로
+      //    (그러면 익명에게 SELECT 권한이 없어 저장 자체가 거부된다 — apply_client.js 주석 참조)
+      //    돌려받는 row 는 «우리가 보낸 행»이다. receipt_no·lookup_code 는 어차피 클라가 만든 값이라
+      //    이 판정으로 완료화면·조회코드 보관이 그대로 성립한다.
       supaOK = true;
       if (row && row.receipt_no) savedReceipt = row.receipt_no;
+      // 이 기기에 조회코드를 보관 → 다음에 «내 신청 현황»에서 자동으로 조회된다.
+      //   ⚠ 보관 조건은 여전히 «Supabase 저장 성공»이다(여기 try 안에서만 부른다).
+      //     메일만 나간 접수는 Supabase 행이 없어 그 코드로 조회되지 않는다.
+      saveLookupEntry({
+        code: lookupCode,
+        receipt_no: savedReceipt,
+        benefit_name: p.사업명,
+        at: new Date().toISOString(),
+      });
     } catch (e) {
       supaErr = e;
-      console.warn("[신청] Supabase 저장 실패(메일 경로로 접수 진행):", e);
+      // «조용한 실패» — 시민에게는 알리지 않는다(접수 자체는 메일 경로로 이어진다).
+      //   시민을 불안하게 만들 이유가 없고, 시민이 할 수 있는 조치도 없다.
+      //   대신 원인 분류(conn/perm/setup/other)를 콘솔에 함께 남겨,
+      //   «닿지 못함(conn)»과 «권한 거부(perm)»를 나중에 구분할 수 있게 한다.
+      //   ⚠ perm 이 반복되면 서버 정책이 아니라 «클라이언트가 RETURNING 을 쓰고 있지 않은지»를
+      //     먼저 의심할 것(2026-08-18 실제 장애 원인).
+      let kind = "";
+      try { kind = (window.SangjuApply && SangjuApply.errKind) ? SangjuApply.errKind(e) : ""; } catch (e2) {}
+      console.warn("[신청] Supabase 저장 실패(메일 경로로 접수 진행) kind=" + kind + ":", e);
     }
   }
 
@@ -1063,9 +1179,15 @@ async function sendApply() {
   btn.disabled = false;
   btn.textContent = orig;
 
+  // Supabase 저장이 성공했다 = 서버에 닿았다. 앱을 켤 때 프로브가 네트워크 때문에
+  // 실패해 «아직 모름»으로 남아 있다면, 완료 화면을 그리기 «전에» 한 번 더 확인한다.
+  if (supaOK && msAvail !== "ok") {
+    try { await msProbe(); } catch (e) { /* 확인 못해도 코드는 보여 준다 */ }
+  }
+
   if (supaOK || mailOK) {
-    // 접수번호는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
-    showDone(p, supaOK ? savedReceipt : "");
+    // 접수번호·조회코드는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
+    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "");
   } else {
     const detail = (supaErr && supaErr.message) || (mailErr && mailErr.message) || "";
     alert("신청 접수에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + detail + ")");
@@ -1124,6 +1246,9 @@ async function sendInquiry() {
     $("doneProgram").textContent = "문의가 접수되었습니다";
     // 직전 신청 완료의 접수번호가 남아있지 않도록 숨긴다(문의는 접수번호가 없음)
     if ($("doneReceipt")) { $("doneReceipt").textContent = ""; $("doneReceipt").hidden = true; }
+    // 조회코드 상자·«내 신청 현황» 버튼도 함께 감춘다(문의는 조회 대상이 아님)
+    setDoneCode("");
+    if ($("doneStatus")) $("doneStatus").hidden = true;
     document.querySelector("#view-done h2").textContent = "문의해 주셔서 감사합니다";
     document.querySelector("#view-done .done-desc").innerHTML =
       "담당자에게 문의 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
@@ -1138,7 +1263,7 @@ async function sendInquiry() {
   }
 }
 
-function showDone(p, receiptNo) {
+function showDone(p, receiptNo, lookupCode) {
   $("topTitle").textContent = "접수 완료";
   // 문의 완료로 바뀌었던 문구를 신청 완료용으로 복원
   document.querySelector("#view-done h2").textContent = "신청이 접수되었습니다";
@@ -1152,10 +1277,479 @@ function showDone(p, receiptNo) {
     if (no) { rc.textContent = "접수번호 " + no; rc.hidden = false; }
     else { rc.textContent = ""; rc.hidden = true; }
   }
+  // 🔑 조회코드 안내 — 저장이 성공했고, 서버에 조회 함수가 «없다고 확인되지 않았을 때» 보여 준다.
+  //    (함수가 «없다»고 확인된 서버에서만 감춘다. «아직 모름»이면 보여 준다 —
+  //     네트워크가 잠깐 흔들렸다는 이유로 시민이 코드를 못 받는 일이 없어야 한다.)
+  setDoneCode(msCodeUIVisible() ? lookupCode : "");
+  // «내 신청 현황 보기» 버튼도 같은 기준
+  if ($("doneStatus")) $("doneStatus").hidden = !(msCodeUIVisible() && (lookupCode || "").trim());
   // 완료 화면 이후 뒤로가기는 홈으로 가도록 스택 정리
   state.navStack = [{ v: "home", t: HOME_TITLE }, { v: "done", t: "접수 완료" }];
   state.fwdStack = [];
   showView("done", false);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  🧾 내 신청 현황 — 시민이 «자기 신청»의 진행 상태를 스스로 본다 (2026-08-18)
+//  ----------------------------------------------------------------------
+//  왜 이렇게 만드는가
+//    applications 에는 이름·연락처가 들어 있어 익명 조회를 RLS 로 막아 두었다(그 문은 열지 않는다).
+//    대신 서버 함수 check_application_status(조회코드) 가 «상태 몇 줄»만 돌려준다.
+//    → 이 화면은 신청할 때 만든 조회코드로 그 함수만 부른다.
+//  지키는 규칙
+//    ① 화면에 «이름·연락처»를 다시 뿌리지 않는다 — 서버 함수도 애초에 주지 않는다.
+//    ② 20초 폴링은 «이 화면이 눈에 보일 때만» 돈다(다른 화면·백그라운드에서는 아무 일도 하지 않는다).
+//    ③ ⏸ 정지 버튼을 둔다 — 스스로 바뀌는 화면은 멈출 수 있어야 한다(KWCAG 2.2 «정지 기능 제공»).
+//    ④ 실제로 달라졌을 때만 다시 그린다(초점·스크롤이 20초마다 튀지 않게).
+//    ⑤ 서버에 함수가 «없을 때만»(PGRST202) 진입점을 조용히 숨긴다.
+//       ⚠ 네트워크 오류로 숨기지 않는다 — 아래 «3값 프로브» 참조.
+//    ⑥ 🧹 이 기기에서 지우기 — 공용 기기에서 앞사람 코드가 남지 않게 스스로 지울 수 있어야 한다.
+//    ⑦ 보관 코드는 180일이 지나면 자동으로 사라진다(개인정보 처리방침에 적은 그대로).
+//
+//  ⭐ 폴링 구조 (2026-08-18 개편, 🩷 security-privacy 지적)
+//     · 코드마다 1회씩 8초 폴링 → 분당 최대 225회 = «코드 대입 공격»과 트래픽 모양이 같았다.
+//     · 이제 배열 함수 check_application_status_many 를 «먼저» 부르고(1회 왕복),
+//       그 함수가 아직 서버에 없으면(PGRST202) 단건 함수로 «조용히» 폴백한다.
+//     · 주기는 8초 → 20초.
+//
+//  ⭐ 3값 프로브 (2026-08-18, 🔴 reviewer 가 찾은 실제 버그의 수정)
+//     예전에는 앱을 켤 때 프로브를 «딱 한 번» 던져 실패하면 msAvailable=false 로 굳었다.
+//     그때 마침 네트워크가 불안정하면(콜드스타트 직후 흔하다) 그 세션 내내
+//     신청이 성공해도 조회코드 상자와 진입점이 숨겨졌다 = 시민이 코드를 못 받았다.
+//     → 이제 상태를 3값으로 둔다.
+//        "unknown"     : 아직 모름(네트워크 실패 포함) → 코드는 «보여 주고», 나중에 다시 확인
+//        "ok"          : 함수가 있다 → 진입점 노출
+//        "unavailable" : 함수가 «없다»고 서버가 명확히 답했다(PGRST202) → 조용히 숨김
+//     다시 확인하는 시점: ① 「내 신청 현황」에 들어올 때 ② 신청이 Supabase 에 저장된 직후.
+// ════════════════════════════════════════════════════════════════════════
+const LOOKUP_KEY = "sangju_lookup_codes";   // [{code, receipt_no, benefit_name, at}]
+const LOOKUP_MAX = 30;                      // 기기에 보관할 최대 건수(오래된 것부터 버림)
+const LOOKUP_TTL_MS = 180 * 24 * 60 * 60 * 1000;   // 보관 코드 자동 만료 — 180일
+const LOOKUP_TOUCH_MS = 12 * 60 * 60 * 1000;       // «마지막 확인일» 갱신 주기(잦은 쓰기 방지)
+const MS_POLL_MS = 20000;                   // 폴링 주기 20초(예전 8초 — 위 ⭐ 참조)
+
+let msAvail = "unknown";   // "unknown" | "ok" | "unavailable"  (위 ⭐ 3값 프로브)
+let msBatch = "unknown";   // 배열 호출 함수가 서버에 있는가: "unknown" | "yes" | "no"
+let msAuto = true;         // ⏸ 자동 새로고침 on/off
+let msTimer = null, msBusy = false;
+let msRows = [], msSig = "", msErr = false, msLoaded = false;
+let msDeferred = false;    // 목록 안에 초점이 있어 «미뤄 둔» 갱신이 있는가
+let msFocusBound = false;
+
+// 조회코드 상자·«내 신청 현황» 버튼을 보여 줄까?
+//   «없다»고 서버가 확인해 준 경우에만 감춘다 — 모를 때는 보여 준다(코드를 못 받는 사고 방지).
+function msCodeUIVisible() { return msAvail !== "unavailable"; }
+
+// ── 기기 보관(localStorage) ────────────────────────────────────────────
+// 읽을 때마다 180일이 지난 항목을 «걸러서 되쓴다» — 오래된 코드가 기기에 남지 않게.
+function loadLookupEntries() {
+  let list = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(LOOKUP_KEY) || "[]");
+    list = Array.isArray(raw) ? raw.filter((e) => e && typeof e.code === "string") : [];
+  } catch (e) { return []; }
+  const now = Date.now();
+  let changed = false;
+  const kept = [];
+  list.forEach((e) => {
+    const t = Date.parse(e.at || "");
+    if (isNaN(t)) {
+      // 날짜가 없거나 깨진 옛 기록 — 지금 시각을 찍어 두고 여기서부터 180일을 센다.
+      e.at = new Date(now).toISOString();
+      changed = true;
+      kept.push(e);
+      return;
+    }
+    if (now - t < LOOKUP_TTL_MS) kept.push(e);
+    else changed = true;                       // 180일 경과 → 버린다
+  });
+  if (changed) {
+    try { localStorage.setItem(LOOKUP_KEY, JSON.stringify(kept)); } catch (e) { /* 무시 */ }
+  }
+  return kept;
+}
+
+// 조회에 성공한 코드의 «마지막 확인일»을 갱신한다(180일은 마지막 확인일부터 센다).
+//   20초마다 저장소에 쓰지 않도록 12시간에 한 번만 찍는다.
+function touchLookupEntries(codes) {
+  if (!codes || !codes.length) return;
+  const now = Date.now();
+  const list = loadLookupEntries();
+  let changed = false;
+  list.forEach((e) => {
+    if (codes.indexOf(e.code) < 0) return;
+    const t = Date.parse(e.at || "");
+    if (isNaN(t) || now - t > LOOKUP_TOUCH_MS) { e.at = new Date(now).toISOString(); changed = true; }
+  });
+  if (changed) {
+    try { localStorage.setItem(LOOKUP_KEY, JSON.stringify(list)); } catch (e) { /* 무시 */ }
+  }
+}
+function saveLookupEntry(entry) {
+  if (!entry || !entry.code) return;
+  const list = loadLookupEntries().filter((e) => e.code !== entry.code);
+  list.push(entry);
+  while (list.length > LOOKUP_MAX) list.shift();
+  try { localStorage.setItem(LOOKUP_KEY, JSON.stringify(list)); } catch (e) { /* 저장 못해도 앱은 정상 */ }
+}
+
+// ── 완료 화면의 조회코드 상자 ──────────────────────────────────────────
+function setDoneCode(code) {
+  const box = $("doneCodeBox"), out = $("doneCode"), msg = $("doneCodeMsg");
+  if (!box || !out) return;
+  const c = (code || "").trim();
+  out.textContent = c;
+  box.hidden = !c;
+  if (msg) msg.textContent = "";
+}
+
+// ── 날짜·시각 표기 (YYYY-MM-DD HH:MM) ──────────────────────────────────
+function msFmtDateTime(ts) {
+  if (!ts) return "";
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  } catch (e) { return ""; }
+}
+
+// ── 조회 ───────────────────────────────────────────────────────────────
+// 보관한 코드들을 «한 번의 호출»로 조회해 접수번호로 중복을 정리하고 최신순으로 돌려준다.
+//   ① check_application_status_many(배열) — 기본 경로(왕복 1회)
+//   ② 그 함수가 서버에 없으면(PGRST202) 단건 check_application_status 로 폴백
+//      (양호창님이 대시보드에서 SQL 을 실행하기 «전»까지는 이 경로로 돈다)
+async function msFetchRows() {
+  const A = window.SangjuApply;
+  if (!A || !A.checkStatus) return { rows: [], failed: false };
+  const codes = [];
+  loadLookupEntries().forEach((e) => {
+    const c = String(e.code || "").trim();
+    if (c.length >= 8 && codes.indexOf(c) < 0) codes.push(c);
+  });
+  if (!codes.length) return { rows: [], failed: false };
+
+  let packs = null, failed = false;
+
+  // ① 배열 1회 호출
+  if (A.checkStatusMany && msBatch !== "no") {
+    try {
+      packs = [await A.checkStatusMany(codes)];
+      msBatch = "yes";
+    } catch (e) {
+      if (A.isMissingFunction && A.isMissingFunction(e)) {
+        msBatch = "no";      // 서버에 아직 없다 → 아래 단건 경로로 조용히 내려간다
+        packs = null;
+      } else {
+        return { rows: [], failed: true };   // 네트워크·서버 오류 → 다음 주기에 다시
+      }
+    }
+  }
+
+  // ② 단건 폴백
+  if (packs === null) {
+    let bad = 0;
+    packs = await Promise.all(codes.map(async (c) => {
+      try { return await A.checkStatus(c); }
+      catch (e) { bad++; return []; }      // 한 코드가 실패해도 나머지는 보여 준다
+    }));
+    failed = bad === codes.length;
+  }
+
+  const seen = {}, rows = [];
+  packs.forEach((pack) => (pack || []).forEach((r) => {
+    const k = String(r.receipt_no || "") + "|" + String(r.benefit_name || "");
+    if (seen[k]) return;
+    seen[k] = 1; rows.push(r);
+  }));
+  rows.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  if (!failed) touchLookupEntries(codes);   // «마지막 확인일» 갱신(180일 만료의 기준)
+  return { rows: rows, failed: failed };
+}
+
+// 화면에 그릴 «서명» — 이 값이 같으면 다시 그리지 않는다(초점·스크롤 보존).
+function msSignature(rows) {
+  return (rows || []).map((r) =>
+    [r.receipt_no, r.status, r.updated_at, (r.citizen_reply || "").length].join("|")
+  ).join(";");
+}
+
+function msRenderList() {
+  const box = $("msList");
+  if (!box) return;
+  const hasCodes = loadLookupEntries().length > 0;
+  if (msErr) {
+    box.innerHTML = `<div class="ms-empty"><p>지금은 진행 상태를 불러오지 못했습니다.</p>
+      <p>인터넷 연결을 확인하신 뒤 «지금 새로고침»을 눌러 주세요.</p></div>`;
+    return;
+  }
+  if (!msRows.length) {
+    box.innerHTML = hasCodes
+      ? `<div class="ms-empty"><p>조회되는 신청 내역이 없습니다.</p>
+           <p>아래 칸에 조회코드를 넣어 다시 확인해 보세요.</p></div>`
+      : `<div class="ms-empty"><p>이 휴대폰에 저장된 신청 내역이 없습니다.</p>
+           <p>신청을 마치면 이 화면에서 진행 상태를 보실 수 있습니다.<br>
+              다른 기기에서 신청하셨다면 아래에 조회코드를 넣어 주세요.</p></div>`;
+    return;
+  }
+  box.innerHTML = msRows.map((r) => {
+    const st = (r.status || "접수").trim();
+    const reply = (r.citizen_reply || "").trim();
+    return `<div class="ms-card">
+      <div class="ms-card-top">
+        <span class="ms-badge ast-${esc(st)}">${esc(st)}</span>
+        ${r.receipt_no ? `<span class="ms-rc"><span aria-hidden="true">🧾</span> ${esc(r.receipt_no)}</span>` : ""}
+      </div>
+      <div class="ms-card-title">${esc(r.benefit_name || "(사업명 없음)")}</div>
+      <div class="ms-card-meta"><span aria-hidden="true">🗓</span> 신청 ${esc(msFmtDateTime(r.created_at))}${
+        r.updated_at && r.updated_at !== r.created_at
+          ? ` · 갱신 ${esc(msFmtDateTime(r.updated_at))}` : ""}</div>
+      ${reply ? `<div class="ms-reply"><p class="ms-reply-k"><span aria-hidden="true">💬</span> 담당 부서 안내</p>
+                   <p class="ms-reply-v">${linkifyHtml(reply)}</p></div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+// 낭독은 «실제로 달라졌을 때만» — 20초마다 같은 말을 읽지 않게 한다.
+function msAnnounce(msg) {
+  const el = $("msAnnounce");
+  if (el) el.textContent = msg || "";
+}
+
+// 목록 «안»에 초점이 있는가 — 안내문 속 링크에 초점을 둔 채로 innerHTML 을 갈아엎으면
+// 초점이 사라진다(KWCAG 2.2 «초점 이동과 표시»). 그동안은 다시 그리기를 미룬다.
+function msListHasFocus() {
+  const box = $("msList");
+  const a = document.activeElement;
+  return !!(box && a && a !== document.body && box.contains(a));
+}
+
+// 미뤄 둔 갱신을 «초점이 목록을 벗어난 뒤» 반영한다.
+function msFlushDeferred() {
+  if (!msDeferred || msListHasFocus()) return;
+  msDeferred = false;
+  msRenderList();
+}
+
+async function msLoad(force) {
+  if (msBusy) return;
+  msBusy = true;
+  try {
+    const res = await msFetchRows();
+    // 서명에 «오류였는가»까지 넣는다 → 연결이 끊긴 동안 20초마다 같은 화면을 다시 그리지 않는다.
+    const sig = (res.failed ? "ERR|" : "OK|") + msSignature(res.rows);
+    const changed = force || !msLoaded || sig !== msSig;
+    msErr = res.failed;
+    msRows = res.rows;
+    msSig = sig;
+    msLoaded = true;
+    if (changed) {
+      if (!force && msListHasFocus()) {
+        // 초점을 뺏지 않는다 — 벗어나는 즉시(focusout) 또는 다음 주기에 반영한다.
+        msDeferred = true;
+        msAnnounce("진행 상태가 갱신되었습니다. 목록에서 초점을 옮기시면 화면에 반영됩니다.");
+      } else {
+        msDeferred = false;
+        msRenderList();
+        if (!res.failed && res.rows.length) {
+          msAnnounce(`신청 ${res.rows.length}건의 진행 상태를 갱신했습니다.`);
+        }
+      }
+    }
+    const up = $("msUpdated");
+    if (up) up.textContent = res.failed ? "" : "확인 " + msFmtDateTime(new Date().toISOString());
+  } catch (e) {
+    // 자동 갱신 때문에 앱이 멈추는 일은 없어야 한다 — 다음 주기에 다시 시도한다.
+    console.debug("[내신청현황] 이번 조회 실패, 다음에 다시 시도합니다.");
+  } finally {
+    msBusy = false;
+  }
+}
+
+// 20초 폴링 — «이 화면이 보일 때만». 다른 화면·백그라운드에서는 아무 일도 하지 않는다.
+function msTick() {
+  msFlushDeferred();            // 미뤄 둔 갱신이 있으면 먼저 반영
+  if (!msAuto || msBusy) return;
+  if (document.hidden) return;
+  if (_currentView() !== "mystatus") return;
+  msLoad(false);
+}
+
+function msPaintAutoBtn() {
+  const b = $("msAutoBtn");
+  if (!b) return;
+  b.innerHTML = msAuto
+    ? '<span aria-hidden="true">⏸</span> 자동 새로고침 멈추기'
+    : '<span aria-hidden="true">▶</span> 자동 새로고침 켜기';
+  b.setAttribute("aria-label", msAuto
+    ? "자동 새로고침 멈추기 — 지금은 20초마다 진행 상태가 저절로 갱신됩니다."
+    : "자동 새로고침 켜기 — 지금은 진행 상태가 저절로 갱신되지 않습니다.");
+}
+
+// 🧹 이 기기에서 지우기 — 공용 기기(주민센터·도서관 PC, 가족 태블릿)에서
+//    앞사람의 조회코드가 남아 다음 사람에게 신청 내역이 보이는 일이 없어야 한다.
+//    ⚠ 지우는 것은 «이 기기의 보관값»뿐 — 신청 자체는 그대로 살아 있다.
+function msClearDevice() {
+  const n = loadLookupEntries().length;
+  if (!n) { msAnnounce("이 기기에 보관된 조회코드가 없습니다."); return; }
+  const ok = confirm(
+    `이 기기에 보관된 조회코드 ${n}건을 지웁니다.\n` +
+    "지운 뒤에는 적어 두신 조회코드를 다시 입력해야 진행 상태를 보실 수 있습니다.\n" +
+    "신청 자체가 취소되지는 않습니다.\n" +
+    "지울까요?");
+  if (!ok) return;
+  try { localStorage.removeItem(LOOKUP_KEY); } catch (e) { /* 무시 */ }
+  msRows = []; msSig = ""; msErr = false; msLoaded = true; msDeferred = false;
+  msRenderList();
+  msPaintEntry();               // 보관 코드가 0건이 되면 홈 진입점도 다시 판단한다
+  const up = $("msUpdated");
+  if (up) up.textContent = "";
+  msAnnounce("이 기기에 보관된 조회코드를 모두 지웠습니다.");
+}
+
+function openMyStatus() {
+  $("topTitle").textContent = "내 신청 현황";
+  msRenderList();               // 있던 내용을 먼저 그려 빈 화면을 보이지 않게
+  showView("mystatus");
+  msPaintAutoBtn();
+  // 앱을 켤 때 프로브가 «네트워크 때문에» 실패했을 수 있다 → 들어온 김에 다시 확인한다.
+  if (msAvail !== "ok") { try { msProbe(); } catch (e) { /* 무시 */ } }
+  msLoad(true);                 // 들어온 «그 순간» 한 번 확인(20초를 기다리지 않는다)
+  // 목록 안에서 초점이 빠져나가면 미뤄 둔 갱신을 즉시 반영한다(리스너는 한 번만 건다).
+  if (!msFocusBound) {
+    const box = $("msList");
+    if (box) {
+      box.addEventListener("focusout", () => setTimeout(msFlushDeferred, 0));
+      msFocusBound = true;
+    }
+  }
+  if (!msTimer) {
+    msTimer = setInterval(msTick, MS_POLL_MS);
+    // 화면이 가려져 있는 동안은 건너뛰므로, 다시 앞으로 나온 «그 순간» 한 번 따라잡는다.
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) { try { msTick(); } catch (e) { /* 무시 */ } }
+    });
+  }
+}
+
+// 홈의 «내 신청 현황» 진입점 노출.
+//   · "ok"          → 보인다
+//   · "unavailable" → 감춘다(서버에 함수가 «없다»고 확인된 경우에만)
+//   · "unknown"     → 이 기기에 보관된 조회코드가 «있으면» 보인다.
+//     ⚠ 마지막 줄이 중요하다. 아직 모른다고 무조건 감추면, 오프라인으로 앱을 연 이용자는
+//       화면에 들어갈 수 없고 → 들어가야 다시 확인하므로 → 영영 못 들어가는 막다른 길이 된다.
+function msPaintEntry() {
+  const el = $("myStatusEntry");
+  if (!el) return;
+  if (msAvail === "ok") { el.hidden = false; return; }
+  if (msAvail === "unavailable") { el.hidden = true; return; }
+  el.hidden = loadLookupEntries().length === 0;
+}
+
+// 서버에 조회 함수가 있는지 «조용히» 확인한다. (위 ⭐ 3값 프로브)
+//  ① 배열 함수부터 빈 배열로 불러 본다 — 가짜 코드를 서버에 던지지 않는다.
+//  ② 배열 함수가 «없다»고 하면(PGRST202) 단건 함수를 무작위 코드로 불러 본다
+//     (단건 함수는 배열 인자를 받지 않아 빈 프로브를 만들 수 없다. 무작위 코드라
+//      개인정보가 오가지 않고, 8자 이상이라 서버는 «해당 없음»만 답한다).
+//  ③ 성공 → "ok" / «함수 없음» → "unavailable" / 그 밖(네트워크) → "unknown" 으로 «남겨 둔다».
+//     ⚠ ③의 마지막이 핵심이다. 네트워크 오류를 «영구 불가»로 굳히면, 신청이 실제로
+//       성공해도 조회코드가 시민 눈에 보이지 않는 사고가 난다(2026-08-18 수정).
+async function msProbe() {
+  if (msAvail === "unavailable") return msAvail;   // 이미 «없다»고 확인된 서버
+  const A = window.SangjuApply;
+  if (!(A && A.checkStatus && A.genLookupCode)) return msAvail;
+
+  // ① 배열 함수 — 빈 배열 프로브
+  if (A.checkStatusMany && msBatch !== "no") {
+    try {
+      await A.checkStatusMany([]);
+      msBatch = "yes";
+      msAvail = "ok";
+      msPaintEntry();
+      return msAvail;
+    } catch (e) {
+      if (A.isMissingFunction && A.isMissingFunction(e)) {
+        msBatch = "no";                            // 아직 SQL 미실행 → ②로 내려간다
+      } else {
+        console.debug("[내신청현황] 지금은 확인할 수 없습니다(다음에 다시 확인).");
+        msPaintEntry();
+        return msAvail;                            // "unknown" 유지 — 굳히지 않는다
+      }
+    }
+  }
+
+  // ② 단건 함수
+  try {
+    await A.checkStatus(A.genLookupCode(10));
+    msAvail = "ok";
+  } catch (e) {
+    if (A.isMissingFunction && A.isMissingFunction(e)) {
+      msAvail = "unavailable";
+      console.debug("[내신청현황] 서버에 조회 함수가 없어 진입점을 감춥니다.");
+    } else {
+      console.debug("[내신청현황] 지금은 확인할 수 없습니다(다음에 다시 확인).");
+    }
+  }
+  msPaintEntry();
+  return msAvail;
+}
+
+async function initMyStatus() {
+  await msProbe();
+}
+
+// 조회코드 직접 입력 — 기기를 바꾼 분을 위한 통로.
+async function msLookupByCode() {
+  const codeEl = $("msCode"), rcEl = $("msReceipt");
+  if (!codeEl) return;
+  // 코드는 대문자·숫자만 쓴다 → 공백·하이픈을 지우고 대문자로 맞춘다(적어 둔 것을 그대로 넣어도 되게).
+  const code = (codeEl.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const rc = (rcEl ? rcEl.value : "").trim();
+  setFieldError("msCode", "msCodeErr", "");
+  if (code.length < 8) {
+    setFieldError("msCode", "msCodeErr", "조회코드를 다시 확인해 주세요. (영문 대문자·숫자 10자리)");
+    codeEl.focus();
+    return;
+  }
+  const btn = $("msLookup");
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "조회 중..."; }
+  let rows = null;
+  try {
+    rows = await SangjuApply.checkStatus(code);
+  } catch (e) {
+    setFieldError("msCode", "msCodeErr",
+      "지금은 조회할 수 없습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.");
+    codeEl.focus();
+    return;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+  // ⚠ 접수번호는 «2차 비밀번호»가 아니다 — 서버는 조회코드만 본다.
+  //   여기서 하는 일은 이미 받아 온 결과에서 «보고 싶은 건만 골라 주는» 것뿐이므로,
+  //   오류 문구도 두 값을 대조한 것처럼 읽히지 않게 쓴다(2026-08-18 🩷 지적).
+  let matched = rows || [];
+  if (rc) matched = matched.filter((r) => String(r.receipt_no || "").trim() === rc);
+  if (!matched.length) {
+    setFieldError("msCode", "msCodeErr", rc
+      ? "이 조회코드로 찾은 신청 중에 그 접수번호와 같은 건이 없습니다. 접수번호를 지우고 조회하시면 이 코드의 신청을 모두 보실 수 있습니다."
+      : "조회되는 신청이 없습니다. 조회코드를 다시 확인해 주세요.");
+    codeEl.focus();
+    return;
+  }
+  // 찾았으면 이 기기에도 보관한다 → 다음부터는 코드를 넣지 않아도 보인다.
+  saveLookupEntry({
+    code: code,
+    receipt_no: matched[0].receipt_no || "",
+    benefit_name: matched[0].benefit_name || "",
+    at: new Date().toISOString(),
+  });
+  codeEl.value = "";
+  if (rcEl) rcEl.value = "";
+  msPaintEntry();               // 이제 이 기기에도 코드가 있으므로 홈 진입점을 다시 판단
+  await msLoad(true);
+  msAnnounce(`신청 ${matched.length}건을 찾았습니다. 목록에 추가했습니다.`);
+  focusMain();
 }
 
 // ---------- 모달 접근성: 포커스 트랩 + Esc 닫기 + 호출 버튼으로 복귀 (KWCAG 2.2) ----------
@@ -1293,6 +1887,7 @@ function bindEvents() {
       const go = el.dataset.go;
       if (go === "all") { state.selectedCats = new Set(); openList({ title: "전체 사업" }); }
       else if (go === "recommend") { $("topTitle").textContent = "맞춤 찾기"; showView("recommend"); }
+      else if (go === "mystatus") { openMyStatus(); }
       else if (go === "propose") { if (window.Proposals) window.Proposals.open(); }
     });
   });
@@ -1344,6 +1939,27 @@ function bindEvents() {
     $("topTitle").textContent = HOME_TITLE;
     showView("home", false);
   });
+  // ── 🧾 내 신청 현황 ────────────────────────────────────────────────
+  const doneStatusBtn = $("doneStatus");
+  if (doneStatusBtn) doneStatusBtn.addEventListener("click", openMyStatus);
+  const doneCodeCopy = $("doneCodeCopy");
+  if (doneCodeCopy) doneCodeCopy.addEventListener("click", copyLookupCode);
+  const msRefreshBtn = $("msRefresh");
+  if (msRefreshBtn) msRefreshBtn.addEventListener("click", () => msLoad(true));
+  const msClearBtn = $("msClear");
+  if (msClearBtn) msClearBtn.addEventListener("click", msClearDevice);
+  const msAutoBtn = $("msAutoBtn");
+  if (msAutoBtn) msAutoBtn.addEventListener("click", () => {
+    msAuto = !msAuto;
+    msPaintAutoBtn();
+    msAnnounce(msAuto ? "자동 새로고침을 켰습니다. 20초마다 진행 상태가 갱신됩니다."
+                      : "자동 새로고침을 멈췄습니다. 새로고침을 누를 때만 갱신됩니다.");
+    if (msAuto) msTick();
+  });
+  const msForm = $("msForm");
+  if (msForm) msForm.addEventListener("submit", (e) => { e.preventDefault(); msLookupByCode(); });
+  const msCodeEl = $("msCode");
+  if (msCodeEl) msCodeEl.addEventListener("input", () => setFieldError("msCode", "msCodeErr", ""));
   // 신규 사업 알림 배너
   $("newBannerView").addEventListener("click", () => {
     state.selectedCats = new Set();

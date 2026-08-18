@@ -14,8 +14,18 @@
 //     규약문서 + SQL 주석 + 세 앱을 «동시에» 갱신하고 검수 담당에게 알린다.
 //
 //  노출: window.SangjuApply = {
-//    useClient, benefitKey, genReceiptNo, submitApplication, errKind, TABLE, STATUSES
+//    useClient, benefitKey, genReceiptNo, genLookupCode, submitApplication,
+//    checkStatus, checkStatusMany, isMissingFunction, errKind, TABLE, STATUSES
 //  }   ← 시민앱이 실제로 쓰는 것만. 조회·수정·삭제·구독은 노출하지 않는다.
+//
+//  ⭐ checkStatus 는 «테이블 조회»가 아니다 (2026-08-18)
+//     아래 ⛔ 금지목록(listApplications 등)과 헷갈리지 말 것. checkStatus 는
+//     applications 테이블을 읽지 않고, 서버 함수 check_application_status(코드) 를
+//     호출한다(supabase/application_status.sql). 그 함수는
+//       · 조회코드를 «정확히 아는» 행만 찾고(8자 미만이면 무조건 빈 결과),
+//       · 접수번호·사업명·상태·시민안내문·일시만 돌려준다 — 이름·연락처는 «없다».
+//     즉 개인정보 테이블의 문은 계속 잠겨 있고(익명 SELECT 금지), 시민 본인이
+//     자기 코드로 «상태 몇 줄»만 확인하는 통로다. 절대 여기에 컬럼을 더 넣지 말 것.
 //
 //  방어 원칙: applications.sql 이 아직 실행 안 됐으면(테이블 없음·PGRST205)
 //    · submitApplication 실패는 throw → 시민앱이 안내(메일 전송과 «독립»)
@@ -74,6 +84,38 @@ window.SangjuApply = (function () {
     return base + "-" + p(idx);
   }
 
+  // ── 조회코드(lookup_code) 생성 — 시민이 «내 신청 현황»을 여는 열쇠 ──────
+  //  · 서버가 만들지 않고 «시민 기기»에서 만든다. 만든 값은 insert 페이로드와
+  //    기기 localStorage 양쪽에 들어간다(기기에 없으면 시민이 적어 둔 코드로 입력).
+  //  · 혼동되는 글자를 뺀 32자 알파벳: O·0 / I·1·l 을 모두 제외하고 대문자만 쓴다.
+  //    (전화로 불러 주거나 종이에 적어 다시 입력하는 상황을 전제로 한 선택)
+  //    10자 × 32종 = 50비트 → 남의 코드를 찍어서 맞힐 수 없다.
+  //  · ⛔ Math.random 폴백을 두지 않는다 (2026-08-18, 🩷 security-privacy 지적)
+  //    Math.random 은 «예측 가능»한 난수라, 그것으로 만든 코드는 50비트가 사실상 0비트가 된다
+  //    (남의 조회코드를 계산해 낼 수 있다 = 남의 신청 상태·안내문을 볼 수 있다).
+  //    crypto.getRandomValues 는 https 가 아닌 http 환경에서도 쓸 수 있어(secure context 제약이
+  //    없는 API) 폴백의 실익이 없다. → 없으면 «조용히 내려가지» 말고 신청을 막고 오류를 낸다.
+  //    ⚠ 256 을 32 로 나눌 때 나머지가 없으므로 모듈로 편향이 없다(256 = 32 × 8).
+  var LOOKUP_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function genLookupCode(len) {
+    var n = len || 10, out = "", i;
+    var bytes = null;
+    try {
+      if (window.crypto && window.crypto.getRandomValues) {
+        bytes = new Uint8Array(n);
+        window.crypto.getRandomValues(bytes);
+      }
+    } catch (e) { bytes = null; }
+    if (!bytes) {
+      throw new Error("이 브라우저에서는 안전한 조회코드를 만들 수 없습니다. "
+        + "브라우저를 최신으로 올리시거나 다른 브라우저에서 신청해 주세요.");
+    }
+    for (i = 0; i < n; i++) {
+      out += LOOKUP_ALPHABET.charAt(bytes[i] % LOOKUP_ALPHABET.length);
+    }
+    return out;
+  }
+
   // 서버가 관리하는 필드는 클라가 절대 넣지 않는다(RLS with check 위반 방지).
   //   status·admin_memo·created_at·updated_at·id 를 방어적으로 제거.
   //   receipt_no 가 비어 있으면 클라에서 채운다(서버 트리거는 안전망).
@@ -84,6 +126,9 @@ window.SangjuApply = (function () {
     }
     delete out.status;
     delete out.admin_memo;
+    // citizen_reply(공무원이 쓰는 시민 안내문)도 클라가 넣지 않는다 —
+    // 신청자가 자기 화면에 보일 답변을 스스로 써 넣는 일이 없어야 한다.
+    delete out.citizen_reply;
     delete out.created_at;
     delete out.updated_at;
     delete out.id;
@@ -93,15 +138,89 @@ window.SangjuApply = (function () {
     return out;
   }
 
-  // ── 시민 신청 INSERT (anon) — 성공 시 저장된 행(receipt_no 포함) 반환 ──
+  // ── 시민 신청 INSERT (anon) — 성공 시 «보낸 행»(receipt_no 포함)을 그대로 반환 ──
   //   실패는 throw → 호출부(시민앱)가 안내. «메일 전송과 독립» 으로 처리한다.
+  //
+  //  ⛔⛔ 여기에 «절대» .select() 를 붙이지 마세요 (2026-08-18, 실제 장애로 확인)
+  //     .insert(row).select() 는 서버에서 `INSERT … RETURNING` 이 된다.
+  //     PostgreSQL 은 RETURNING 이 붙는 순간 INSERT 권한뿐 아니라 그 행에 대한
+  //     «SELECT 권한(정책)»까지 함께 요구한다. applications 는 이름·연락처가 든
+  //     개인정보 테이블이라 익명(anon)에게 SELECT 정책이 «없는 것이 정상»이고,
+  //     그래서 저장이 통째로 거부됐다(REST 로 재현: Prefer: return=representation →
+  //     401, 헤더를 빼면 201 성공). 서버 정책은 «정상»이었고 클라이언트가 문제였다.
+  //     ⚠ 이때 나오는 문구가 하필 "new row violates row-level security policy" 라
+  //       «INSERT 정책이 없다»로 오인하기 쉽다 — 그 함정에 빠지지 말 것.
+  //     ⛔ 해결책으로 «익명 SELECT 정책을 여는» 방법은 금지다(🩷 자물쇠 확정).
+  //       RETURNING 을 통과시키는 SELECT 정책은 보통의 조회도 함께 통과시켜,
+  //       created_at 을 최근 몇 초로 좁혀도 그 사이 접수된 다른 시민의
+  //       이름·연락처·문의내용이 누구에게나 열린다.
+  //
+  //  반환값: 서버가 돌려준 행이 아니라 «우리가 보낸 행»(_clean 을 거친 row).
+  //     receipt_no·lookup_code 는 클라가 만들어 보내는 값이라 서버 왕복 없이도 확정이다.
+  //     (receipt_no 를 비워 보내면 서버 트리거가 채우지만, 이 앱은 항상 채워 보낸다.)
+  //  성공 판정: «반환된 행이 있는가»가 아니라 «throw 없이 끝났는가»로 본다.
   async function submitApplication(payload) {
     var sb = client();
     if (!sb) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
     var row = _clean(payload || {});
-    var res = await sb.from(TABLE).insert(row).select().single();
+    var res = await sb.from(TABLE).insert(row);   // ⛔ .select()/.single() 금지 — 위 주석 참조
     if (res.error) throw res.error;
-    return res.data;
+    return row;
+  }
+
+  // ── 내 신청 «상태» 조회 (익명) — 테이블이 아니라 «서버 함수»를 부른다 ──
+  //   supabase/application_status.sql 의 check_application_status(p_code)
+  //   반환: [{receipt_no, benefit_name, status, citizen_reply, created_at, updated_at}]
+  //   · 코드가 8자 미만이면 서버가 «무조건» 빈 결과를 준다(빈 값으로 남의 행이 걸리는 사고 방지).
+  //     클라에서도 미리 걸러 헛된 왕복을 줄인다.
+  //   · 함수가 아직 없는 환경(PGRST202)에서는 throw → 호출부가 진입점을 «조용히» 숨긴다.
+  //     (앱의 다른 기능은 어떤 경우에도 멀쩡해야 한다는 기존 방어 원칙 그대로)
+  async function checkStatus(code) {
+    var c = String(code == null ? "" : code).trim();
+    if (c.length < 8) return [];
+    var sb = client();
+    if (!sb || !sb.rpc) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    var res = await sb.rpc("check_application_status", { p_code: c });
+    if (res.error) throw res.error;
+    return res.data || [];
+  }
+
+  // ── 내 신청 «상태» 여러 건 조회 (익명, 배열 1회 호출) ───────────────────
+  //   supabase/application_status.sql 의 check_application_status_many(p_codes text[])
+  //   왜 배열인가 (2026-08-18, 🩷 security-privacy 지적)
+  //     기기에 보관된 코드를 «한 건씩» 폴링하면 분당 수백 회 호출이 되어,
+  //     정상 사용과 «코드 대입 공격»의 트래픽 모양이 같아진다 → 나중에 속도 제한을 걸 수 없다.
+  //     배열로 한 번에 물으면 «1회 호출 = 1명의 정상 조회»가 되어 구분이 생긴다.
+  //   ⚠ 이 함수가 아직 서버에 없을 수 있다(양호창님이 대시보드에서 SQL 을 실행하기 전).
+  //     그때는 PGRST202 로 실패하므로, 호출부가 isMissingFunction 으로 «함수 없음»을 가려내
+  //     단건 checkStatus 로 조용히 폴백한다. 네트워크 오류와 «함수 없음»은 반드시 구분한다.
+  //   · 빈 배열로 부르면 «함수가 있는지»만 확인하는 프로브가 된다(가짜 코드를 던지지 않는다).
+  async function checkStatusMany(codes) {
+    var list = [], i, c;
+    var src = codes || [];
+    for (i = 0; i < src.length; i++) {
+      c = String(src[i] == null ? "" : src[i]).trim();
+      if (c.length >= 8 && list.indexOf(c) < 0) list.push(c);
+    }
+    var sb = client();
+    if (!sb || !sb.rpc) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    var res = await sb.rpc("check_application_status_many", { p_codes: list });
+    if (res.error) throw res.error;
+    return res.data || [];
+  }
+
+  // ── «서버에 그 함수가 없다» 인가? (네트워크 오류와 구분) ────────────────
+  //   PostgREST 는 없는 함수를 부르면 PGRST202 + "Could not find the function ... in the schema cache"
+  //   를 준다. 이 경우에만 «영구 불가»로 처리하고, 그 밖(연결 끊김·타임아웃·5xx)은
+  //   «아직 모름»으로 남겨 나중에 다시 시도해야 한다.
+  function isMissingFunction(e) {
+    if (!e) return false;
+    var code = String((e && (e.code || e.status || e.statusCode)) || "");
+    var msg = String((e && (e.message || e.error || e.details || e.hint)) || "").toLowerCase();
+    if (code === "PGRST202" || code === "42883") return true;
+    if (/could not find the function/.test(msg)) return true;
+    if (/function .*does not exist/.test(msg)) return true;
+    return false;
   }
 
   // ┌──────────────────────────────────────────────────────────────────┐
@@ -145,7 +264,14 @@ window.SangjuApply = (function () {
     useClient: useClient,
     benefitKey: benefitKey,
     genReceiptNo: genReceiptNo,
+    genLookupCode: genLookupCode,
     submitApplication: submitApplication,
+    // ✅ checkStatus 는 «상태 몇 줄»만 돌려주는 서버 함수 호출이다(위 ⭐ 주석 참조).
+    //    아래 ⛔ 금지목록과 성격이 다르므로 함께 지우지 말 것.
+    checkStatus: checkStatus,
+    //    배열 1회 호출판(없는 서버에서는 PGRST202 → 호출부가 checkStatus 로 폴백).
+    checkStatusMany: checkStatusMany,
+    isMissingFunction: isMissingFunction,
     // ⛔ listApplications·updateApplication·deleteApplication·subscribeApplications 는
     //    시민앱에서 의도적으로 «노출하지 않습니다»(위 ⛔ 주석 참조). 되살리지 마세요.
     errKind: errKind

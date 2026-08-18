@@ -394,6 +394,9 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .field-err::before { content: "⚠ "; }
 .req { color: var(--err-text); font-weight: 800; }
 
+/* 입력칸 도움말 — 라벨 아래 설명(aria-describedby 로 연결). 흰 5.74:1 · 크림 5.41:1 (AA 충족) */
+.field-help { margin: 6px 0 0; font-size: 0.8125rem; color: var(--muted); line-height: 1.55; }
+
 /* ⚖ 개인정보 수집·이용 동의 상자 */
 .consent-box {
   margin: 20px 0 4px; padding: 14px; border: 1.5px solid var(--border-input);
@@ -427,6 +430,94 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .done-program { font-size: 1.0625rem; font-weight: 700; color: var(--accent-text); background: var(--header); /* 5.25:1 */ display: inline-block; padding: 8px 16px; border-radius: 10px; margin: 0 0 12px; }
 .done-receipt { font-size: 0.9375rem; font-weight: 700; color: var(--text); letter-spacing: 0.02em; margin: 0 0 16px; }
 .done-desc { color: var(--muted); font-size: 0.9375rem; line-height: 1.6; margin: 0 0 28px; }
+
+/* ═══════════════ 🧾 내 신청 현황 ═══════════════════════════════════════
+   신청한 시민이 «자기 신청»의 진행 상태를 보는 화면. 개인정보(이름·연락처)는
+   서버 함수가 애초에 돌려주지 않으므로 화면에도 없다.
+   색만으로 상태를 알리지 않는다 — 배지 «글자»가 곧 상태다(KWCAG 5.3.1).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 홈 진입 카드 — 지원사업 갈래(곶감 주황)에 속하므로 왼쪽 굵은 선으로만 구분한다.
+   (정책참여 카드의 청록과 색이 겹치지 않게) */
+.status-card {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; text-align: left; margin-top: 12px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--border); border-left: 5px solid var(--primary);
+  border-radius: 14px; background: var(--card); color: var(--text);
+  cursor: pointer;
+}
+.status-card:active { transform: scale(.98); }
+.status-card-icon { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.status-card-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.status-card-title { font-size: 1.0625rem; font-weight: 700; color: var(--accent-text); }  /* 흰 6.03:1 */
+.status-card-desc  { font-size: 0.8125rem; color: var(--muted); line-height: 1.45; }        /* 흰 5.74:1 */
+.status-card-arrow { font-size: 24px; color: var(--accent-text); flex-shrink: 0; }
+
+/* 🔑 조회코드 상자(신청 완료 화면) — 적어 두지 않으면 다른 기기에서 볼 수 없으므로 강조한다 */
+.code-box {
+  margin: 0 0 20px; padding: 16px 14px; text-align: center;
+  background: var(--header); border: 2px dashed var(--primary); border-radius: 14px;
+}
+.code-box-k { margin: 0 0 8px; font-size: 0.9375rem; font-weight: 800; color: var(--accent-text); }  /* 헤더 5.25:1 */
+.code-box-v {
+  margin: 0 0 10px; font-size: 1.5rem; font-weight: 800; letter-spacing: 0.12em;
+  color: var(--text); word-break: break-all;
+  font-family: "Consolas", "D2Coding", ui-monospace, monospace;   /* 글자를 헷갈리지 않게 고정폭 */
+}
+.code-box-desc { margin: 0 0 12px; font-size: 0.8125rem; color: var(--muted); line-height: 1.6; }
+.code-copy-btn {
+  min-height: 44px; padding: 10px 18px; font-size: 0.9375rem; font-weight: 700;
+  border: 1.5px solid var(--primary-hover); border-radius: 10px;
+  background: var(--primary-hover); color: #fff; cursor: pointer;   /* 흰글자 4.71:1 */
+}
+.code-copy-btn:active { background: var(--primary-press); }
+.code-copy-msg { margin: 10px 0 0; font-size: 0.8125rem; color: var(--muted); line-height: 1.5; }
+
+/* 도구줄 — 「지금 새로고침」과 ⏸ 정지(KWCAG 2.2 «정지 기능 제공») */
+.ms-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 12px; }
+.ms-updated { font-size: 0.8125rem; color: var(--muted); margin-right: auto; }   /* 흰 5.74:1 */
+.ms-tool-btn {
+  min-height: 44px; padding: 8px 14px; font-size: 0.84375rem; font-weight: 700;   /* 손가락 조작 최소 44px */
+  border: 1.5px solid var(--border-input); border-radius: 10px;
+  background: var(--card); color: var(--accent-text); cursor: pointer;   /* 흰 6.03:1 */
+}
+.ms-tool-btn:active { background: var(--header); }
+
+.ms-list { display: grid; gap: 12px; }
+.ms-empty {
+  padding: 26px 16px; text-align: center; font-size: 0.9375rem; line-height: 1.7;
+  color: var(--disabled);                          /* 흰 5.36:1 */
+  border: 1.5px dashed var(--border); border-radius: 14px; background: var(--card);
+}
+.ms-empty p { margin: 0 0 6px; }
+.ms-empty p:last-child { margin-bottom: 0; }
+
+.ms-card {
+  padding: 16px; background: var(--card);
+  border: 1.5px solid var(--border); border-radius: 14px;
+}
+.ms-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ms-badge { font-size: 0.8125rem; font-weight: 800; padding: 5px 12px; border-radius: 8px; white-space: nowrap; }
+/* 상태 4값 — 공무원앱(cloudui .ast-*)과 «같은 값»이라 두 앱의 상태색이 일치한다 */
+.ast-접수   { background: #E3E8F2; color: #1B2A4A; }
+.ast-심사중 { background: #FFF3CD; color: #7A5B00; }
+.ast-승인   { background: #E3F6EA; color: #1F7A41; }
+.ast-반려   { background: #FDE7E7; color: #B03024; }   /* #FDE7E7 위 5.39:1 (기존 #C0392B 는 4.60 — 4색 중 여유가 가장 좁아 올림) */
+.ms-rc { font-size: 0.8125rem; font-weight: 700; color: var(--muted); }
+.ms-card-title { font-size: 1.0625rem; font-weight: 700; line-height: 1.45; margin-bottom: 6px; }
+.ms-card-meta { font-size: 0.8125rem; color: var(--muted); line-height: 1.5; }
+/* 💬 담당 부서 안내(citizen_reply) — 공무원이 «시민에게 보이라고» 쓴 글만 여기 온다 */
+.ms-reply {
+  margin-top: 12px; padding: 12px 14px;
+  background: var(--header); border-left: 5px solid var(--primary); border-radius: 10px;
+}
+.ms-reply-k { margin: 0 0 6px; font-size: 0.84375rem; font-weight: 800; color: var(--accent-text); }
+.ms-reply-v { margin: 0; font-size: 0.90625rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+
+/* 다른 기기에서 신청한 경우 — 접수번호·조회코드 직접 입력 */
+.ms-manual { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
+.ms-manual-title { font-size: 1rem; font-weight: 800; margin: 0 0 6px; color: var(--text); }
 
 /* 하단 플로팅 뒤로가기 버튼(엄지 위치) */
 .fab-back {
@@ -923,7 +1014,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
  *   · 화면 전환 fade  : .view (translateY 포함)
  *   · 모달 등장 fade  : .team-card / .install-card
  *   · 눌림 반응 scale : .big-btn / .card / .err-retry / .fab-back / .a2hs-tip / .inapp-btn
- *                       .propose-card / .pp-new-btn
+ *                       .propose-card / .status-card / .pp-new-btn
  *   · 전환            : 본문 바로가기(skip-link) top, .cl-guide-row 배경 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -940,5 +1031,6 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   .a2hs-tip:active,
   .inapp-btn:active,
   .propose-card:active,
+  .status-card:active,
   .pp-new-btn:active { transform: none; }
 }
