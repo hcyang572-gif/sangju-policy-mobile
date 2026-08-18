@@ -5,7 +5,8 @@
 // ⚠ v25: 「내 신청 현황」 화면 신설(index.html·app.js·style.css·apply_client.js).
 //    index.html·app.js 는 cache-first 라 «캐시 버전을 올리지 않으면» 기존 이용자에게
 //    새 화면이 없는 구버전이 계속 제공된다(진입점이 영영 안 보임).
-const CACHE = "sangju-v27";   // v27: 신청이 클라우드에 저장되지 않던 문제 수정(개인정보 테이블에 RETURNING 금지)
+const CACHE = "sangju-v28";   // v28: 🔑 조회코드 «되찾기» 창구 신설(이름+연락처 뒷4자리 → 조회코드만)
+// v27: 신청이 클라우드에 저장되지 않던 문제 수정(개인정보 테이블에 RETURNING 금지)
 
 // scope(예: https://hcyang572-gif.github.io/sangju-policy-mobile/)를 기준으로
 // 절대 URL을 만들어 둔다. (서브경로/루트 모두 안전)

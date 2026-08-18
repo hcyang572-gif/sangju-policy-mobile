@@ -519,6 +519,28 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .ms-manual { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
 .ms-manual-title { font-size: 1rem; font-weight: 800; margin: 0 0 6px; color: var(--text); }
 
+/* 🔑 조회코드 «되찾기» — 조회코드 입력칸 «아래»의 보조 링크로만 둔다.
+   ⛔ 눈에 띄게 키우거나 위로 올리지 말 것(설계 근거: supabase/조회코드_되찾기.sql 머리말).
+      이름+연락처 뒷4자리는 조회코드보다 약한 열쇠라 «드물게» 쓰여야 한다.
+   ※ .link-btn 은 style.css 안에서 두 번 선언되어 나중 것(패딩 0)이 이긴다 →
+     터치 표적 44px 을 여기서 다시 확보한다. */
+.ms-recover { margin-top: 18px; }
+.ms-recover-toggle {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 10px 2px;
+  font-size: 0.9375rem;              /* 본문보다 작게 — 「보조 링크」임이 눈으로 드러나게 */
+  color: var(--accent-text);         /* 흰 배경 6.03:1 */
+}
+.ms-recover-toggle > span { margin-right: 6px; text-decoration: none; display: inline-block; }
+.ms-recover-panel {
+  margin-top: 6px; padding: 16px 14px;
+  background: var(--card); border: 1.5px solid var(--border); border-radius: 14px;
+}
+.ms-recover-panel .apply-hint { margin-top: 0; }
+.ms-recover-result { margin: 18px 0 0; }   /* .code-box 는 margin-bottom 20px 이라 여기서 되잡는다 */
+/* 되찾은 코드가 여러 건일 수 있다(최대 10건) → 줄바꿈을 그대로 보이게 하고 글자를 조금 줄인다. */
+.ms-recover-result .code-box-v { white-space: pre-line; font-size: 1.25rem; line-height: 1.5; }
+.ms-recover-result:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+
 /* 하단 플로팅 뒤로가기 버튼(엄지 위치) */
 .fab-back {
   position: fixed;

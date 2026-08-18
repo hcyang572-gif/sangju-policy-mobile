@@ -15,7 +15,8 @@
 //
 //  노출: window.SangjuApply = {
 //    useClient, benefitKey, genReceiptNo, genLookupCode, submitApplication,
-//    checkStatus, checkStatusMany, isMissingFunction, errKind, TABLE, STATUSES
+//    checkStatus, checkStatusMany, recoverLookupCodes,
+//    isMissingFunction, isRateLimited, errKind, TABLE, STATUSES
 //  }   ← 시민앱이 실제로 쓰는 것만. 조회·수정·삭제·구독은 노출하지 않는다.
 //
 //  ⭐ checkStatus 는 «테이블 조회»가 아니다 (2026-08-18)
@@ -209,6 +210,53 @@ window.SangjuApply = (function () {
     return res.data || [];
   }
 
+  // ── 🔑 조회코드 «되찾기» (익명) — 이름 + 연락처 뒷 4자리 ────────────────
+  //   supabase/조회코드_되찾기.sql 의 recover_lookup_codes(p_name, p_phone4)
+  //
+  //   ⭐ 이 함수가 돌려주는 것은 «조회코드뿐»이다 — 사업명·상태·안내문·접수번호를
+  //      주지 않는다(일부러). 코드를 받은 뒤 기존 checkStatusMany 로 물으면 다 나온다.
+  //      「상태를 보여 주는 두 번째 문」 이 아니라 「잃어버린 열쇠를 되찾아 주는 창구」다.
+  //      ⛔ 반환 컬럼을 늘려 달라는 요구가 오면 SQL 파일 머리말을 함께 읽고 거절할 것.
+  //
+  //   ⚠ .rpc(..., {}, { get: true }) 로 부르지 말 것.
+  //     이 함수는 시도 횟수를 «쓰기» 때문에 volatile 이다 — GET 은 읽기전용 트랜잭션이라 실패한다.
+  //   ⚠ «프로브»하지 말 것(checkStatusMany([]) 같은 빈 호출을 흉내내지 말 것).
+  //     서버는 입력 형식을 검사하기 «전에» 시도 횟수부터 센다(10분에 10회). 형식이 틀린
+  //     호출로 횟수 제한을 피해 가는 길을 막으려고 일부러 그 순서로 만든 것이라,
+  //     프로브 한 번이 시민의 실제 시도 한 번을 잡아먹는다.
+  //     → 함수가 있는지는 «시민이 실제로 눌렀을 때» 응답으로 배운다(PGRST202 → 진입점 숨김).
+  //
+  //   반환: 조회코드 «문자열» 배열 0~10개.
+  //     ※ 서버는 [{lookup_code:"..."}] «객체 배열»을 주므로 여기서 펴서 돌려준다.
+  //   0건과 «동명이인이라 안 준다»는 서버에서 이미 구분되지 않는다(둘 다 0건). 호출부도
+  //   이유를 캐묻거나 시민에게 알려 주지 말 것 — 찍어 보는 사람에게 힌트가 된다.
+  async function recoverLookupCodes(name, phone4) {
+    var nm = String(name == null ? "" : name).trim();
+    var p4 = String(phone4 == null ? "" : phone4).replace(/[^0-9]/g, "");
+    // 서버도 막지만 여기서 먼저 거른다 — 형식이 틀린 호출로 «시도 횟수»를 태우지 않기 위해.
+    if (nm.length < 2 || nm.length > 40 || p4.length !== 4) return [];
+    var sb = client();
+    if (!sb || !sb.rpc) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    var res = await sb.rpc("recover_lookup_codes", { p_name: nm, p_phone4: p4 });
+    if (res.error) throw res.error;
+    var rows = res.data || [], out = [], i, c;
+    for (i = 0; i < rows.length; i++) {
+      c = String((rows[i] && rows[i].lookup_code) || "").trim();
+      if (c && out.indexOf(c) < 0) out.push(c);
+    }
+    return out;
+  }
+
+  // ── «시도 횟수 제한에 걸렸다» 인가? ────────────────────────────────────
+  //   recover_lookup_codes 가 10분에 10회를 넘기면 P0001 + hint 'RATE_LIMIT' 으로 막는다.
+  //   이때는 «틀렸다»가 아니라 «잠시 뒤에»라고 안내해야 한다(입력을 고치라고 하면 안 된다).
+  function isRateLimited(e) {
+    if (!e) return false;
+    if (String((e && e.code) || "") === "P0001") return true;
+    if (/RATE_LIMIT/i.test(String((e && e.hint) || ""))) return true;
+    return false;
+  }
+
   // ── «서버에 그 함수가 없다» 인가? (네트워크 오류와 구분) ────────────────
   //   PostgREST 는 없는 함수를 부르면 PGRST202 + "Could not find the function ... in the schema cache"
   //   를 준다. 이 경우에만 «영구 불가»로 처리하고, 그 밖(연결 끊김·타임아웃·5xx)은
@@ -271,6 +319,10 @@ window.SangjuApply = (function () {
     checkStatus: checkStatus,
     //    배열 1회 호출판(없는 서버에서는 PGRST202 → 호출부가 checkStatus 로 폴백).
     checkStatusMany: checkStatusMany,
+    // 🔑 조회코드를 «잊었을 때» 되찾는 보조 창구(이름+연락처 뒷4자리 → 조회코드만).
+    //    위 ⛔ 금지목록과 성격이 다르다 — 개인정보를 «주지 않고» 열쇠만 돌려준다.
+    recoverLookupCodes: recoverLookupCodes,
+    isRateLimited: isRateLimited,
     isMissingFunction: isMissingFunction,
     // ⛔ listApplications·updateApplication·deleteApplication·subscribeApplications 는
     //    시민앱에서 의도적으로 «노출하지 않습니다»(위 ⛔ 주석 참조). 되살리지 마세요.

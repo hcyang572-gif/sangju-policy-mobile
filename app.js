@@ -1612,6 +1612,12 @@ function openMyStatus() {
   msRenderList();               // 있던 내용을 먼저 그려 빈 화면을 보이지 않게
   showView("mystatus");
   msPaintAutoBtn();
+  // 🔑 되찾기 창구는 «들어올 때마다 접힌 채»로 시작한다.
+  //   ① 보조 링크라는 성격을 유지하고(펼쳐진 채 남으면 상시 통로처럼 보인다)
+  //   ② 공용 기기에서 앞사람이 넣은 이름·되찾은 코드가 화면에 남지 않게 한다.
+  //   ⚠ msRecoverWrap 의 hidden 은 건드리지 않는다 — 서버에 함수가 없어 숨긴 상태를 되살리면 안 된다.
+  if (msRecOpen) msRecToggle();
+  else msRecReset();
   // 앱을 켤 때 프로브가 «네트워크 때문에» 실패했을 수 있다 → 들어온 김에 다시 확인한다.
   if (msAvail !== "ok") { try { msProbe(); } catch (e) { /* 무시 */ } }
   msLoad(true);                 // 들어온 «그 순간» 한 번 확인(20초를 기다리지 않는다)
@@ -1750,6 +1756,197 @@ async function msLookupByCode() {
   await msLoad(true);
   msAnnounce(`신청 ${matched.length}건을 찾았습니다. 목록에 추가했습니다.`);
   focusMain();
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  🔑 조회코드 «되찾기» — 코드를 적어 두지 않고 기기를 바꾼 분을 위한 보조 창구
+//     (2026-08-18 설계: 🩷 security-privacy / supabase/조회코드_되찾기.sql)
+//  ----------------------------------------------------------------------
+//  무엇인가
+//    이름 + 연락처 뒷 4자리가 모두 맞으면 «조회코드만» 돌려받는다. 그 코드를 기기에
+//    보관하고 곧바로 기존 「내 신청 현황」 경로(checkStatusMany)를 탄다.
+//    → 여기에 «새 목록 화면»을 만들지 않는다. 되찾은 다음은 기존 화면 그대로다.
+//
+//  왜 «상태»가 아니라 «코드»만인가
+//    이름+뒷4자리는 조회코드(50비트)보다 훨씬 약한 열쇠다. 이것으로 상태를 «바로»
+//    보여 주면 기기를 바꾼 시민은 볼 때마다 이 문을 쓰게 되고, 그러면 정상 이용과
+//    무차별 대입의 트래픽 모양이 같아져 시도 제한을 걸 수 없게 된다.
+//    코드만 돌려주면 이 문은 «기기를 바꾼 그 한 번»만 쓰인다.
+//
+//  ⛔ 여기서 하지 말 것
+//    · 이 진입점을 홈이나 화면 위쪽으로 올리지 말 것(보조 링크로 둔다).
+//    · 0건일 때 «그런 이름이 없다 / 동명이인이 있다»처럼 이유를 알려 주지 말 것.
+//      찍어 보는 사람에게 «정답에 가까워졌다»는 신호가 된다. 서버도 둘을 구분해 주지 않는다.
+//    · 함수가 있는지 «프로브»하지 말 것 — 서버는 형식 검사 «전에» 시도 횟수를 센다
+//      (10분 10회). 프로브 한 번이 시민의 실제 시도 한 번을 잡아먹는다.
+//      → 함수 유무는 시민이 실제로 눌렀을 때의 응답(PGRST202)으로 배운다.
+// ════════════════════════════════════════════════════════════════════════
+let msRecOpen = false;      // 패널이 펼쳐져 있는가
+let msRecBusy = false;      // 되찾기 요청 진행 중(중복 제출 방지)
+
+// 오류 문구는 두 칸이 함께 쓰지만(msRecErr 하나), aria-invalid 는 «틀린 칸»에만 건다.
+function msRecSetErr(msg, whichId) {
+  const err = $("msRecErr");
+  if (err) { err.textContent = msg || ""; err.hidden = !msg; }
+  ["msRecName", "msRecPhone4"].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    if (msg && id === whichId) el.setAttribute("aria-invalid", "true");
+    else el.removeAttribute("aria-invalid");
+  });
+}
+
+// 진입점 «조용히 숨김» — 서버에 recover_lookup_codes 가 «없다»고 확인된 경우에만.
+//   ⚠ 네트워크 오류로 숨기지 않는다(내 신청 현황의 3값 프로브와 같은 원칙).
+//   숨긴 뒤에도 앱의 다른 기능은 멀쩡해야 한다.
+function msRecHideEntry() {
+  const wrap = $("msRecoverWrap");
+  if (wrap) wrap.hidden = true;
+  msRecOpen = false;
+  // 초점이 사라지는 버튼 위에 남지 않게 조회코드 입력칸으로 옮긴다(초점 유실 방지 KWCAG).
+  const codeEl = $("msCode");
+  if (codeEl) { try { codeEl.focus(); } catch (e) { /* 무시 */ } }
+  // 낭독 이용자에게는 «사라졌다»는 사실만 담백하게 알린다(서버 사정을 설명하지 않는다).
+  msAnnounce("지금은 조회코드 되찾기를 이용할 수 없습니다. 적어 두신 조회코드로 조회해 주세요.");
+}
+
+function msRecToggle() {
+  const panel = $("msRecoverPanel"), btn = $("msRecoverToggle");
+  if (!panel || !btn) return;
+  msRecOpen = !msRecOpen;
+  panel.hidden = !msRecOpen;
+  btn.setAttribute("aria-expanded", msRecOpen ? "true" : "false");
+  if (msRecOpen) {
+    const nm = $("msRecName");
+    if (nm) { try { nm.focus(); } catch (e) { /* 무시 */ } }
+  } else {
+    // 닫을 때는 입력·결과를 지운다 — 공용 기기에 이름이 남지 않게.
+    msRecReset();
+  }
+}
+
+function msRecReset() {
+  ["msRecName", "msRecPhone4"].forEach((id) => { const el = $(id); if (el) el.value = ""; });
+  msRecSetErr("");
+  const box = $("msRecResult");
+  if (box) box.hidden = true;
+  const codes = $("msRecCodes");
+  if (codes) codes.textContent = "";
+  const msg = $("msRecCopyMsg");
+  if (msg) msg.textContent = "";
+}
+
+// 되찾은 코드 복사 — 완료 화면과 같은 방식(alert 대신 상자 안 안내문).
+async function msRecCopyCodes() {
+  const text = ($("msRecCodes") ? $("msRecCodes").textContent : "").trim();
+  const msg = $("msRecCopyMsg");
+  if (!text) return;
+  let ok = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } else { throw new Error("no clipboard api"); }
+  } catch (e) {
+    try {
+      const t = document.createElement("input");
+      t.value = text; document.body.appendChild(t);
+      t.select(); document.execCommand("copy");
+      document.body.removeChild(t);
+      ok = true;
+    } catch (e2) { ok = false; }
+  }
+  if (msg) {
+    msg.textContent = ok
+      ? "조회코드를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
+      : "복사하지 못했습니다. 화면의 코드를 직접 적어 주세요.";
+  }
+}
+
+async function msRecoverSubmit() {
+  if (msRecBusy) return;
+  const nameEl = $("msRecName"), p4El = $("msRecPhone4");
+  if (!nameEl || !p4El) return;
+  const A = window.SangjuApply;
+  if (!(A && A.recoverLookupCodes)) { msRecHideEntry(); return; }
+
+  const name = (nameEl.value || "").trim();
+  const p4 = (p4El.value || "").replace(/[^0-9]/g, "");
+  msRecSetErr("");
+  const resBox = $("msRecResult");
+  if (resBox) resBox.hidden = true;
+
+  // ── 입력 검증 — «첫 번째» 틀린 칸으로 초점을 옮긴다(KWCAG 오류 정정 안내)
+  if (name.length < 2) {
+    msRecSetErr("이름을 두 글자 이상 넣어 주세요.", "msRecName");
+    nameEl.focus(); return;
+  }
+  if (name.length > 40) {
+    msRecSetErr("이름이 너무 깁니다. 신청서에 적으신 이름만 넣어 주세요.", "msRecName");
+    nameEl.focus(); return;
+  }
+  if (p4.length !== 4) {
+    msRecSetErr("연락처 뒷 4자리를 숫자 네 자리로 넣어 주세요.", "msRecPhone4");
+    p4El.focus(); return;
+  }
+
+  const btn = $("msRecoverBtn");
+  const orig = btn ? btn.innerHTML : "";
+  msRecBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = "찾는 중..."; }
+
+  let codes = null;
+  try {
+    codes = await A.recoverLookupCodes(name, p4);
+  } catch (e) {
+    // ① 시도 횟수 제한 — «틀렸다»가 아니라 «잠시 뒤에»라고 안내한다.
+    if (A.isRateLimited && A.isRateLimited(e)) {
+      msRecSetErr("조회 시도가 너무 많습니다. 10분 뒤에 다시 시도해 주세요.");
+      nameEl.focus();
+    // ② 서버에 함수가 «없다» — 진입점을 조용히 숨긴다(앱의 다른 기능은 멀쩡하다).
+    } else if (A.isMissingFunction && A.isMissingFunction(e)) {
+      msRecHideEntry();
+    // ③ 그 밖(네트워크·일시 오류) — «영구 실패»로 굳히지 않는다.
+    } else {
+      msRecSetErr("잠시 후 다시 시도해 주세요.");
+      nameEl.focus();
+    }
+    return;
+  } finally {
+    msRecBusy = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+
+  // ── 0건 — ⛔ 이유를 알려 주지 않는다(못 찾음·동명이인을 구분해 주면 힌트가 된다)
+  if (!codes || !codes.length) {
+    msRecSetErr("일치하는 신청을 찾지 못했습니다. 이름과 연락처 뒷 4자리를 확인해 주세요. "
+      + "계속 찾을 수 없으면 담당 부서로 문의해 주세요.");
+    nameEl.focus();
+    return;
+  }
+
+  // ── 찾았다 → ① 기기에 보관 ② 기존 「내 신청 현황」 경로로 그대로 넘긴다
+  //   ⚠ 사업명·접수번호는 이 함수가 «주지 않는다»(일부러). 빈 값으로 넣어 두면
+  //     바로 이어지는 msLoad 가 상태 조회 결과로 화면을 채운다.
+  const at = new Date().toISOString();
+  codes.forEach((c) => saveLookupEntry({ code: c, receipt_no: "", benefit_name: "", at: at }));
+
+  // 되찾은 코드를 보여 준다 — 다음에 또 기기를 바꾸면 이 문을 다시 쓰게 되므로 «적어 두세요».
+  const out = $("msRecCodes");
+  if (out) out.textContent = codes.join("\n");
+  if (resBox) resBox.hidden = false;
+  const copyMsg = $("msRecCopyMsg");
+  if (copyMsg) copyMsg.textContent = "";
+  // 이름은 화면에 남기지 않는다(공용 기기 배려). 되찾은 코드는 위 상자에 남는다.
+  nameEl.value = ""; p4El.value = "";
+
+  // 되찾은 코드 상자로 초점을 옮긴다 — 버튼 «아래»에 결과가 생기므로, 초점을 옮기지 않으면
+  // 키보드·낭독기 이용자는 무엇이 생겼는지 스스로 찾아 내려가야 한다(KWCAG 초점 이동·상태 알림).
+  if (resBox) { try { resBox.focus(); } catch (e) { /* 무시 */ } }
+
+  msPaintEntry();          // 이제 이 기기에도 코드가 있으므로 홈 진입점을 다시 판단
+  await msLoad(true);      // ③ 그 다음은 «기존 화면 그대로»
+  msAnnounce(`조회코드 ${codes.length}건을 찾았습니다. 목록에 추가했습니다. 코드는 아래 상자에 있으니 적어 두세요.`);
 }
 
 // ---------- 모달 접근성: 포커스 트랩 + Esc 닫기 + 호출 버튼으로 복귀 (KWCAG 2.2) ----------
@@ -1960,6 +2157,23 @@ function bindEvents() {
   if (msForm) msForm.addEventListener("submit", (e) => { e.preventDefault(); msLookupByCode(); });
   const msCodeEl = $("msCode");
   if (msCodeEl) msCodeEl.addEventListener("input", () => setFieldError("msCode", "msCodeErr", ""));
+  // 🔑 조회코드 되찾기(보조 창구) — 접기·펴기 / 제출 / 복사 / 입력 시 오류문구 지우기
+  const msRecToggleBtn = $("msRecoverToggle");
+  if (msRecToggleBtn) msRecToggleBtn.addEventListener("click", msRecToggle);
+  const msRecForm = $("msRecoverForm");
+  if (msRecForm) msRecForm.addEventListener("submit", (e) => { e.preventDefault(); msRecoverSubmit(); });
+  const msRecCopyBtn = $("msRecCopy");
+  if (msRecCopyBtn) msRecCopyBtn.addEventListener("click", msRecCopyCodes);
+  ["msRecName", "msRecPhone4"].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("input", () => { if (el.getAttribute("aria-invalid")) msRecSetErr(""); });
+  });
+  // 뒷 4자리는 숫자만 — 붙여넣기·한글 자판으로 들어온 글자를 그 자리에서 걸러 준다.
+  const msRecP4 = $("msRecPhone4");
+  if (msRecP4) msRecP4.addEventListener("input", () => {
+    const v = (msRecP4.value || "").replace(/[^0-9]/g, "").slice(0, 4);
+    if (v !== msRecP4.value) msRecP4.value = v;
+  });
   // 신규 사업 알림 배너
   $("newBannerView").addEventListener("click", () => {
     state.selectedCats = new Set();
