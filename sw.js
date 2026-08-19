@@ -1,11 +1,32 @@
 /* 상주시 정책플랫폼 — 서비스워커 (PWA 설치 가능 + 오프라인 로딩)
  * 경로는 모두 상대경로(self.registration.scope 기준)로 다뤄
  * GitHub Pages 하위경로(/sangju-policy-mobile/)에서도 깨지지 않게 함.
- * 캐시 버전을 올리려면 아래 CACHE 값을 바꾸면 됨(예: sangju-v2). */
-// ⚠ v25: 「내 신청 현황」 화면 신설(index.html·app.js·style.css·apply_client.js).
-//    index.html·app.js 는 cache-first 라 «캐시 버전을 올리지 않으면» 기존 이용자에게
-//    새 화면이 없는 구버전이 계속 제공된다(진입점이 영영 안 보임).
-const CACHE = "sangju-v29";   // v29: 🎨 시안 A「감빛 온기」 적용(팔레트·헤더 제목/배지·시정구호 확대·눌림 파동 tap.js) + 표기 「상주시 정책플랫폼」 통일
+ *
+ * ═══ v30 에서 고친 «구조적 캐시 결함» ══════════════════════════════
+ * 증상: 캐시 이름을 v28→v29 로 올렸는데도 이용자에게 옛 화면이 계속 나왔다.
+ * 원인: ① GitHub Pages 응답이 Cache-Control: max-age=600 이라 모든 정적 자원이
+ *          브라우저 HTTP 캐시에 10분 남는다.
+ *       ② 프리캐시가 그 HTTP 캐시를 그대로 타서 «캐시 이름은 새것(v29),
+ *          담긴 내용은 옛것» 이 되었다. Request 의 {cache:"reload"} 는
+ *          일부 브라우저(특히 iOS 사파리)가 무시한다.
+ *       ③ index.html 이 cache-first 라 새 HTML 이 영영 안 내려왔다.
+ *       ④ 카카오톡 인앱 브라우저는 서비스워커를 제한해 ①만 남는다.
+ * 대책: ① 프리캐시를 «URL 에 1회용 쿼리(swcb)를 붙여 fetch → 정식 키로 put» 방식으로
+ *          바꿔, 어떤 브라우저에서도 HTTP 캐시를 확실히 우회한다.
+ *       ② 자원 URL 에 배포 버전 쿼리(?v=ASSET_V)를 붙인다. 배포마다 URL 이 달라져
+ *          서비스워커가 없는 환경(카톡 인앱 브라우저)에서도 옛 캐시가 잡히지 않는다.
+ *          ⚠ index.html 의 참조 문자열과 아래 목록이 «글자 단위로» 같아야 한다.
+ *       ③ 문서(navigate) 요청은 network-first(실패 시 캐시)로 바꿨다.
+ * ══════════════════════════════════════════════════════════════════ */
+
+// 배포 버전 — 버전정보.json 의 "version" 및 version.js 의 APP_VERSION 과 항상 같은 값.
+// ⚠ 손으로 고치지 말고 루트의 `py -3 자원버전_동기화.py` 를 돌리면
+//    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
+const ASSET_V = "0.4.1";
+
+const CACHE = "sangju-v31";   // v31: 0.4.1 - 배포해도 옛 화면이 남던 캐시 결함 수정(프리캐시 HTTP 캐시 우회·버전 쿼리) 반영, 자원버전 0.4.1
+//      + activate 가 공무원앱 캐시(sangju-admin-*)까지 지우던 결함 수정(앱 분리 대칭)
+// v29: 🎨 시안 A「감빛 온기」 적용(팔레트·헤더 제목/배지·시정구호 확대·눌림 파동 tap.js) + 표기 「상주시 정책플랫폼」 통일
 // v28: 🔑 조회코드 «되찾기» 창구 신설(이름+연락처 뒷4자리 → 조회코드만)
 // v27: 신청이 클라우드에 저장되지 않던 문제 수정(개인정보 테이블에 RETURNING 금지)
 
@@ -13,20 +34,26 @@ const CACHE = "sangju-v29";   // v29: 🎨 시안 A「감빛 온기」 적용(�
 // 절대 URL을 만들어 둔다. (서브경로/루트 모두 안전)
 const SCOPE = self.registration.scope;
 const u = (p) => new URL(p, SCOPE).toString();
+// 버전 쿼리를 붙인 경로 — index.html 의 참조와 반드시 같은 문자열이어야 한다.
+const vq = (p) => p + "?v=" + ASSET_V;
 
-// 미리 캐시할 핵심 정적 자원(상대경로). data.json은 일부러 제외(항상 최신 우선).
-const PRECACHE = [
+// 이것이 없으면 앱이 «옛 화면»으로 뜨는 자원 — 반드시 새로 받아야 한다.
+const ESSENTIAL = [
   "./",
   "index.html",
-  "style.css",
-  "app.js",
-  "proposals.js",
-  "config.js",
-  "version.js",
-  "tap.js",
-  "forms.js",
-  "apply_client.js",
+  vq("style.css"),
+  vq("app.js"),
+  vq("proposals.js"),
+  vq("config.js"),
+  vq("version.js"),
+  vq("tap.js"),
+  vq("forms.js"),
+  vq("apply_client.js"),
   "manifest.json",
+];
+// 없어도 화면 골격은 뜨는 자원(그림). 실패해도 설치를 막지 않는다.
+// data.json 은 일부러 제외 — 항상 최신 우선(network-first).
+const OPTIONAL = [
   "icon-192.png",
   "icon-512.png",
   "qr.png",
@@ -39,35 +66,61 @@ const PRECACHE = [
   "assets/slogan-wide.png",
 ];
 
-// 설치: 핵심 자원을 미리 담되, 하나가 실패해도 install 전체가 실패하지 않게
-// 개별 add 를 try/catch 로 감싼다.
+/* 자원 하나를 «HTTP 캐시를 확실히 우회해» 받아 캐시에 담는다.
+ * 핵심: 받아올 때는 1회용 쿼리(swcb=CACHE)를 붙여 브라우저가 캐시를 못 쓰게 하고,
+ *       담을 때는 쿼리를 뗀 «정식 키»로 담는다. 그래야 페이지가 요청하는 URL 과 맞는다. */
+async function precacheOne(cache, path) {
+  const key = u(path);                                   // 캐시에 담을 정식 키
+  const bust = key + (key.includes("?") ? "&" : "?") + "swcb=" + CACHE;
+  const res = await fetch(new Request(bust, { cache: "reload", credentials: "same-origin" }));
+  if (!res || !res.ok) throw new Error("HTTP " + (res ? res.status : "?"));
+  await cache.put(key, res);
+  return true;
+}
+
+// 설치: 자원을 «네트워크에서 새로» 받아 담는다. 하나가 실패해도 설치는 계속한다
+// (fetch 핸들러가 캐시 미스 시 네트워크로 다시 받아 스스로 메운다).
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
+      let ok = 0, fail = 0;
       await Promise.all(
-        PRECACHE.map(async (p) => {
-          try {
-            await cache.add(new Request(u(p), { cache: "reload" }));
-          } catch (e) {
-            // 일부 자원이 없거나 실패해도 무시(설치 계속 진행)
-            console.warn("[sw] precache 실패(무시):", p, e);
-          }
+        ESSENTIAL.map(async (p) => {
+          try { await precacheOne(cache, p); ok++; }
+          catch (e) { fail++; console.error("[sw] 핵심 자원 프리캐시 실패:", p, e); }
         })
       );
+      await Promise.all(
+        OPTIONAL.map(async (p) => {
+          try { await precacheOne(cache, p); ok++; }
+          catch (e) { fail++; console.warn("[sw] 보조 자원 프리캐시 실패(무시):", p, e); }
+        })
+      );
+      console.log("[sw] " + CACHE + " 프리캐시 완료 — 성공 " + ok + " · 실패 " + fail);
       // 새 서비스워커가 곧바로 대기 상태를 건너뛰도록(업데이트 빠르게 적용)
       await self.skipWaiting();
     })()
   );
 });
 
-// 활성화: 현재 버전(CACHE)이 아닌 옛 캐시를 정리한다.
+// 활성화: 이 앱의 현재 캐시(CACHE) 외 '시민앱' 옛 캐시만 정리.
+// ⚠ Cache Storage 는 «origin 전체가 공유»한다 — 서비스워커 scope 로 격리되지 않는다.
+//    caches.keys() 는 scope 와 무관하게 이 origin 의 모든 캐시 이름을 돌려준다.
+//    예전엔 (k !== CACHE) 로 «자기 것 빼고 전부» 지웠는데, 그러면 같은 브라우저로
+//    공무원앱(/admin/)을 열어 본 이용자는 시민앱 워커가 활성화될 때마다
+//    공무원앱 캐시(sangju-admin-*)까지 함께 날아갔다(= 공무원앱이 매번 오프라인 불가).
+//    시민앱 접두사 "sangju-" 는 "sangju-admin-" 도 포함하므로 «반드시» 따로 제외한다.
+//    → 공무원앱 sw.js 의 「시민앱 캐시는 같은 origin 이라도 건드리지 않는다」와 짝을 이룬다.
+//    이 필터를 startsWith("sangju-") 하나로 «단순화하지 말 것».
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))
+        keys
+          .filter((k) => k.startsWith("sangju-") && !k.startsWith("sangju-admin-") && k !== CACHE)
+          .map((k) => caches.delete(k))
       );
       // 열려 있는 모든 탭을 즉시 이 서비스워커가 제어
       await self.clients.claim();
@@ -83,8 +136,10 @@ self.addEventListener("message", (event) => {
 // fetch: 크롬 설치조건 충족을 위해 반드시 핸들러 등록.
 // 전략
 //  - GET 이외 / 타 출처(Web3Forms 등) 요청은 가로채지 않고 통과(네트워크 그대로).
+//  - 문서(navigate) = index.html: network-first (최신 HTML 우선) + 실패 시 캐시 폴백.
 //  - data.json: network-first (최신 우선) + 실패 시 캐시 폴백.
 //  - 그 외 동일 출처 정적 자원: cache-first + 받아오면 캐시에 보관.
+//    (자원은 ?v= 버전 쿼리를 달고 있어, 배포가 바뀌면 URL 자체가 달라져 새로 받는다)
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -103,8 +158,15 @@ self.addEventListener("fetch", (event) => {
   // → 공무원앱은 자체 서비스워커(sangju-admin-*)가 제어한다(두 앱 완전 분리).
   if (url.pathname.includes("/admin/")) return;
 
+  // 화면(HTML) — 항상 최신 우선. 여기서 최신 HTML 이 내려오면
+  // 나머지 자원은 ?v= 쿼리를 타고 자동으로 새 것이 따라온다.
+  if (req.mode === "navigate" || url.pathname.endsWith("/") || url.pathname.endsWith("index.html")) {
+    event.respondWith(documentFirst(req));
+    return;
+  }
+
   // 데이터는 항상 최신을 우선 — network-first
-  if (url.pathname.endsWith("/data.json") || url.pathname.endsWith("data.json")) {
+  if (url.pathname.endsWith("data.json")) {
     event.respondWith(networkFirst(req));
     return;
   }
@@ -112,6 +174,27 @@ self.addEventListener("fetch", (event) => {
   // 정적 자원 — cache-first
   event.respondWith(cacheFirst(req));
 });
+
+// 문서 network-first: HTTP 캐시를 건너뛰고(서버 재검증) 받아온다. 실패 시 캐시 폴백.
+async function documentFirst(req) {
+  const cache = await caches.open(CACHE);
+  try {
+    const res = await fetch(new Request(req.url, {
+      cache: "no-cache",            // 서버에 재검증 — 옛 HTML 이 10분간 남던 문제 차단
+      credentials: "same-origin",
+      redirect: "follow",
+    }));
+    if (res && res.ok && res.type === "basic") {
+      cache.put(u("index.html"), res.clone());
+      cache.put(u("./"), res.clone());
+    }
+    return res;
+  } catch (e) {
+    const cached = (await cache.match(req)) || (await cache.match(u("index.html")));
+    if (cached) return cached;
+    throw e;
+  }
+}
 
 // network-first: 네트워크 성공 시 캐시 갱신 후 반환, 실패 시 캐시 폴백
 async function networkFirst(req) {

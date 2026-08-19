@@ -2266,13 +2266,39 @@ function _bindSwipe() {
 
 init();
 
+// ── 새 버전이 준비됐을 때의 «조용한 1회 갱신» 안전장치 ─────────────
+// 아래 조건을 «모두» 만족할 때만 새로고침한다. 하나라도 어긋나면 알림 띠만 남긴다.
+//   ① 이 탭에서 아직 한 번도 자동 갱신하지 않았다(무한 새로고침 방지)
+//   ② 앱을 연 지 20초 안이다(오래 보고 있던 화면을 갑자기 바꾸지 않는다)
+//   ③ 홈 화면이다(목록·상세·신청 화면을 보고 있으면 건드리지 않는다)
+//   ④ 아직 아무 입력·누름이 없다(작성 중인 신청서를 날리지 않는다)
+const _appOpenedAt = Date.now();
+let _userTouched = false;
+["pointerdown", "keydown", "input"].forEach((ev) => {
+  window.addEventListener(ev, () => { _userTouched = true; }, { once: true, passive: true });
+});
+function reloadIfUntouched() {
+  const KEY = "sangju_sw_autoreload";
+  if (sessionStorage.getItem(KEY) === "1") return;      // ①
+  if (Date.now() - _appOpenedAt > 20000) return;        // ②
+  const home = document.getElementById("view-home");
+  if (!home || home.hidden) return;                     // ③
+  if (_userTouched) return;                             // ④
+  sessionStorage.setItem(KEY, "1");
+  console.log("[PWA] 첫 화면이라 새 버전으로 조용히 한 번 다시 엽니다.");
+  location.reload();
+}
+
 // ── PWA 서비스워커 등록 (설치 가능화 + 오프라인 로딩) ─────────────
 // 상대경로로 등록 → GitHub Pages 하위경로(/sangju-policy-mobile/)에서도 동작.
 // 등록 실패해도 앱 기능에는 영향 없음.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("sw.js")
+      // updateViaCache:"none" — sw.js 자체도 브라우저 HTTP 캐시(max-age=600)에서
+      // 꺼내 쓰지 말고 «항상 서버에서» 확인하게 한다. 이게 없으면 새 서비스워커가
+      // 최대 10분 늦게(카톡 인앱 브라우저는 더 오래) 감지된다.
+      .register("sw.js", { updateViaCache: "none" })
       .then((reg) => {
         console.log("[PWA] 서비스워커 등록 성공:", reg.scope);
         // 새 버전 감지 시: 설치 완료되면 즉시 적용(다음 새로고침부터 최신)
@@ -2286,6 +2312,10 @@ if ("serviceWorker" in navigator) {
               // 새 버전이 적용됐다. 이제 갱신 알림 띠로 알려 «한 번»에 끝낸다.
               // (자동 새로고침은 하지 않는다 — 보던 화면이 저절로 바뀌면 안 됨)
               try { noticeUpdate("앱이 새 버전으로 준비되었습니다"); } catch (e) {}
+              // 다만 «아직 아무것도 안 한 첫 화면»이라면 조용히 한 번만 다시 그린다.
+              // 옛 서비스워커가 index.html 을 cache-first 로 내주던 탓에 새 판이
+              // «두 번 열어야» 보이던 문제를 없앤다. 보던 화면·입력이 있으면 하지 않는다.
+              try { reloadIfUntouched(); } catch (e) {}
             }
           });
         });
