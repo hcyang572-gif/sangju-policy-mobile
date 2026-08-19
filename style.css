@@ -371,6 +371,10 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 #detailContent h2 { font-size: 1.3125rem; margin: 4px 0 14px; }
 .detail-block { margin-bottom: 16px; }
 .detail-block .k { font-weight: 700; font-size: 0.875rem; color: var(--accent-text); margin-bottom: 4px; }
+/* ⚠ pre-wrap 은 «엑셀에서 온 줄바꿈»을 살리려고 넣은 것이다(사업 내용·대상·이용방법…).
+   그래서 이 안에 «코드가 만든 HTML»(서식 목록 등)을 넣으면 태그 사이의 줄바꿈·
+   들여쓰기 공백까지 그대로 그려져 항목 간격이 크게 벌어진다.
+   → 그런 블록은 아래 #formsDownload 처럼 white-space 를 normal 로 되돌릴 것. */
 .detail-block .v { font-size: 0.9375rem; white-space: pre-wrap; }
 .tel-link { color: var(--accent-text); font-weight: 700; text-decoration: none; }
 .tel-link .tel-ico { font-size: 14px; }
@@ -670,7 +674,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   border-radius: 18px;
   padding: 22px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, .3);
-  animation: fade .2s ease;
+  /* 등장 효과는 파일 끝 「톱니바퀴 클릭 효과」 절에서 정의한다(저감모션에서 전부 꺼진다) */
 }
 .team-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .team-card-head .team-gear { font-size: 34px; color: var(--accent-text); }
@@ -1195,9 +1199,13 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 /* 칩 안에 SVG 가 들어오는 경우(분야 칩이 아닌 다른 칩)만 크기를 맞춘다 */
 .chip > svg.ic { width: 18px; height: 18px; color: var(--accent-text); }
 .chip.active > svg.ic { color: #fff; }
-/* 덜어내기: 자주 찾는 8개만 펴 두고 나머지는 접는다(ui.js 가 표시를 맡는다) */
-.chips .chip-more { display: none; }
-.chips.chips-open .chip-more { display: inline-flex; }
+/* ⚠ 2026-08-19 «분야 접기»를 없앴다(양호창님 지시).
+   예전에는 자주 찾는 8개만 펴고 나머지를 .chip-more 로 접은 뒤 「분야 전체 보기」
+   버튼으로 열게 했다. 그러나 분야는 «무엇이 있는지 한눈에 보이는 것»이 핵심이라,
+   접어 두면 자기 분야가 있는 줄 모르고 돌아가는 일이 생겼다.
+   → 이제 전부 보이고, 아래 «행렬 그리드»가 들쭉날쭉함을 대신 잡아 준다.
+   ⛔ .chip-more / .chips-open / .chip-toggle(분야용) 규칙을 되살리지 말 것.
+      (.chip-toggle 자체는 맞춤 찾기의 「더 보기」가 계속 쓰므로 «남겨 둔다») */
 .chip-toggle {
   position: relative; margin-top: var(--sp-3);
   min-height: var(--h-chip); display: inline-flex; align-items: center; gap: 6px;
@@ -1662,4 +1670,184 @@ h1, h2, h3,
 }
 @media (orientation: landscape) and (max-height: 480px) and (min-width: 600px) {
   .slogan img { max-width: 46%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2026-08-19 개편 묶음 — 푸터 정렬 · 분야 그리드 · 내 신청 분리 ·
+   첨부 · 설치 안내 · 서식 목록 간격 · 톱니바퀴 등장 효과
+   ⚠ 이 절은 «파일 맨 끝»에 둔다. 앞선 규칙을 덮어써야 하는 것이 섞여 있고,
+      저감모션 블록(그 아래)이 여기서 만든 움직임을 전부 끄기 때문이다.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── ① 푸터 톱니바퀴 ↔ 팀명 세로 정렬 ─────────────────────────────────
+   버튼 안의 SVG 가 inline-flex 라 뒤따르는 텍스트와 기준선이 어긋나고
+   사이 간격도 없었다. 줄 전체를 flex 로 만들어 «가운데 정렬 + 간격»을 준다. */
+.foot-team {
+  display: flex; align-items: center; justify-content: center;
+  gap: 7px; flex-wrap: wrap;
+}
+.gear-btn { display: inline-flex; align-items: center; line-height: 1; }
+.foot-team .gear { line-height: 1; }
+.foot-team-name { line-height: 1.2; }
+/* 눌렀을 때 톱니가 살짝 돈다(재미 요소 ①) — 모양 변화라 정보 손실이 없다 */
+.gear-btn .ic { transition: transform .25s cubic-bezier(.2, .7, .3, 1); }
+.gear-btn:active .ic { transform: rotate(120deg); }
+
+/* ── ② 홈 「분야별로 찾기」 — 행·열이 맞는 그리드 ──────────────────────
+   칩을 flex-wrap 으로 흘리면 글자 길이에 따라 줄마다 개수가 달라져
+   «들쭉날쭉»해 보인다. 격자로 두면 어르신도 눈으로 훑기 쉽다.
+   맨 앞 «전체» 칩만 한 줄을 다 쓴다(분야가 아니라 «전체 보기» 길이므로). */
+.chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+.chips .chip {
+  min-height: 44px;               /* 터치 영역 44px 를 «실제 높이»로 확보 */
+  justify-content: center;
+  text-align: center;
+  padding: 6px 10px;
+  /* 한글은 낱자로 자르지 않는다(keep-all). 다만 「🎨 문화·체육·관광」처럼 띄어쓰기가
+     없는 긴 이름이 320px 폰의 좁은 칸을 넘칠 수 있으므로, «다른 방법이 없을 때만»
+     끊기도록 overflow-wrap:anywhere 를 안전망으로 둔다.
+     ⚠ word-break:break-all 로 바꾸지 말 것 — 그건 늘 낱자로 잘라 읽기가 나빠진다. */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.chips .chip-all { grid-column: 1 / -1; }
+@media (min-width: 420px) { .chips { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 680px) { .chips { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ── ③ 목록 정렬 줄(최신순) — 정책참여 목록과 같은 모양 ──────────────── */
+.list-toolbar { display: flex; justify-content: flex-end; margin: var(--sp-3) 0 var(--sp-1); }
+.list-toolbar .pp-select { min-height: 40px; }
+
+/* ── ④ 내 신청: 「신청한 사업 / 낸 제안」 갈래 ────────────────────────── */
+.ms-tabs {
+  display: flex; gap: var(--sp-2);
+  margin: var(--sp-2) 0 var(--sp-4);
+}
+.ms-tab {
+  flex: 1 1 0; min-height: 44px;
+  border: 1.5px solid var(--border); border-radius: var(--r-btn);
+  background: var(--card); color: var(--text);
+  font-family: inherit; font-size: 0.9375rem; font-weight: 700;
+  cursor: pointer;
+}
+/* 고른 갈래는 «색»만이 아니라 굵기·테두리로도 구분된다(색만으로 알리지 않기) */
+.ms-tab.is-on {
+  background: var(--primary-hover); color: #fff;      /* 흰글자 5.21:1 */
+  border-color: var(--primary-hover); font-weight: 800;
+}
+.ms-tab:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* 내 신청 카드의 «제목 버튼» — 누르면 그 사업의 상세로 간다(목록 카드와 같은 방식).
+   ⚠ 카드 전체를 덮개로 만들지 않는다 — 담당 부서 안내문 안의 링크를 가로막게 된다. */
+.ms-open {
+  display: block; width: 100%;
+  margin: 0; padding: 0; border: 0; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  word-break: keep-all;
+}
+.ms-open:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.ms-open-go { font-size: 0.8125rem; font-weight: 700; color: var(--accent-text); margin-left: 6px; white-space: nowrap; }
+.ms-note {
+  margin-top: var(--sp-2); padding: 10px 12px;
+  background: var(--header); border-radius: 12px;
+  font-size: 0.875rem; line-height: 1.6; color: var(--text);
+}
+/* 「확인 번호로 찾기」 화면에서는 원래의 구분선(윗 테두리)이 필요 없다 */
+#view-mscode .ms-manual { margin-top: 0; padding-top: 0; border-top: none; }
+
+/* ── ⑤ 서식 다운로드 목록의 «과도한 공백» 해소 ─────────────────────────
+   원인: 부모 .detail-block .v 의 white-space:pre-wrap 때문에 <li> 사이의
+   줄바꿈·들여쓰기가 «지워지지 않는 공백»이 되어 flex 항목으로 끼어들었다.
+   → 이 블록만 normal 로 되돌린다(다른 상세 본문의 pre-wrap 은 그대로). */
+#formsDownload .v,
+.forms-dl-list { white-space: normal; }
+
+/* ── ⑥ 신청 폼: 파일 첨부 ─────────────────────────────────────────────── */
+.file-input {
+  display: block; width: 100%;
+  min-height: var(--h-btn); padding: 10px var(--sp-3);
+  border: 1.5px dashed var(--border-input); border-radius: var(--r-btn);
+  background: var(--card); color: var(--text);
+  font-family: inherit; font-size: 0.9375rem;
+}
+.file-input:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
+.file-list { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: var(--sp-2); }
+.file-list li {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 10px 12px;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  background: var(--card); font-size: 0.875rem;
+}
+.file-name { flex: 1 1 auto; min-width: 0; word-break: break-all; font-weight: 700; }
+.file-size { flex: 0 0 auto; color: var(--muted); font-weight: 600; font-size: 0.8125rem; }
+.file-del {
+  flex: 0 0 auto; min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin: 0; padding: 0 8px; border: none; background: none;
+  font: inherit; font-weight: 700; color: var(--accent-text); cursor: pointer;
+}
+.file-del:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.done-attach { margin: 6px 0 0; font-size: 0.875rem; font-weight: 700; color: var(--accent-text); }
+
+/* ── ⑦ 설치 안내 ───────────────────────────────────────────────────────── */
+.a2hs-install {
+  flex: 0 0 auto; min-height: 36px; padding: 0 14px;
+  border: none; border-radius: var(--r-pill);
+  background: var(--primary-hover); color: #fff;      /* 흰글자 5.21:1 */
+  font-family: inherit; font-size: 0.8125rem; font-weight: 800;
+  white-space: nowrap; cursor: pointer;
+}
+.a2hs-install:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+/* 원터치 설치가 가능하면 「방법 보기 ›」는 군더더기가 된다 — 숨긴다 */
+.a2hs-tip.has-install .a2hs-go { display: none; }
+.install-ios-hint {
+  margin: 0 0 var(--sp-3); padding: 12px;
+  background: var(--header); border-radius: 12px;
+  font-size: 0.875rem; line-height: 1.6; color: var(--text);
+}
+
+/* ── ⑧ 톱니바퀴 클릭 효과 — 팀원 모달 등장 ─────────────────────────────
+   규격서 14절: transform·opacity 만, 자동 반복 없음, 정보를 움직임에만 담지 않음.
+   저감모션에서는 아래 «움직임 최소화» 블록과 이 절 끝의 규칙이 전부 끈다. */
+.team-card { animation: teamPop .40s cubic-bezier(.2, .9, .3, 1.25) both; }
+@keyframes teamPop {
+  from { opacity: 0; transform: scale(.84) translateY(16px); }
+  60%  { opacity: 1; transform: scale(1.03) translateY(0); }
+  to   { opacity: 1; transform: none; }
+}
+/* 톱니가 «한 바퀴» 돌면서 자리를 잡는다 */
+.team-card-head .team-gear { animation: gearSpin .72s cubic-bezier(.2, .7, .3, 1) both; }
+@keyframes gearSpin {
+  from { opacity: 0; transform: rotate(-360deg) scale(.55); }
+  to   { opacity: 1; transform: none; }
+}
+/* 팀원은 위에서부터 차례로 스르륵 */
+.team-list li { animation: teamRowIn .28s cubic-bezier(.2, .7, .3, 1) both; }
+.team-list li:nth-child(1) { animation-delay: .16s; }
+.team-list li:nth-child(2) { animation-delay: .22s; }
+.team-list li:nth-child(3) { animation-delay: .28s; }
+.team-list li:nth-child(4) { animation-delay: .34s; }
+.team-list li:nth-child(5) { animation-delay: .40s; }
+.team-list li:nth-child(6) { animation-delay: .46s; }
+.team-list li:nth-child(n+7) { animation-delay: .50s; }
+@keyframes teamRowIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 저감모션 — 위에서 새로 넣은 움직임을 «예외 없이» 전부 끈다.
+   ⚠ 이 블록은 파일 끝의 기존 @media(prefers-reduced-motion) 보다 «뒤»에 있어야
+      효력이 확실하다. 그래서 여기서 한 번 더 선언한다(중복이지만 안전하다). */
+@media (prefers-reduced-motion: reduce) {
+  .team-card,
+  .team-card-head .team-gear,
+  .team-list li { animation: none; opacity: 1; transform: none; }
+  .team-list li:nth-child(n) { animation-delay: 0s !important; }
+  .gear-btn .ic { transition: none; }
+  .gear-btn:active .ic { transform: none; }
 }

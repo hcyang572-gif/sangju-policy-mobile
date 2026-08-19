@@ -24,9 +24,13 @@
 
   <!-- PWA: 홈 화면에 추가 시 앱 이름/아이콘 -->
   <link rel="manifest" href="manifest.json" />
-  <link rel="apple-touch-icon" href="icon-192.png" />
+  <!-- ⚠ 아이콘 파일명에 «-v2» 를 붙인 이유(2026-08-19)
+       설치 아이콘은 파일명이 같으면 브라우저·런처가 옛 이미지를 계속 재사용한다
+       (서비스워커 캐시를 비워도 홈 화면에 이미 박힌 그림은 바뀌지 않는다).
+       → 새 도안을 만들 때는 «이름을 바꾼다». manifest.json·sw.js 목록도 함께 바꿀 것. -->
+  <link rel="apple-touch-icon" href="icon-192-v2.png" />
   <!-- 파비콘 명시(없으면 브라우저가 /favicon.ico 를 찾다가 404 콘솔 오류를 남긴다) -->
-  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="icon" type="image/png" href="icon-192-v2.png" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -41,7 +45,7 @@
   <meta property="og:image" content="https://hcyang572-gif.github.io/sangju-policy-mobile/share.png" />
   <meta property="og:url" content="https://hcyang572-gif.github.io/sangju-policy-mobile/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="style.css?v=0.4.3" />
+  <link rel="stylesheet" href="style.css?v=0.4.4" />
 </head>
 <body>
   <!-- 반복 영역 건너뛰기(KWCAG 2.2): 키보드 첫 Tab에서만 노출, 본문(main#app)으로 즉시 이동 -->
@@ -84,6 +88,11 @@
       <button id="dataRtClose" class="rt-banner-close" type="button" aria-label="알림 닫기"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
 
+    <!-- 낭독 전용 알림(내 신청 관련) — 내용이 «실제로 달라졌을 때만» JS 가 글을 넣는다.
+         ⚠ «화면 밖»에 둔다. 「내 신청」과 「확인 번호로 찾기」 두 화면이 함께 쓰는데,
+            어느 한 화면 안에 두면 다른 화면에 있을 때 hidden 이라 낭독되지 않는다. -->
+    <p id="msAnnounce" class="sr-only" role="status" aria-live="polite"></p>
+
     <!-- 홈 -->
     <section id="view-home" class="view">
       <picture class="slogan">
@@ -122,6 +131,10 @@
           <span class="a2hs-text">홈 화면에 추가하면 <b>앱처럼</b> 써요</span>
           <span class="a2hs-go">방법 보기 ›</span>
         </button>
+        <!-- 원터치 설치 — 브라우저가 «설치할 수 있다»고 알려 줄 때(beforeinstallprompt)만
+             a2hs.js 가 hidden 을 푼다. 아이폰(사파리)에는 이 사건이 없어 계속 숨은 채로
+             있고, 대신 위 「방법 보기」가 아이폰 전용 안내를 연다. -->
+        <button id="a2hsInstall" class="a2hs-install" type="button" hidden>홈 화면에 추가</button>
         <button id="a2hsClose" class="a2hs-close" type="button" aria-label="설치 안내 닫기"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="search-box">
@@ -129,8 +142,9 @@
         <input id="homeSearch" type="search" placeholder="어떤 지원이 필요하세요?" aria-label="어떤 지원이 필요하세요? 사업명이나 내용으로 찾기" />
       </div>
       <!-- 분야 칩 — 시안 A: 검색 바로 아래에서 «무엇이 있는지» 먼저 보인다.
-           ui.js(시각 레이어)가 ① 분야 이름에 맞는 인라인 SVG 를 넣고
-           ② 자주 찾는 8개만 펴 두고 나머지는 「분야 전체 보기」로 접는다(데이터·필터는 그대로). -->
+           ⚠ 2026-08-19: «접기»를 없앴다. 분야는 전부 보이고, style.css 의 격자(.chips)가
+              줄·칸을 맞춘다(좁은 화면 2열 → 넓어지면 3~4열, 맨 앞 «전체» 칩은 한 줄 전체).
+              ⛔ 「분야 전체 보기」 토글을 되살리지 말 것(ui.js·style.css 주석 참조). -->
       <h2 class="section-title">분야별로 찾기</h2>
       <div id="categoryChips" class="chips"></div>
 
@@ -165,6 +179,16 @@
         <svg class="ic search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
         <input id="listSearch" type="search" placeholder="결과 안에서 찾기" aria-label="결과 안에서 찾기" />
       </div>
+      <!-- 정렬 — 정책참여 목록(#ppSort)과 «같은 컨트롤·같은 말투».
+           ⚠ 사업 정보에 등록일이 없는 환경(내장 data.json 만으로 뜬 경우)에서는
+              app.js 가 이 줄을 통째로 숨긴다(아무 일도 못 하는 조작을 두지 않는다). -->
+      <div id="listToolbar" class="list-toolbar" hidden>
+        <label class="sr-only" for="listSort">정렬</label>
+        <select id="listSort" class="pp-select">
+          <option value="default">기본순</option>
+          <option value="new">최신순</option>
+        </select>
+      </div>
       <p id="listMeta" class="list-meta" aria-live="polite"></p>
       <div id="listResults" class="cards"></div>
     </section>
@@ -180,7 +204,11 @@
       </div>
       <label class="field-label" id="situationLabel">② 해당하는 상황을 모두 선택</label>
       <div id="situationList" class="situations" role="group" aria-labelledby="situationLabel"></div>
-      <button id="recommendRun" class="big-btn primary full">맞는 사업 찾기 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg></button>
+      <!-- 아무것도 고르지 않고 눌렀을 때의 안내 — 예전에는 브라우저 alert() 가 떠서
+           «hcyang572-gif.github.io 내용:» 같은 군더더기가 함께 보였다.
+           화면 안 안내(role="alert")로 바꿔 낭독기에도 그 자리에서 읽히게 한다. -->
+      <p id="recommendErr" class="field-err" role="alert" hidden></p>
+      <button id="recommendRun" class="big-btn primary full">맞는 사업 찾기<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg></button>
     </section>
 
     <!-- 상세 -->
@@ -203,13 +231,33 @@
         <p id="applyNameErr" class="field-err" role="alert" hidden></p>
 
         <label class="field-label" for="applyPhone">연락처 <span class="req">(필수)</span></label>
-        <input id="applyPhone" class="text-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11"
-               placeholder="01000000000 (- 없이 숫자만)"
-               required aria-required="true" aria-describedby="applyPhoneErr" />
+        <!-- ⚠ maxlength 는 «하이픈까지» 센 13 이다(010-1234-5678).
+             숫자만 넣으셔도 app.js 가 입력하는 동안 하이픈을 자동으로 넣어 준다.
+             ⛔ 서버·메일로 보낼 때는 하이픈을 뗀 «숫자만»을 보낸다(PC 자동접수.py·
+                접수대장·확인번호 되찾기가 모두 숫자 기준). app.js sendApply 참조. -->
+        <input id="applyPhone" class="text-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="13"
+               placeholder="010-1234-5678"
+               required aria-required="true" aria-describedby="applyPhoneHelp applyPhoneErr" />
+        <p id="applyPhoneHelp" class="field-help">숫자만 누르셔도 010-1234-5678 모양으로 자동으로 맞춰집니다.</p>
         <p id="applyPhoneErr" class="field-err" role="alert" hidden></p>
 
         <label class="field-label" for="applyMemo">더 하실 말씀 <span class="opt">(없으면 비워 두세요)</span></label>
         <textarea id="applyMemo" class="text-input" rows="4" placeholder="궁금한 점이나 더 알리고 싶은 내용"></textarea>
+
+        <!-- 📎 증빙서류 첨부 (supabase/신청첨부.sql 의 «통행증» 규약)
+             ⚠ 서버에 SQL 이 아직 적용되지 않았으면 app.js 가 이 블록을 «조용히» 숨긴다.
+                그때도 신청 자체는 지금까지와 똑같이 동작해야 한다(기존 방어 원칙). -->
+        <div id="applyAttachWrap" hidden>
+          <label class="field-label" for="applyFiles">증빙서류 첨부 <span class="opt">(선택)</span></label>
+          <input id="applyFiles" class="file-input" type="file" multiple
+                 accept=".hwp,.hwpx,.pdf,.docx,.xlsx,.jpg,.jpeg,.png,.heic"
+                 aria-describedby="applyFilesHelp applyFilesErr" />
+          <p id="applyFilesHelp" class="field-help">최대 <b>5개</b>, 한 개당 <b>10MB</b>까지 붙이실 수 있습니다.
+             hwp·hwpx·pdf·docx·xlsx·jpg·jpeg·png·heic 만 됩니다.
+             사진은 가능하면 <b>JPEG</b>로 올려 주세요(담당자 PC에서 열리지 않는 경우가 있습니다).</p>
+          <ul id="applyFileList" class="file-list"></ul>
+          <p id="applyFilesErr" class="field-err" role="alert" hidden></p>
+        </div>
 
         <!-- ⚖ 개인정보 수집·이용 동의 (개인정보 보호법 §15) — 없으면 수집 자체가 위법.
              구 PC앱 apply_view.py 의 «고지문 + 필수 동의 체크 + 미체크 시 차단»을 그대로 복원한다.
@@ -217,7 +265,7 @@
         <fieldset class="consent-box">
           <legend class="consent-legend">개인정보 수집·이용 동의 <span class="req">(필수)</span></legend>
           <dl class="consent-dl">
-            <dt>수집 항목</dt><dd>성명, 연락처(휴대전화), (작성 시) 문의사항</dd>
+            <dt>수집 항목</dt><dd>성명, 연락처(휴대전화), (작성 시) 문의사항, (첨부 시) 증빙서류 파일</dd>
             <dt>이용 목적</dt><dd>신청하신 지원사업의 접수·처리 및 결과 안내(담당자 연락)</dd>
             <dt>보유 기간</dt><dd>처리 목적 달성 시까지. 관계 법령에 정한 기간이 있으면 그 기간 동안 보관 후 파기</dd>
           </dl>
@@ -231,6 +279,9 @@
           <p class="consent-more">자세한 내용은 <button type="button" id="applyPrivacyLink" class="link-btn">개인정보 처리방침</button>에서 확인하실 수 있습니다.</p>
         </fieldset>
 
+        <!-- 폼 전체에 걸린 오류(접수 실패·설정 미완료 등) — 예전에는 alert() 였다.
+             칸 하나의 문제가 아니므로 제출 버튼 «바로 위»에 둔다. -->
+        <p id="applyFormErr" class="field-err" role="alert" hidden></p>
         <button id="applySend" type="submit" class="big-btn primary full"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11"/></svg> 신청서 보내기</button>
       </form>
       <p class="apply-note">※ 보내면 담당 부서로 바로 접수됩니다.</p>
@@ -244,6 +295,7 @@
       <textarea id="inquiryMemo" class="text-input" rows="6" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
       <label class="field-label" for="inquiryContact">연락처 (선택)</label>
       <input id="inquiryContact" class="text-input" type="text" placeholder="회신받을 연락처나 이메일" />
+      <p id="inquiryErr" class="field-err" role="alert" hidden></p>
       <button id="inquirySend" class="big-btn primary full"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.8 6.6 8.2 6 8.2-6"/></svg> 불편신고 보내기</button>
       <p class="apply-note">※ 보내면 hcyang572@korea.kr 로 전달됩니다.</p>
     </section>
@@ -257,6 +309,9 @@
         <h2>신청이 접수되었습니다</h2>
         <p id="doneProgram" class="done-program"></p>
         <p id="doneReceipt" class="done-receipt" role="status" aria-live="polite" hidden></p>
+        <!-- 📎 첨부 결과 — 증빙서류를 붙였을 때만 JS 가 채운다.
+             실패했으면 «숨기지 않고» 알린다: 시민이 다른 방법(전화·방문)을 택할 수 있어야 한다. -->
+        <p id="doneAttach" class="done-attach" role="status" aria-live="polite" hidden></p>
         <!-- 🔑 조회코드 안내 — 나중에 «내 신청 현황»을 여는 열쇠.
              기기를 바꾸거나 저장자료를 지우면 이 코드로만 다시 볼 수 있어 «적어 두세요»를 강조한다.
              (문의 완료 화면에서는 JS 가 이 상자를 숨긴다) -->
@@ -275,28 +330,65 @@
       </div>
     </section>
 
-    <!-- 내 신청 현황 (조회코드로 상태만 확인 — 이름·연락처는 다시 표시하지 않는다) -->
+    <!-- 내 신청 (조회코드로 상태만 확인 — 이름·연락처는 다시 표시하지 않는다)
+         ⚠ 2026-08-19 개편
+           ① «확인 번호로 찾기»는 별도 화면(#view-mscode)으로 떼어 냈다.
+              한 화면에 목록 + 코드입력 + 되찾기가 겹쳐 무엇을 해야 할지 알기 어려웠다.
+           ② 자동 폴링(20초)을 없앴다 → 화면이 «스스로» 바뀌지 않으므로
+              KWCAG 2.2 «정지 기능 제공»의 대상 자체가 사라졌다.
+              그래서 「지금 새로고침」·「자동 새로고침 멈추기」 두 버튼을 뺐다.
+              조회는 «이 화면에 들어올 때»와 «앱으로 돌아올 때» 각각 1회만 일어난다.
+              ⛔ 폴링을 되살리려면 정지 버튼도 «함께» 되살려야 한다(둘은 한 쌍이다).
+           ③ 「신청한 사업 / 낸 제안」 두 갈래로 나눴다(같은 화면, 눌러서 바꾼다). -->
     <section id="view-mystatus" class="view" hidden>
-      <h2 class="sr-only">내 신청 현황</h2>
-      <p class="apply-hint">이 휴대폰으로 신청하신 내역의 진행 상태입니다.
-        이름·연락처는 표시하지 않으며, <b>확인 번호</b>를 아는 경우에만 보입니다.</p>
+      <h2 class="sr-only">내 신청</h2>
 
-      <div class="ms-toolbar">
-        <span id="msUpdated" class="ms-updated"></span>
-        <button id="msRefresh" class="ms-tool-btn" type="button"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 지금 새로고침</button>
-        <!-- ⏸ 자동 갱신 정지(KWCAG 2.2 «정지 기능 제공») — 화면이 스스로 바뀌는 이상
-             멈춰 두고 천천히 보거나 낭독을 들을 수 있어야 한다. 상태는 «글자»가 알려 준다. -->
-        <button id="msAutoBtn" class="ms-tool-btn" type="button"><span aria-hidden="true">⏸</span> 자동 새로고침 멈추기</button>
-        <!-- 🧹 공용 기기(주민센터·도서관 PC, 가족 태블릿)에서 앞사람의 조회코드가 남지 않게
-             시민이 «스스로» 지울 수 있어야 한다. 지우는 것은 이 기기의 보관값뿐이다. -->
-        <button id="msClear" class="ms-tool-btn" type="button"
-                aria-label="이 휴대폰에서 지우기 — 이 휴대폰에 보관된 확인 번호를 모두 지웁니다."><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13.8 4.6 5.6 5.6-7.4 7.4H6.4l-2.8-2.8z"/><path d="M20.4 20.4H9.6"/></svg> 이 휴대폰에서 지우기</button>
+      <div class="ms-tabs">
+        <button id="msTabApply" class="ms-tab is-on tap" type="button"
+                aria-pressed="true" aria-controls="msPanelApply">신청한 사업</button>
+        <button id="msTabProposal" class="ms-tab tap" type="button"
+                aria-pressed="false" aria-controls="msPanelProposal">낸 제안</button>
       </div>
 
-      <div id="msList" class="ms-list"></div>
-      <!-- 낭독 전용 알림: 내용이 «실제로 달라졌을 때만» JS 가 글을 넣는다(20초마다 읽지 않게) -->
-      <p id="msAnnounce" class="sr-only" role="status" aria-live="polite"></p>
+      <div id="msPanelApply">
+        <p class="apply-hint">이 휴대폰으로 신청하신 내역의 진행 상태입니다.
+          이름·연락처는 표시하지 않으며, <b>확인 번호</b>를 아는 경우에만 보입니다.</p>
 
+        <div class="ms-toolbar">
+          <span id="msUpdated" class="ms-updated"></span>
+          <!-- 🧹 공용 기기(주민센터·도서관 PC, 가족 태블릿)에서 앞사람의 조회코드가 남지 않게
+               시민이 «스스로» 지울 수 있어야 한다. 지우는 것은 이 기기의 보관값뿐이다. -->
+          <button id="msClear" class="ms-tool-btn" type="button"
+                  aria-label="이 휴대폰에서 지우기 — 이 휴대폰에 보관된 확인 번호를 모두 지웁니다."><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13.8 4.6 5.6 5.6-7.4 7.4H6.4l-2.8-2.8z"/><path d="M20.4 20.4H9.6"/></svg> 이 휴대폰에서 지우기</button>
+        </div>
+
+        <div id="msList" class="ms-list"></div>
+
+        <!-- 다른 기기에서 신청한 경우로 가는 «문» — 실제 입력칸은 별도 화면에 있다. -->
+        <button id="msCodeEntry" class="status-card" type="button"
+                aria-label="확인 번호로 내 신청 찾기" aria-describedby="msCodeEntryDesc">
+          <svg class="ic status-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21l-1.6 2.2M17.4 12v2.6"/></svg>
+          <span class="status-card-text">
+            <span class="status-card-title">확인 번호로 내 신청 찾기</span>
+            <span id="msCodeEntryDesc" class="status-card-desc">다른 기기에서 신청하셨나요? 확인 번호를 넣으시면 여기에도 보입니다</span>
+          </span>
+          <svg class="ic status-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+        </button>
+      </div>
+
+      <!-- 낸 제안 — 이 휴대폰에서 올린 정책제안(localStorage 에 남긴 제안 번호로 조회).
+           «신청한 사업»과 성격이 다르므로 목록을 섞지 않는다. -->
+      <div id="msPanelProposal" hidden>
+        <p class="apply-hint">이 휴대폰에서 올리신 <b>정책제안</b>의 검토 진행 상태입니다.
+          다른 기기에서 올리신 제안은 여기에 나타나지 않습니다.</p>
+        <div id="mpList" class="ms-list"></div>
+      </div>
+
+    </section>
+
+    <!-- 확인 번호로 내 신청 찾기 (내 신청 화면에서 떼어 낸 별도 화면) -->
+    <section id="view-mscode" class="view" hidden>
+      <h2 class="sr-only">확인 번호로 내 신청 찾기</h2>
       <div class="ms-manual">
         <h3 class="ms-manual-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/></svg> 다른 기기에서 신청하셨나요?</h3>
         <p class="apply-hint">신청을 마칠 때 받으신 <b>확인 번호</b>를 넣으시면 이 휴대폰에서도 보입니다.</p>
@@ -308,12 +400,11 @@
           <p id="msCodeHelp" class="field-help">영문 대문자와 숫자 10자리입니다. 헷갈리는 글자(O·I·0·1)는 쓰지 않습니다.</p>
           <p id="msCodeErr" class="field-err" role="alert" hidden></p>
 
-          <label class="field-label" for="msReceipt">접수번호 (선택)</label>
-          <input id="msReceipt" class="text-input" type="text" autocomplete="off" spellcheck="false"
-                 maxlength="30" placeholder="예: 20260818-142530-01"
-                 aria-describedby="msReceiptHelp" />
-          <p id="msReceiptHelp" class="field-help">여러 건을 신청하신 경우, 특정 건만 보시려면 접수번호를 함께 넣으세요.</p>
-
+          <!-- ⛔ 「접수번호(선택)」 칸을 되살리지 마세요 (2026-08-19 제거).
+               서버는 «조회코드»만 봅니다 — 접수번호는 2차 비밀번호가 아니었고,
+               이미 받아 온 결과에서 한 건만 골라 주는 «걸러내기»에 지나지 않았습니다.
+               그런데 칸이 있다는 사실만으로 「둘 다 맞아야 한다」고 읽혀,
+               필요 없는 정보를 찾아 헤매게 만들었습니다. -->
           <button id="msLookup" class="big-btn primary full" type="submit">내 신청 찾기</button>
         </form>
 
@@ -454,13 +545,14 @@
       <div class="privacy-doc">
         <h3 class="privacy-h">1. 수집하는 개인정보 항목</h3>
         <ul class="privacy-ul">
-          <li><b>지원사업 신청 시</b> — 이름, 연락처(휴대전화), (작성 시) 문의사항, 신청한 사업명<br>
+          <li><b>지원사업 신청 시</b> — 이름, 연락처(휴대전화), (작성 시) 문의사항, 신청한 사업명, (첨부 시) 증빙서류 파일<br>
             <span class="privacy-sub">※ 접수 과정에서 <b>접수번호</b>가 자동 생성되며, 담당 부서가 <b>처리상태·처리메모</b>를 함께 기록합니다.<br>
             ※ 신청 시 이용자 휴대폰에서 <b>확인 번호</b>(무작위 영문·숫자 10자리, 개인정보 아님)가 만들어져 함께 저장되고 이 기기에도 보관됩니다. 「내 신청 현황」에서 <b>본인 신청의 진행 상태·담당 부서 안내문</b>을 확인하는 데만 쓰이며, 이 번호로는 이름·연락처를 조회할 수 없습니다.<br>
             ※ 확인 번호는 본인 확인을 대신하는 값입니다. 번호를 알고 있는 사람은 누구나 해당 신청의 진행 상태와 담당 부서 안내문을 볼 수 있으므로, 비밀번호처럼 본인만 보관해 주세요. 이 기기에 보관된 번호는 「내 신청 현황」 화면의 「이 휴대폰에서 지우기」로 언제든 지울 수 있으며, 마지막 확인일로부터 180일이 지나면 자동으로 지워집니다.<br>
             ※ 확인 번호를 잊으신 경우, 「내 신청 현황」 화면의 <b>「확인 번호를 잊으셨나요?」</b>에서 <b>본인확인 목적으로 입력하신 이름과 연락처 뒷 4자리를 이미 접수된 신청 내역과 대조</b>하여, 모두 일치하면 <b>확인 번호만</b> 다시 알려 드립니다. 이때 <b>주민등록번호는 수집하지 않으며</b>, 대조에 쓰인 이름·연락처 뒷 4자리는 <b>별도로 저장하지 않습니다.</b> 최근 1년 이내 신청 내역에 한하며, 이름이 같아도 연락처가 서로 다른 신청이 있으면 알려 드리지 않습니다. 무단 조회를 막기 위해 접속지점별 시도 횟수를 제한하며, 이때 <b>원문 IP 주소를 저장하지 않고 복원할 수 없도록 변환한 값과 시도 횟수만</b> 최대 1일간 보관합니다.<br>
             ※ <b>신청자의 이메일 주소는 수집하지 않습니다.</b> 결과 안내는 위 연락처로 담당자가 연락드립니다.<br>
-            ※ 이 모바일 앱에는 <b>파일 첨부 기능이 없습니다.</b></span></li>
+            ※ 신청 시 <b>증빙서류를 첨부</b>하실 수 있습니다(선택). 첨부하신 파일은 최대 5개·1개당 10MB 까지이며, 담당 부서가 신청 내용을 확인하는 목적으로만 이용합니다. 첨부파일은 <b>비공개 저장소</b>에 보관되어 <b>로그인한 담당 공무원만</b> 열람할 수 있고, 인터넷 주소만으로는 누구도 열 수 없습니다. 파일 이름은 접수대장의 「첨부서류」 칸에 함께 기록되며, 신청 건이 파기될 때 첨부파일도 함께 파기합니다.<br>
+            ※ 첨부는 <b>선택 사항</b>입니다. 첨부하지 않으셔도 신청은 정상 접수됩니다.</span></li>
           <li><b>정책참여(시민 제안)</b> — 닉네임, (선택) 동네, 제안 내용 / 공감 시 기기식별값(localStorage) / 본인확인용 PIN(임의 숫자, 개인정보 아님)</li>
           <li><b>오류·문의</b> — 문의 내용, (선택) 연락처</li>
         </ul>
@@ -489,7 +581,7 @@
         <h3 class="privacy-h">5. 개인정보 처리의 위탁 및 제3자 제공</h3>
         <ul class="privacy-ul">
           <li>신청서를 제출하면 <b>두 경로가 동시에</b> 처리됩니다 — ① 아래 Supabase에 접수 자료로 저장, ② 아래 Web3Forms를 통해 담당 부서 메일로 전달. (한쪽이 실패해도 다른 쪽으로 접수됩니다)</li>
-          <li><b>Supabase</b>(클라우드 데이터베이스) — <b>지원사업 신청 내역(이름·연락처·문의사항·접수번호·처리상태·처리메모)</b>과 정책제안 데이터의 저장·실시간 동기화 업무를 위탁합니다.</li>
+          <li><b>Supabase</b>(클라우드 데이터베이스·파일 저장소) — <b>지원사업 신청 내역(이름·연락처·문의사항·접수번호·처리상태·처리메모)</b>, <b>신청 시 첨부하신 증빙서류 파일</b>, 정책제안 데이터의 저장·실시간 동기화 업무를 위탁합니다.</li>
           <li><b>Web3Forms</b>(폼메일 서비스) — 신청·문의 내용을 담당 부서 메일로 <b>전달</b>하는 업무를 위탁합니다.</li>
           <li>수탁자는 위 <b>2곳</b>이며, 위탁 업무 외의 목적으로 개인정보를 이용할 수 없도록 관리·감독합니다. 위탁계약 체결 여부·내용: <b>운영 개시 시 확정</b></li>
           <li>위 서비스 중 일부는 국외 서버를 사용할 수 있으며, 이 경우 「개인정보 국외이전 고지·동의」 절차에 따릅니다. 국외 이전 여부·국가·보호조치: <b>운영 개시 시 확정</b></li>
@@ -536,7 +628,7 @@
   <button id="fabBack" class="fab-back" hidden aria-label="뒤로가기">‹ 뒤로</button>
 
   <footer class="foot">
-    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.7 1.7 0 0 0 .35 1.9l.06.06a2 2 0 1 1-2.84 2.84l-.06-.06a1.7 1.7 0 0 0-1.9-.35 1.7 1.7 0 0 0-1.03 1.56v.17a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.9.35l-.06.06A2 2 0 1 1 3.8 16.4l.06-.06a1.7 1.7 0 0 0 .35-1.9 1.7 1.7 0 0 0-1.56-1.03H2.5a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.35-1.9L3.74 6.3A2 2 0 1 1 6.58 3.5l.06.06a1.7 1.7 0 0 0 1.9.35h.08A1.7 1.7 0 0 0 9.65 2.3v-.17a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.9-.35l.06-.06a2 2 0 1 1 2.84 2.84l-.06.06a1.7 1.7 0 0 0-.35 1.9v.08a1.7 1.7 0 0 0 1.56 1.03h.17a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z"/></svg> 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
+    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.7 1.7 0 0 0 .35 1.9l.06.06a2 2 0 1 1-2.84 2.84l-.06-.06a1.7 1.7 0 0 0-1.9-.35 1.7 1.7 0 0 0-1.03 1.56v.17a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.9.35l-.06.06A2 2 0 1 1 3.8 16.4l.06-.06a1.7 1.7 0 0 0 .35-1.9 1.7 1.7 0 0 0-1.56-1.03H2.5a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.35-1.9L3.74 6.3A2 2 0 1 1 6.58 3.5l.06.06a1.7 1.7 0 0 0 1.9.35h.08A1.7 1.7 0 0 0 9.65 2.3v-.17a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.9-.35l.06-.06a2 2 0 1 1 2.84 2.84l-.06.06a1.7 1.7 0 0 0-.35 1.9v.08a1.7 1.7 0 0 0 1.56 1.03h.17a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z"/></svg> 톱니바퀴</span></button><span class="foot-team-name">제6기 미래상주 희망연구팀</span></div>
     <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <button id="versionBtn" class="foot-link-btn" type="button" aria-label="v0.0.2 — 버전 정보 및 이용 안내 보기">v0.0.2</button></div>
   </footer>
 
@@ -622,6 +714,11 @@
           </ol>
         </div>
       </div>
+      <!-- 원터치 설치 — 안드로이드 크롬 등 «설치 가능»한 브라우저에서만 a2hs.js 가 켠다.
+           #installIosHint 는 반대로 아이폰(사파리)에서만 켜진다(둘은 동시에 뜨지 않는다). -->
+      <p id="installIosHint" class="install-ios-hint" hidden>아이폰은 <b>사파리</b>에서만 설치할 수 있습니다.
+        화면 <b>아래쪽 가운데의 공유 버튼</b>을 누른 뒤, 목록을 조금 내려 <b>‘홈 화면에 추가’</b>를 고르시면 됩니다.</p>
+      <button id="installNow" class="big-btn primary full" type="button" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/><path d="M12 14.5V7.5m0 0-2.4 2.4M12 7.5l2.4 2.4"/></svg> 지금 홈 화면에 추가</button>
       <button id="installClose" class="big-btn primary full">알겠어요</button>
     </div>
   </div>
@@ -707,11 +804,11 @@
 
   <!-- 공통 버전·개선사항 단일 소스(앱 스크립트보다 먼저 로드) -->
   <!-- 눌림 반응(파동)+햅틱. 앱 로직과 무관하게 «듣기만» 한다(passive·capture) -->
-  <script src="tap.js?v=0.4.3" defer></script>
+  <script src="tap.js?v=0.4.4" defer></script>
   <!-- 시각 레이어: 분야 칩 아이콘·접기 · 하단 탭바 · 동적 이모지 → SVG. 앱 로직에 관여하지 않는다 -->
-  <script src="ui.js?v=0.4.3" defer></script>
-  <script src="version.js?v=0.4.3"></script>
-  <script src="config.js?v=0.4.3"></script>
+  <script src="ui.js?v=0.4.4" defer></script>
+  <script src="version.js?v=0.4.4"></script>
+  <script src="config.js?v=0.4.4"></script>
   <!-- Supabase 클라이언트 (사업목록 하이브리드 조회·정책참여·서식·신청접수)
        ※ 세 앱(모바일웹·cloudui·webui) 모두 «같은 버전·같은 해시»를 쓴다. 하나만 바꾸지 말 것.
        · 버전 고정: @2 (뜬 범위)는 CDN이 언제든 다른 코드를 내려줄 수 있어 2.112.0 으로 못박음.
@@ -725,10 +822,14 @@
           integrity="sha384-De+l/Df7qym5QBDVocD3+gW1S7IjR3epf+6KbRDjB3FCCzM/LqVTwqckT6FhFar8"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- 서식 스토리지 공용 헬퍼(세 앱 공통). app.js 보다 먼저 로드 -->
-  <script src="forms.js?v=0.4.3"></script>
+  <script src="forms.js?v=0.4.4"></script>
   <!-- 신청 접수 공용 헬퍼(세 앱 공통·byte-identical). app.js 보다 먼저 로드 -->
-  <script src="apply_client.js?v=0.4.3"></script>
-  <script src="app.js?v=0.4.3"></script>
-  <script src="proposals.js?v=0.4.3"></script>
+  <script src="apply_client.js?v=0.4.4"></script>
+  <script src="app.js?v=0.4.4"></script>
+  <script src="proposals.js?v=0.4.4"></script>
+  <!-- 「홈 화면에 추가」 — 설치가 «실제로 가능할 때»만 원터치 버튼을 켠다.
+       app.js 의 안내 띠(#a2hsTip)·인앱 배너(#inappBanner)와 겹치지 않게 스스로 판단한다.
+       app.js 보다 «뒤»에 두어, app.js initA2HS() 가 띠를 정한 뒤 그 위에 얹는다. -->
+  <script src="a2hs.js?v=0.4.4" defer></script>
 </body>
 </html>

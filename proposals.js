@@ -44,6 +44,37 @@
     try { localStorage.setItem(LIKED_LS, JSON.stringify([...set])); } catch (e) {}
   }
 
+  /* ── 내가 낸 제안 (2026-08-19) ─────────────────────────────────────────
+     「내 신청」 화면에서 «신청한 사업»과 나란히 보여 주기 위해, 제안을 등록한
+     기기에 «제안 번호»만 남긴다.
+     ⚠ 여기에 개인정보를 넣지 않는다 — 닉네임·PIN·내용은 저장하지 않는다.
+        제목·작성일은 «서버가 아직 안 될 때 최소한이라도 보여 주려는» 보조값이고,
+        본문은 늘 서버에서 다시 읽는다(상태가 바뀌므로).
+     ⚠ 「이 휴대폰에서 지우기」는 조회코드만 지운다 — 제안은 공개 게시물이고
+        번호를 지운다고 글이 사라지지 않으므로 함께 지우지 않는다.  */
+  const MINE_LS = "sangju_my_proposals";
+  const MINE_MAX = 50;
+  function loadMine() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(MINE_LS) || "[]");
+      return Array.isArray(raw) ? raw.filter((e) => e && e.id != null) : [];
+    } catch (e) { return []; }
+  }
+  function saveMine(entry) {
+    if (!entry || entry.id == null) return;
+    try {
+      const list = loadMine().filter((e) => String(e.id) !== String(entry.id));
+      list.unshift(entry);
+      localStorage.setItem(MINE_LS, JSON.stringify(list.slice(0, MINE_MAX)));
+    } catch (e) { /* 저장 못 해도 제안 등록 자체는 성공이다 — 조용히 넘어간다 */ }
+  }
+  function forgetMine(id) {
+    try {
+      const list = loadMine().filter((e) => String(e.id) !== String(id));
+      localStorage.setItem(MINE_LS, JSON.stringify(list));
+    } catch (e) { /* 무시 */ }
+  }
+
   // ---------- 상태 ----------
   const PAGE = 20;
   const pstate = { cat: "", sort: "new", page: 0, items: [], end: false, loading: false };
@@ -432,6 +463,12 @@
         p_nick: nick, p_region: region || null, p_pin: pin,
       });
       if (error) throw error;
+      // 이 기기에 «제안 번호»를 남긴다 → 「내 신청 › 낸 제안」에서 상태를 볼 수 있다.
+      //   create_proposal 은 proposals 행을 통째로 돌려준다(supabase/phaseA_policy.sql).
+      //   ⚠ 서버가 행을 안 주는 환경이라도 등록 자체는 성공이므로 «조용히» 넘어간다.
+      if (data && data.id != null) {
+        saveMine({ id: data.id, title: data.title || title, at: data.created_at || new Date().toISOString() });
+      }
       alert("제안이 등록되었습니다. 감사합니다!");
       // 목록으로 복귀 + 새로고침
       goBack();
@@ -470,6 +507,7 @@
     try {
       const { error } = await client.rpc("delete_proposal", { p_id: pinTarget.id, p_pin: pin });
       if (error) throw error;
+      forgetMine(pinTarget.id);   // 「내 신청 › 낸 제안」에서도 함께 지운다
       alert("삭제되었습니다.");
       closePinModal();
       goBack();          // 목록으로
@@ -635,6 +673,61 @@
   }
 
   // ---------- 이벤트 바인딩 ----------
+  /* ── 「내 신청 › 낸 제안」 목록 그리기 (app.js 가 부른다) ────────────────
+     기기에 남긴 제안 번호로 서버에서 «지금 상태»를 다시 읽어 온다.
+     ⚠ 방어 원칙: 서버 미준비·조회 실패·번호 없음 → 모두 «없음»으로 조용히 끝낸다.
+        이 목록 때문에 「내 신청」 화면이 깨지는 일은 없어야 한다.
+     ⚠ 신청(ms-card)과 «같은 카드 모양»을 쓰되, 배지는 제안 상태(접수/검토중/반영…)다.
+        신청 상태(접수/심사중/승인/반려)와 값이 다르므로 절대 섞지 않는다. */
+  async function renderMine(boxId) {
+    const box = $(boxId || "mpList");
+    if (!box) return;
+    const mine = loadMine();
+    if (!mine.length) {
+      box.innerHTML = `<div class="ms-empty"><p>이 휴대폰에서 올리신 정책제안이 없습니다.</p>
+        <p>「정책 제안」에서 제안을 올리시면 이곳에서 검토 진행 상태를 보실 수 있습니다.</p></div>`;
+      return;
+    }
+    const client = getClient();
+    let rows = [];
+    if (client) {
+      if (window.skeletonHtml) box.innerHTML = window.skeletonHtml(Math.min(mine.length, 3));
+      try {
+        const ids = mine.map((e) => e.id);
+        const { data, error } = await client.from("proposals").select("*").in("id", ids);
+        if (error) throw error;
+        rows = data || [];
+      } catch (e) {
+        console.warn("[정책참여] 내 제안 조회 실패:", e);
+        rows = [];
+      }
+    }
+    if (!rows.length) {
+      box.innerHTML = `<div class="ms-empty"><p>지금은 제안의 진행 상태를 불러오지 못했습니다.</p>
+        <p>인터넷 연결을 확인하신 뒤 이 화면을 다시 열어 주세요.</p></div>`;
+      return;
+    }
+    // 기기에 남긴 순서(최근 등록이 위)를 그대로 따른다 — 서버 반환 순서는 보장되지 않는다.
+    const order = {};
+    mine.forEach((e, i) => { order[String(e.id)] = i; });
+    rows.sort((a, b) => (order[String(a.id)] ?? 999) - (order[String(b.id)] ?? 999));
+
+    box.innerHTML = rows.map((p) => {
+      const b = STATUS_BADGE[p.status] || STATUS_BADGE["접수"];
+      return `<div class="ms-card">
+        <div class="ms-card-top">
+          <span class="pp-badge ${b.cls}">${esc(b.label)}</span>
+          ${p.category ? `<span class="pp-cat">${esc(p.category)}</span>` : ""}
+        </div>
+        <div class="ms-card-title"><button class="ms-open" type="button" data-id="${esc(p.id)}">${esc(p.title)}<span class="ms-open-go" aria-hidden="true">제안 내용 보기 ›</span></button></div>
+        <div class="ms-card-meta">올린 날 ${esc(fmtDate(p.created_at))} · 공감 ${Number(p.like_count) || 0}</div>
+      </div>`;
+    }).join("");
+    box.querySelectorAll(".ms-open").forEach((btn) => {
+      btn.addEventListener("click", () => openDetail(btn.dataset.id));
+    });
+  }
+
   function bind() {
     // 실시간 알림 띠의 «새로고침» — 목록 갱신은 오직 이 클릭으로만 일어난다
     if ($("ppRtBtn")) $("ppRtBtn").addEventListener("click", applyRtRefresh);
@@ -681,5 +774,6 @@
   // syncNotice: 화면이 바뀔 때 app.js 의 showView 가 불러 준다.
   // 상세·작성 화면에 있는 동안 도착한 알림은 띠가 숨겨진 채 카운트만 쌓이므로,
   // 목록으로 돌아왔을 때 다시 계산해 주지 않으면 알림이 영영 안 뜬다.
-  window.Proposals = { open, openWrite, resetWriteForm, syncNotice: syncRtBanner };
+  // renderMine: 「내 신청 › 낸 제안」 목록을 그린다(app.js msLoadMyProposals 가 부른다).
+  window.Proposals = { open, openWrite, resetWriteForm, syncNotice: syncRtBanner, renderMine };
 })();

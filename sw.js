@@ -22,9 +22,13 @@
 // 배포 버전 — 버전정보.json 의 "version" 및 version.js 의 APP_VERSION 과 항상 같은 값.
 // ⚠ 손으로 고치지 말고 루트의 `py -3 자원버전_동기화.py` 를 돌리면
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
-const ASSET_V = "0.4.3";
+const ASSET_V = "0.4.4";
 
-const CACHE = "sangju-v39";   // v39: version.js 문구를 3개 앱 기준안으로 통일(정책플랫폼·불편신고, 이모지 제거) — 캐시된 옛 문구 교체.
+const CACHE = "sangju-v40";   // v40: 화면 개편 14건 — 분야 칩 전체 노출(격자) · 내 신청 화면 분리 ·
+//                자동 새로고침 폐지 · 파일첨부 · 연락처 자동 하이픈 · 설치 안내(a2hs.js) ·
+//                아이콘 새 도안(파일명 -v2) · 목록 최신순 정렬 · 서식 목록 간격 수정.
+//                HTML·CSS·JS 가 모두 바뀌었고 새 파일(a2hs.js)·새 아이콘이 늘었다 → 반드시 올린다.
+//      v39 사유: version.js 문구를 3개 앱 기준안으로 통일(정책플랫폼·불편신고, 이모지 제거) — 캐시된 옛 문구 교체.
 //               눕힌 화면(높이 480px 이하)에서 홈 시정구호가 본문의 절반을 먹던 것을 style.css 로 대응. CSS 변경이라 캐시 갱신 필요
 //      v37 사유: 키보드 초점 표시 복구(KWCAG 2.2) — 검색창·입력칸의 outline:none 제거 + :focus-visible 통일. CSS 변경이라 캐시 갱신 필요
 //      v36 사유: 헤더 브랜드 색 구분(규격서 2절) — 「시민 참여형」 #B84A1C / 「상주시 정책플랫폼」 #33241C. CSS 변경이라 캐시 갱신 필요
@@ -70,13 +74,17 @@ const ESSENTIAL = [
   vq("ui.js"),
   vq("forms.js"),
   vq("apply_client.js"),
+  vq("a2hs.js"),
   "manifest.json",
 ];
 // 없어도 화면 골격은 뜨는 자원(그림). 실패해도 설치를 막지 않는다.
 // data.json 은 일부러 제외 — 항상 최신 우선(network-first).
 const OPTIONAL = [
-  "icon-192.png",
-  "icon-512.png",
+  // ⚠ 아이콘 파일명의 «-v2» 는 «옛 아이콘 재사용»을 끊기 위한 것이다(make_icons.py 머리말).
+  //    도안을 새로 만들 때는 이름을 또 바꾸고, manifest.json·index.html 과 «함께» 고칠 것.
+  "icon-192-v2.png",
+  "icon-512-v2.png",
+  "icon-maskable-512-v2.png",
   "qr.png",
   "assets/sangsang1.png",
   "assets/gotgam.png",

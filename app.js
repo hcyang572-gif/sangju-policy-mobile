@@ -45,8 +45,11 @@ function applyTeamColor(el, name) {
   if (c) { el.style.background = c.bg; el.style.color = c.fg; }
 }
 
+// ⚠ 새 화면을 추가하면 «반드시» 이 배열에 이름을 넣는다 — showView 가 여기 적힌 것만
+//    보이고/숨기므로, 빠뜨리면 그 화면이 다른 화면 위에 겹쳐 남는다.
+//    mscode = 「확인 번호로 내 신청 찾기」(2026-08-19 내 신청 화면에서 분리)
 const VIEWS = ["home", "list", "recommend", "detail", "apply", "inquiry", "done",
-  "mystatus", "propose", "pdetail", "pwrite", "privacy"];
+  "mystatus", "mscode", "propose", "pdetail", "pwrite", "privacy"];
 
 // 첫 렌더가 끝났는지 — showView 의 초점 이동을 «두 번째 화면부터» 적용하기 위한 표시
 let _viewReady = false;
@@ -502,6 +505,12 @@ function adaptCloudRow(r) {
     "종료일": txt(r.end_date),          // 컬럼 미생성 시 "" (화면에서 생략)
     "비고": tidyText(txt(r.note)),
     "categories": Array.isArray(r.categories) ? r.categories.filter(Boolean) : [],
+    // 📅 «최신순» 정렬용 날짜. benefits 표의 created_at(등록)·updated_at(수정)에서 온다.
+    //    · 내장 data.json 에는 이 값이 «없다»(엑셀에 등록일 칸이 없음) → 빈 문자열.
+    //      그때는 목록의 정렬 컨트롤 자체를 숨기고 기존 순서를 그대로 쓴다(안전한 폴백).
+    //    · 앞머리 «_» 는 «화면 데이터가 아니라 정렬용 부속값»이라는 표시다.
+    //      ⛔ dataSignature 에 넣지 말 것 — 내용이 그대로여도 갱신 띠가 뜨는 오탐이 된다.
+    "_date": txt(r.created_at) || txt(r.updated_at),
   };
 }
 
@@ -797,7 +806,14 @@ function initA2HS() {
   try { seen = localStorage.getItem(A2HS_SEEN_KEY) === "1"; } catch (e) {}
   // 홈 상단 안내 띠: «처음 1회»에만 뜬다. 한 번 닫았거나, 이미 한 번 띄웠거나,
   // 이미 설치(standalone) 상태거나, 인앱 브라우저 배너가 떠 있으면(겹침 방지) 숨긴다.
-  const show = !dismissed && !seen && !isStandalone() && $("inappBanner").hidden;
+  //
+  // ⚠ 예외 한 가지 — a2hs.js 가 «지금 실제로 설치할 수 있다»(beforeinstallprompt)고
+  //   알려 준 경우에는 «처음 1회» 규칙보다 우선해 띄운다. 그 순간은 «방법 안내»가 아니라
+  //   «버튼 한 번으로 설치»가 가능한 때라, 안내와 성격이 다르다.
+  //   (init 이 늦게 끝나 a2hs.js 가 켜 둔 띠를 여기서 다시 끄는 경합도 이 줄이 막는다)
+  //   ⛔ 시민이 ✕ 로 «닫은» 경우(dismissed)에는 이 예외도 적용하지 않는다.
+  const canInstall = !!window.__a2hsCanInstall;
+  const show = !dismissed && !isStandalone() && $("inappBanner").hidden && (canInstall || !seen);
   $("a2hsTip").hidden = !show;
   // 띄운 «그 순간» 봤다고 적어 둔다 → 다음 방문부터는 헤더 「안내」에서만 볼 수 있다.
   if (show) { try { localStorage.setItem(A2HS_SEEN_KEY, "1"); } catch (e) {} }
@@ -880,9 +896,13 @@ async function copyCurrentUrl() {
       t.value = url; document.body.appendChild(t);
       t.select(); document.execCommand("copy");
       document.body.removeChild(t);
-    } catch (e2) { alert("주소: " + url); return; }
+    } catch (e2) {
+      // (2026-08-19) alert() → 화면 안 짧은 알림(_toast). 화면을 가로막지 않는다.
+      _toast("주소를 복사하지 못했습니다. 주소창의 주소를 직접 복사해 주세요.");
+      return;
+    }
   }
-  alert("주소를 복사했어요. 브라우저(크롬·사파리)에 붙여넣어 열어주세요.");
+  _toast("주소를 복사했어요. 크롬·사파리에 붙여넣어 열어 주세요.");
 }
 
 // 🔑 조회코드 복사 — 결과는 alert 대신 «상자 안 안내문»으로 알린다(작업 흐름을 끊지 않게).
@@ -1020,11 +1040,26 @@ function runRecommend() {
   const cats = new Set(state.situations);
   ageCategories(age).forEach((c) => cats.add(c));
   if (cats.size === 0) {
-    alert("나이를 입력하거나, 해당하는 상황을 하나 이상 선택해 주세요.");
+    // ⛔ alert() 로 되돌리지 말 것 (2026-08-19).
+    //    브라우저 alert 은 «hcyang572-gif.github.io 내용:» 같은 군더더기를 함께 띄우고,
+    //    화면을 가로막아 무엇을 고쳐야 하는지 «그 자리»에서 보이지 않는다.
+    //    → 다른 입력 오류와 «같은 방식»(.field-err + role="alert" + 초점 이동)으로 알린다.
+    setRecommendErr("나이를 입력하시거나, 해당하는 상황을 하나 이상 골라 주세요.");
+    const ageEl = $("ageInput");
+    if (ageEl && ageEl.focus) { try { ageEl.focus(); } catch (e) { /* 무시 */ } }
     return;
   }
+  setRecommendErr("");
   state.selectedCats = cats;
   openList({ title: "맞춤 추천 결과" });
+}
+
+// 맞춤 찾기 안내문 — 빈 문자열이면 숨긴다(다른 화면의 setFieldError 와 같은 규칙).
+function setRecommendErr(msg) {
+  const el = $("recommendErr");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.hidden = !msg;
 }
 
 // ---------- 목록 ----------
@@ -1043,11 +1078,33 @@ function filterPrograms(catSet, query) {
 }
 
 let listOnlyNames = null;   // 특정 사업명만 보여줄 때(예: 신규 사업) 사용
+
+// ── 목록 정렬 (2026-08-19) ────────────────────────────────────────────────
+//  "default" = 지금까지의 순서(공무원앱과 같은 seq→id 순 / data.json 은 엑셀 순).
+//  "new"     = 최신순 — 사업 정보의 등록일(_date, 없으면 수정일)이 늦은 것부터.
+//  ⚠ 날짜는 «클라우드에서 온 사업 정보»에만 있다. 내장 data.json 만으로 화면이 뜬
+//    경우(오프라인·클라우드 지연)에는 값이 하나도 없으므로 정렬 컨트롤을 숨기고
+//    기존 순서를 그대로 쓴다 — 아무 일도 못 하는 조작을 화면에 두지 않는다.
+let listSort = "default";
+function listHasDates() {
+  return !!(DATA && DATA.programs && DATA.programs.some((p) => (p._date || "").trim()));
+}
+function syncListToolbar() {
+  const bar = $("listToolbar");
+  if (!bar) return;
+  const ok = listHasDates();
+  bar.hidden = !ok;
+  if (!ok) listSort = "default";
+  const sel = $("listSort");
+  if (sel) sel.value = listSort;
+}
+
 function openList({ title, onlyNames }) {
   listOnlyNames = onlyNames || null;
   $("topTitle").textContent = title || "사업 목록";
   $("listSearch").value = "";
   renderListDebounced.cancel();   // 이전 화면에서 대기 중이던 검색 렌더는 버린다
+  syncListToolbar();
   showView("list");
   renderList();                    // 목록 진입은 즉시 렌더(지연 없음)
 }
@@ -1073,6 +1130,17 @@ function renderList() {
   if (listOnlyNames) {
     const set = new Set(listOnlyNames);
     results = results.filter((p) => set.has(p.사업명));
+  }
+  // 최신순 — 날짜가 «없는» 사업은 순서를 흔들지 않도록 뒤로 밀고, 그들끼리는 원래 순서를 지킨다.
+  // (Array.prototype.sort 는 최신 브라우저에서 안정 정렬이라 같은 값끼리는 입력 순서가 보존된다)
+  if (listSort === "new") {
+    results = results.slice().sort((a, b) => {
+      const da = (a._date || ""), db = (b._date || "");
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return db < da ? -1 : (db > da ? 1 : 0);   // 내림차순(늦은 날짜가 위)
+    });
   }
   $("listMeta").textContent = `${results.length}개 사업`;
   const box = $("listResults");
@@ -1228,6 +1296,190 @@ async function renderFormsDownload(p, idx) {
     </div>`;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   📎 신청서 파일첨부 — 「통행증(attach_ticket)」 방식   (2026-08-19)
+   규약 원본: supabase/신청첨부.sql 머리말. «반드시» 그 순서를 지킨다.
+   ------------------------------------------------------------------------
+   왜 이 순서인가
+     시민은 로그인하지 않는다. 익명에게 저장소를 그냥 열면 «주소만 아는 누구나»
+     무한히 파일을 밀어 넣는 창고가 된다. 그래서 «이미 접수된 신청»에 한해
+     30분 동안만 열리는 통행증을 두고, 저장소 정책이 그 통행증을 검사한다.
+       ① 파일 검증(개수·확장자·용량)  ② 통행증 생성
+       ③ applications INSERT (attach_ticket 포함)   ← 여기가 먼저다
+       ④ submissions 버킷 업로드                    ← 이때 통행증이 검사된다
+       ⑤ attach_application_file() 로 목록 등록      ← 서버가 attachments 를 갱신
+       ⑥ close_attach_ticket() 로 통행증 즉시 폐기
+     ⛔ ④를 ③보다 «먼저» 하지 말 것 — 검사할 근거가 사라져 무한 업로드가 된다.
+     ⛔ .insert().select() 금지 규약 그대로 — 그래서 서버가 준 id 를 받을 수 없고,
+        첨부를 id 가 아니라 «접수번호 + 통행증»으로 잇는다.
+
+   서버 준비 전 방어
+     SQL 이 아직 실행되지 않은 서버에서는 is_open_attach_ticket 함수가 없다.
+     그때는 첨부 UI 를 «조용히» 숨기고, 신청은 지금까지와 똑같이 동작한다.
+     ⚠ 이 판정을 건너뛰고 attach_ticket 을 보내면 «컬럼 없음»으로 신청 INSERT
+       자체가 실패한다 → 첨부 때문에 접수가 깨진다. 반드시 attachAvail === "ok" 일 때만 보낸다.
+   ════════════════════════════════════════════════════════════════════════ */
+const ATTACH_MAX = 5;                          // 신청 1건당 개수(서버도 5로 강제)
+const ATTACH_MAX_BYTES = 10 * 1024 * 1024;     // 파일당 10MB(버킷 상한과 동일)
+const ATTACH_BUCKET = "submissions";
+// ⚠ 아래 목록은 supabase/신청첨부.sql 의 화이트리스트와 «반드시 같은 값». 한쪽만 고치지 말 것.
+const ATTACH_EXT = ["hwp", "hwpx", "pdf", "docx", "xlsx", "jpg", "jpeg", "png", "heic"];
+
+let attachAvail = "unknown";   // "unknown" | "ok" | "unavailable"
+let attachFiles = [];          // 이번 신청에 붙일 File 객체들
+
+function attachExtOf(name) {
+  const parts = String(name || "").split(".");
+  return parts.length > 1 ? parts.pop().toLowerCase() : "";
+}
+function attachFmtSize(n) {
+  const b = Number(n) || 0;
+  if (b < 1024) return b + "B";
+  if (b < 1024 * 1024) return (b / 1024).toFixed(0) + "KB";
+  return (b / 1024 / 1024).toFixed(1) + "MB";
+}
+function setAttachErr(msg) {
+  const el = $("applyFilesErr");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.hidden = !msg;
+}
+
+// 저장경로용 ASCII 이름 — 저장소 키는 ASCII 만 허용한다(한글 파일명은 그대로 못 쓴다).
+//   서버 검사식: '^<통행증>/[A-Za-z0-9._-]{1,120}$' 이고,
+//   «저장경로의 확장자»와 «원본 파일명의 확장자»가 서로 같아야 통과한다.
+//   → 확장자는 원본에서 그대로 떼어 소문자로 붙인다.
+function attachSafeName(name, idx) {
+  const ext = attachExtOf(name);
+  let base = String(name || "");
+  if (ext) base = base.slice(0, base.length - ext.length - 1);
+  base = base.replace(/[^A-Za-z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^[._-]+/, "");
+  base = base.slice(0, 60);
+  if (!base) base = "file";
+  return String(idx + 1) + "_" + base + (ext ? "." + ext : "");
+}
+
+// 서버에 첨부 규약이 준비돼 있는지 «조용히» 확인한다.
+//   빈 통행증으로 판정 함수를 부른다 → 있으면 false 를 돌려주고, 없으면 PGRST202.
+//   ⚠ 시도 횟수를 세는 함수가 아니므로(되찾기와 다르다) 프로브해도 안전하다.
+async function attachProbe() {
+  if (attachAvail !== "unknown") return attachAvail;
+  const sb = cloudClient();
+  if (!sb || !sb.rpc) return attachAvail;
+  try {
+    const res = await sb.rpc("is_open_attach_ticket", { p_ticket: "" });
+    if (res.error) throw res.error;
+    attachAvail = "ok";
+  } catch (e) {
+    const missing = window.SangjuApply && SangjuApply.isMissingFunction
+      ? SangjuApply.isMissingFunction(e) : false;
+    if (missing) {
+      attachAvail = "unavailable";
+      console.debug("[첨부] 서버에 첨부 규약이 아직 없어 첨부 칸을 감춥니다.");
+    } else {
+      console.debug("[첨부] 지금은 확인할 수 없습니다(다음에 다시 확인).");
+    }
+  }
+  paintAttachWrap();
+  return attachAvail;
+}
+
+// 첨부 칸 노출 — «없다»고 서버가 확인해 준 경우에만 감춘다(모를 때는 보여 준다).
+//   모를 때 보여 주는 이유: 제출 시점에 다시 확인해서, 그때도 없으면 첨부만 조용히
+//   건너뛰고 신청은 정상 진행하기 때문이다(시민이 잃는 것이 없다).
+function paintAttachWrap() {
+  const w = $("applyAttachWrap");
+  if (w) w.hidden = attachAvail === "unavailable";
+}
+
+function renderAttachList() {
+  const box = $("applyFileList");
+  if (!box) return;
+  if (!attachFiles.length) { box.innerHTML = ""; return; }
+  box.innerHTML = attachFiles.map((f, i) =>
+    `<li><span class="file-name">${esc(f.name)}</span>` +
+    `<span class="file-size">${esc(attachFmtSize(f.size))}</span>` +
+    `<button class="file-del" type="button" data-i="${i}" ` +
+    `aria-label="${esc(f.name)} 빼기">빼기</button></li>`).join("");
+  box.querySelectorAll(".file-del").forEach((b) => {
+    b.addEventListener("click", () => {
+      const i = parseInt(b.dataset.i, 10);
+      attachFiles.splice(i, 1);
+      renderAttachList();
+      setAttachErr("");
+      // 지운 버튼 위에 초점이 남지 않게 파일 선택칸으로 돌린다(초점 유실 방지 KWCAG)
+      const inp = $("applyFiles");
+      if (inp && inp.focus) { try { inp.focus(); } catch (e) { /* 무시 */ } }
+    });
+  });
+}
+
+// 파일 선택 — 개수·확장자·용량을 «여기서» 걸러 낸다(서버도 다시 검사하지만,
+// 시민이 올린 뒤에 거절당하는 것보다 고르는 그 자리에서 알려 주는 편이 낫다).
+function onAttachPick(e) {
+  const picked = Array.prototype.slice.call((e.target && e.target.files) || []);
+  const bad = [];
+  picked.forEach((f) => {
+    if (attachFiles.length >= ATTACH_MAX) { bad.push(f.name + " (개수 초과)"); return; }
+    if (ATTACH_EXT.indexOf(attachExtOf(f.name)) < 0) { bad.push(f.name + " (형식)"); return; }
+    if (f.size > ATTACH_MAX_BYTES) { bad.push(f.name + " (용량)"); return; }
+    if (attachFiles.some((x) => x.name === f.name && x.size === f.size)) return;  // 같은 파일 중복
+    attachFiles.push(f);
+  });
+  e.target.value = "";     // 같은 파일을 다시 고를 수 있게 비운다
+  renderAttachList();
+  setAttachErr(bad.length
+    ? "붙이지 못한 파일이 있습니다 — " + bad.join(", ") +
+      ". 최대 " + ATTACH_MAX + "개, 한 개당 10MB, 정해진 형식만 됩니다."
+    : "");
+}
+
+// 통행증 — 조회코드와 «같은 알파벳»(혼동 글자 제외 대문자+숫자) 26자 = 130비트.
+//   서버 검사식이 '^[A-Z0-9]{20,40}$' 이므로 genLookupCode(26) 이 그대로 맞는다.
+function makeAttachTicket() {
+  if (!(window.SangjuApply && SangjuApply.genLookupCode)) return "";
+  try { return SangjuApply.genLookupCode(26); } catch (e) { return ""; }
+}
+
+/* 접수가 끝난 «뒤»에 파일을 올린다. 반환: {ok, fail}
+   ⚠ 여기서 실패해도 «신청 자체»는 이미 접수됐다 — 절대 접수를 되돌리지 않는다.
+      대신 완료 화면에 결과를 정직하게 적어, 시민이 다른 방법을 택할 수 있게 한다. */
+async function uploadAttachments(receiptNo, ticket) {
+  const out = { ok: 0, fail: 0 };
+  if (!attachFiles.length || !ticket || !receiptNo) return out;
+  const sb = cloudClient();
+  if (!sb || !sb.storage) { out.fail = attachFiles.length; return out; }
+  for (let i = 0; i < attachFiles.length; i++) {
+    const f = attachFiles[i];
+    const path = ticket + "/" + attachSafeName(f.name, i);
+    try {
+      // upsert:false — 기존 파일 덮어쓰기 금지(서버에도 UPDATE 정책이 없다·이중 방어)
+      const up = await sb.storage.from(ATTACH_BUCKET).upload(path, f, { upsert: false });
+      if (up.error) throw up.error;
+      // 목록 등록 — 실패해도 «예외»가 아니라 0 을 돌려준다(존재 오라클 차단 설계).
+      const reg = await sb.rpc("attach_application_file", {
+        p_receipt_no: receiptNo,
+        p_ticket: ticket,
+        p_file_name: f.name,          // 🔒 «원본» 한글 파일명 그대로(서버가 정화한다)
+        p_storage_path: path,
+        p_size: f.size,
+        p_content_type: f.type || null,
+      });
+      if (reg.error) throw reg.error;
+      if (!reg.data) throw new Error("등록 거부");
+      out.ok++;
+    } catch (e) {
+      out.fail++;
+      console.warn("[첨부] 올리지 못한 파일:", f.name, e);
+    }
+  }
+  // 일을 마쳤으면 문을 닫는다 — 남은 시간은 순전히 공격 표면이다.
+  //   ⚠ 실패는 «무시»한다(접수도 첨부도 이미 끝났고, 30분이면 저절로 닫힌다).
+  try { await sb.rpc("close_attach_ticket", { p_receipt_no: receiptNo, p_ticket: ticket }); }
+  catch (e) { /* 무시 */ }
+  return out;
+}
+
 // ---------- 신청 (이메일 생성) ----------
 function openApply(idx) {
   currentIdx = idx;
@@ -1247,6 +1499,13 @@ function openApply(idx) {
   $("applyMemo").value = "";
   // ⚖ 동의는 «신청할 때마다» 새로 받는다(이전 신청의 체크가 남아 있으면 안 된다).
   $("applyConsent").checked = false;
+  // 📎 첨부도 «신청할 때마다» 비운다 — 앞 신청에 붙였던 파일이 딸려 가면 안 된다.
+  attachFiles = [];
+  if ($("applyFiles")) $("applyFiles").value = "";
+  renderAttachList();
+  setAttachErr("");
+  paintAttachWrap();
+  attachProbe();                // 서버 준비 여부를 «조용히» 확인(실패해도 무해)
   clearApplyErrors();
   showView("apply");
 }
@@ -1268,12 +1527,59 @@ function clearApplyErrors() {
   setFieldError("applyName", "applyNameErr", "");
   setFieldError("applyPhone", "applyPhoneErr", "");
   setFieldError("applyConsent", "applyConsentErr", "");
+  setFormError("applyFormErr", "");
+}
+
+// 폼 «전체»에 걸린 안내(접수 실패·설정 미완료 등). 예전에는 alert() 였다 —
+// 화면을 가로막지 않고, 낭독기에는 role="alert" 로 그 자리에서 읽힌다.
+function setFormError(id, msg) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = msg || "";
+  el.hidden = !msg;
+  if (msg && el.scrollIntoView) {
+    try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* 무시 */ }
+  }
+}
+
+// ── 연락처 자동 하이픈 (2026-08-19) ──────────────────────────────────────
+//  보이는 값만 010-1234-5678 로 다듬는다.
+//  ⛔ 서버·메일로는 «숫자만» 보낸다(sendApply 참조) — PC 자동접수.py·접수대장·
+//     확인번호 되찾기가 모두 숫자 기준이라, 형식을 바꾸면 그 셋이 함께 깨진다.
+function fmtPhone(digits) {
+  const d = String(digits || "").replace(/[^0-9]/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return d.slice(0, 3) + "-" + d.slice(3);
+  if (d.length <= 10) return d.slice(0, 3) + "-" + d.slice(3, 6) + "-" + d.slice(6);
+  return d.slice(0, 3) + "-" + d.slice(3, 7) + "-" + d.slice(7);
+}
+
+// 입력 중 커서가 튀지 않게 — «커서 앞의 숫자 개수»를 세어 두고, 다시 그린 뒤
+// 같은 숫자 개수 뒤로 커서를 돌려놓는다(하이픈이 늘거나 줄어도 자리를 지킨다).
+function onPhoneInput(e) {
+  const el = e.target;
+  const caret = el.selectionStart == null ? el.value.length : el.selectionStart;
+  const before = el.value.slice(0, caret).replace(/[^0-9]/g, "").length;
+  const out = fmtPhone(el.value);
+  if (out !== el.value) {
+    el.value = out;
+    let pos = 0, cnt = 0;
+    while (pos < out.length && cnt < before) {
+      if (out.charCodeAt(pos) >= 48 && out.charCodeAt(pos) <= 57) cnt++;
+      pos++;
+    }
+    try { el.setSelectionRange(pos, pos); } catch (err) { /* 일부 브라우저는 tel 에서 미지원 */ }
+  }
+  setFieldError("applyPhone", "applyPhoneErr", "");   // 고치는 즉시 오류 표시 해제
 }
 
 async function sendApply() {
   const p = DATA.programs[currentIdx];
   const name = $("applyName").value.trim();
-  const phone = $("applyPhone").value.trim();
+  // 📞 화면에는 하이픈이 있지만(010-1234-5678), 여기서부터는 «숫자만» 쓴다.
+  //    ⛔ 하이픈이 붙은 값을 보내지 말 것 — PC 자동접수.py·엑셀 접수대장·
+  //       확인번호 되찾기(연락처 뒷 4자리)가 모두 숫자 기준으로 맞춰져 있다.
+  const phone = $("applyPhone").value.replace(/[^0-9]/g, "");
   const memo = $("applyMemo").value.trim();
 
   // 검증 — 위에서부터 순서대로 확인하고, «첫 번째» 오류 칸으로 초점을 옮긴다.
@@ -1287,7 +1593,7 @@ async function sendApply() {
     setFieldError("applyPhone", "applyPhoneErr", "연락처를 입력해 주세요.");
     firstBad = firstBad || "applyPhone";
   } else if (phone.length < 10) {
-    setFieldError("applyPhone", "applyPhoneErr", "연락처를 다시 확인해 주세요. (- 없이 숫자 10~11자리)");
+    setFieldError("applyPhone", "applyPhoneErr", "연락처를 다시 확인해 주세요. (숫자 10~11자리)");
     firstBad = firstBad || "applyPhone";
   }
   // ⚖ 개인정보 수집·이용 동의(필수) — 미동의면 «수집 자체»를 하지 않는다.
@@ -1304,7 +1610,8 @@ async function sendApply() {
   }
   const key = window.WEB3FORMS_KEY || "";
   if (!key || key.indexOf("여기에") !== -1) {
-    alert("신청 접수 설정이 아직 완료되지 않았습니다.\n관리자에게 문의해 주세요.");
+    setFormError("applyFormErr",
+      "신청 접수 설정이 아직 완료되지 않았습니다. 담당 부서로 연락해 주세요. (" + SUPPORT_EMAIL + ")");
     return;
   }
 
@@ -1348,10 +1655,19 @@ async function sendApply() {
     } catch (e) {
       btn.disabled = false;
       btn.textContent = orig;
-      alert((e && e.message) ||
+      setFormError("applyFormErr", (e && e.message) ||
         "이 브라우저에서는 안전한 확인 번호를 만들 수 없어 신청을 진행할 수 없습니다.");
       return;
     }
+  }
+
+  // 📎 첨부 통행증 — «첨부할 파일이 있고, 서버에 첨부 규약이 있을 때만» 만든다.
+  //    ⛔ 서버에 컬럼이 없는데 attach_ticket 을 보내면 신청 INSERT 자체가 실패한다.
+  //       그래서 여기서 한 번 더 확인한다(화면을 연 뒤에 준비됐을 수도 있으므로).
+  let attachTicket = "";
+  if (attachFiles.length) {
+    try { await attachProbe(); } catch (e) { /* 무시 */ }
+    if (attachAvail === "ok") attachTicket = makeAttachTicket();
   }
 
   // ── 두 경로를 «독립» 실행 ──────────────────────────────────────────────
@@ -1365,7 +1681,7 @@ async function sendApply() {
   // (1) Supabase 직접 저장 — 개인정보(이름·연락처)가 클라우드로 전송됨(프로토타입·승인됨).
   if (window.SangjuApply && SangjuApply.submitApplication) {
     try {
-      const row = await SangjuApply.submitApplication({
+      const insertRow = {
         receipt_no:     receiptNo,
         benefit_name:   p.사업명,
         benefit_key:    SangjuApply.benefitKey(p),
@@ -1377,7 +1693,15 @@ async function sendApply() {
         source:         "모바일",
         lookup_code:    lookupCode || null,   // 빈 문자열이면 null 로 — 서버 정책이 '없거나 8~32자'만 받는다
         // status·admin_memo·citizen_reply·created_at 은 보내지 않음(서버 기본 '접수'/트리거)
-      });
+      };
+      // 📎 첨부 통행증 — «값이 있을 때만» 키를 «넣는다».
+      //    ⛔⛔ null 이라도 키를 넣지 말 것. PostgREST 는 «표에 없는 컬럼»이면
+      //       값이 null 이어도 PGRST204 로 INSERT 전체를 거부한다.
+      //       신청첨부.sql 을 아직 실행하지 않은 서버에서는 attach_ticket 컬럼이
+      //       없으므로, 키를 늘 넣으면 «첨부와 무관한 모든 신청»이 저장되지 않는다.
+      //    ⛔ attach_count 는 «절대» 보내지 않는다 — 서버만 올린다(정책이 0 을 강제).
+      if (attachTicket) insertRow.attach_ticket = attachTicket;
+      const row = await SangjuApply.submitApplication(insertRow);
       // ✅ 저장 성공 판정 = «throw 없이 끝났는가». «서버가 행을 돌려줬는가»가 아니다.
       //    submitApplication 은 개인정보 테이블에 RETURNING(.select()) 을 쓰지 않으므로
       //    (그러면 익명에게 SELECT 권한이 없어 저장 자체가 거부된다 — apply_client.js 주석 참조)
@@ -1423,6 +1747,23 @@ async function sendApply() {
     console.warn("[신청] 메일 전송 실패:", e);
   }
 
+  // 📎 (3) 첨부 업로드 — «접수가 성공한 뒤»에만. 통행증은 그 접수 행에만 열린다.
+  //    메일로만 접수된 경우(supaOK=false)에는 통행증을 검사할 행이 없어 올릴 수 없다.
+  let attachMsg = "";
+  if (attachFiles.length) {
+    if (supaOK && attachTicket) {
+      btn.textContent = "서류 올리는 중...";
+      btn.disabled = true;
+      const r = await uploadAttachments(savedReceipt, attachTicket);
+      if (r.ok && !r.fail) attachMsg = `증빙서류 ${r.ok}개를 함께 보냈습니다.`;
+      else if (r.ok && r.fail) attachMsg = `증빙서류 ${r.ok}개를 보냈고, ${r.fail}개는 보내지 못했습니다. 담당 부서로 연락해 주세요.`;
+      else attachMsg = "증빙서류는 보내지 못했습니다. 신청은 접수되었으니 담당 부서로 연락해 주세요.";
+      btn.disabled = false;
+    } else {
+      attachMsg = "증빙서류는 보내지 못했습니다. 신청은 접수되었으니 담당 부서로 연락해 주세요.";
+    }
+  }
+
   btn.disabled = false;
   btn.textContent = orig;
 
@@ -1434,10 +1775,14 @@ async function sendApply() {
 
   if (supaOK || mailOK) {
     // 접수번호·조회코드는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
-    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "");
+    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "", attachMsg);
+    attachFiles = [];             // 완료됐으니 비운다(뒤로 갔다 와도 딸려 가지 않게)
+    renderAttachList();
   } else {
     const detail = (supaErr && supaErr.message) || (mailErr && mailErr.message) || "";
-    alert("신청 접수에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + detail + ")");
+    setFormError("applyFormErr",
+      "신청 접수에 실패했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요." +
+      (detail ? " (" + detail + ")" : ""));
   }
 }
 
@@ -1452,19 +1797,25 @@ function openInquiry() {
   $("topTitle").textContent = "불편신고";
   $("inquiryMemo").value = "";
   $("inquiryContact").value = "";
+  setFormError("inquiryErr", "");
   showView("inquiry");
 }
 
 async function sendInquiry() {
   const memo = $("inquiryMemo").value.trim();
   const contact = $("inquiryContact").value.trim();
+  setFormError("inquiryErr", "");
   if (!memo) {
-    alert("어떤 점이 불편하셨는지 적어 주세요.");
+    // (2026-08-19) alert() → 화면 안 안내. 맞춤 찾기·신청 폼과 «같은 방식».
+    setFormError("inquiryErr", "어떤 점이 불편하셨는지 적어 주세요.");
+    const el = $("inquiryMemo");
+    if (el && el.focus) { try { el.focus(); } catch (err) { /* 무시 */ } }
     return;
   }
   const key = window.WEB3FORMS_KEY || "";
   if (!key || key.indexOf("여기에") !== -1) {
-    alert("보내기 설정이 아직 끝나지 않았습니다.\n담당자에게 알려 주세요.");
+    setFormError("inquiryErr",
+      "보내기 설정이 아직 끝나지 않았습니다. " + SUPPORT_EMAIL + " 로 알려 주세요.");
     return;
   }
   const payload = { type: "inquiry", 문의내용: memo, 연락처: contact, 전달주소: SUPPORT_EMAIL };
@@ -1498,6 +1849,8 @@ async function sendInquiry() {
     // 조회코드 상자·«내 신청 현황» 버튼도 함께 감춘다(문의는 조회 대상이 아님)
     setDoneCode("");
     if ($("doneStatus")) $("doneStatus").hidden = true;
+    // 직전 신청의 첨부 안내가 남지 않게 함께 감춘다
+    if ($("doneAttach")) { $("doneAttach").textContent = ""; $("doneAttach").hidden = true; }
     document.querySelector("#view-done h2").textContent = "알려 주셔서 감사합니다";
     document.querySelector("#view-done .done-desc").innerHTML =
       "담당자에게 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
@@ -1505,14 +1858,16 @@ async function sendInquiry() {
     state.fwdStack = [];
     showView("done", false);
   } catch (e) {
-    alert("전송에 실패했습니다.\n인터넷 연결을 확인하고 다시 시도해 주세요.\n\n(" + e.message + ")");
+    setFormError("inquiryErr",
+      "전송에 실패했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요." +
+      (e && e.message ? " (" + e.message + ")" : ""));
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
   }
 }
 
-function showDone(p, receiptNo, lookupCode) {
+function showDone(p, receiptNo, lookupCode, attachMsg) {
   $("topTitle").textContent = "접수 완료";
   // 문의 완료로 바뀌었던 문구를 신청 완료용으로 복원
   document.querySelector("#view-done h2").textContent = "신청이 접수되었습니다";
@@ -1525,6 +1880,13 @@ function showDone(p, receiptNo, lookupCode) {
     const no = (receiptNo || "").trim();
     if (no) { rc.textContent = "접수번호 " + no; rc.hidden = false; }
     else { rc.textContent = ""; rc.hidden = true; }
+  }
+  // 📎 첨부 결과 — 실패도 «숨기지 않고» 알린다(시민이 다른 방법을 택할 수 있어야 한다)
+  const at = $("doneAttach");
+  if (at) {
+    const m = (attachMsg || "").trim();
+    at.textContent = m;
+    at.hidden = !m;
   }
   // 🔑 조회코드 안내 — 저장이 성공했고, 서버에 조회 함수가 «없다고 확인되지 않았을 때» 보여 준다.
   //    (함수가 «없다»고 확인된 서버에서만 감춘다. «아직 모름»이면 보여 준다 —
@@ -1547,19 +1909,24 @@ function showDone(p, receiptNo, lookupCode) {
 //    → 이 화면은 신청할 때 만든 조회코드로 그 함수만 부른다.
 //  지키는 규칙
 //    ① 화면에 «이름·연락처»를 다시 뿌리지 않는다 — 서버 함수도 애초에 주지 않는다.
-//    ② 20초 폴링은 «이 화면이 눈에 보일 때만» 돈다(다른 화면·백그라운드에서는 아무 일도 하지 않는다).
-//    ③ ⏸ 정지 버튼을 둔다 — 스스로 바뀌는 화면은 멈출 수 있어야 한다(KWCAG 2.2 «정지 기능 제공»).
+//    ② ⭐ 2026-08-19 «자동 폴링을 없앴다». 조회는 «이 화면에 들어올 때»와
+//       «앱으로 돌아올 때(visibilitychange)» 각각 1회씩만 일어난다.
+//    ③ ⭐ 그래서 ⏸ 정지 버튼도 없앴다 — 화면이 «스스로» 바뀌지 않으므로
+//       KWCAG 2.2 «정지 기능 제공»의 대상 자체가 없다(움직이는 콘텐츠가 없다).
+//       ⛔ 폴링을 되살리려면 정지 버튼도 «함께» 되살려야 한다. 둘은 한 쌍이다.
+//       (시민에게는 「지금 새로고침」도 필요 없다 — 들어오면 늘 최신이다)
 //    ④ 실제로 달라졌을 때만 다시 그린다(초점·스크롤이 20초마다 튀지 않게).
 //    ⑤ 서버에 함수가 «없을 때만»(PGRST202) 진입점을 조용히 숨긴다.
 //       ⚠ 네트워크 오류로 숨기지 않는다 — 아래 «3값 프로브» 참조.
 //    ⑥ 🧹 이 기기에서 지우기 — 공용 기기에서 앞사람 코드가 남지 않게 스스로 지울 수 있어야 한다.
 //    ⑦ 보관 코드는 180일이 지나면 자동으로 사라진다(개인정보 처리방침에 적은 그대로).
 //
-//  ⭐ 폴링 구조 (2026-08-18 개편, 🩷 security-privacy 지적)
-//     · 코드마다 1회씩 8초 폴링 → 분당 최대 225회 = «코드 대입 공격»과 트래픽 모양이 같았다.
-//     · 이제 배열 함수 check_application_status_many 를 «먼저» 부르고(1회 왕복),
+//  ⭐ 호출 구조 (2026-08-18 개편, 🩷 security-privacy 지적 / 2026-08-19 폴링 폐지)
+//     · 예전: 코드마다 1회씩 8초 폴링 → 분당 최대 225회 = «코드 대입 공격»과 트래픽 모양이 같았다.
+//     · 배열 함수 check_application_status_many 를 «먼저» 부르고(1회 왕복),
 //       그 함수가 아직 서버에 없으면(PGRST202) 단건 함수로 «조용히» 폴백한다.
-//     · 주기는 8초 → 20초.
+//     · 2026-08-19: 주기 폴링을 아예 없앴다 → «화면 진입/복귀 시 1회»만 호출한다.
+//       트래픽이 «사람이 화면을 여는 횟수»와 같아져, 대입 공격과 확실히 구분된다.
 //
 //  ⭐ 3값 프로브 (2026-08-18, 🔴 reviewer 가 찾은 실제 버그의 수정)
 //     예전에는 앱을 켤 때 프로브를 «딱 한 번» 던져 실패하면 msAvailable=false 로 굳었다.
@@ -1575,12 +1942,12 @@ const LOOKUP_KEY = "sangju_lookup_codes";   // [{code, receipt_no, benefit_name,
 const LOOKUP_MAX = 30;                      // 기기에 보관할 최대 건수(오래된 것부터 버림)
 const LOOKUP_TTL_MS = 180 * 24 * 60 * 60 * 1000;   // 보관 코드 자동 만료 — 180일
 const LOOKUP_TOUCH_MS = 12 * 60 * 60 * 1000;       // «마지막 확인일» 갱신 주기(잦은 쓰기 방지)
-const MS_POLL_MS = 20000;                   // 폴링 주기 20초(예전 8초 — 위 ⭐ 참조)
+// ⛔ MS_POLL_MS(폴링 주기)는 2026-08-19 폐지됐다 — 되살리지 말 것(위 ⭐ 참조).
 
 let msAvail = "unknown";   // "unknown" | "ok" | "unavailable"  (위 ⭐ 3값 프로브)
 let msBatch = "unknown";   // 배열 호출 함수가 서버에 있는가: "unknown" | "yes" | "no"
-let msAuto = true;         // ⏸ 자동 새로고침 on/off
-let msTimer = null, msBusy = false;
+let msBusy = false;
+let msVisBound = false;    // visibilitychange 리스너를 한 번만 걸기 위한 표시
 let msRows = [], msSig = "", msErr = false, msLoaded = false;
 let msDeferred = false;    // 목록 안에 초점이 있어 «미뤄 둔» 갱신이 있는가
 let msFocusBound = false;
@@ -1732,34 +2099,101 @@ function msRenderList() {
   if (hasCodes && !msLoaded && !msErr && !msRows.length) { box.innerHTML = skeletonHtml(2); return; }
   if (msErr) {
     box.innerHTML = `<div class="ms-empty"><p>지금은 진행 상태를 불러오지 못했습니다.</p>
-      <p>인터넷 연결을 확인하신 뒤 «지금 새로고침»을 눌러 주세요.</p></div>`;
+      <p>인터넷 연결을 확인하신 뒤 이 화면을 다시 열어 주세요.</p></div>`;
     return;
   }
   if (!msRows.length) {
     box.innerHTML = hasCodes
       ? `<div class="ms-empty"><p>조회되는 신청 내역이 없습니다.</p>
-           <p>아래 칸에 확인 번호를 넣어 다시 확인해 보세요.</p></div>`
+           <p>아래 「확인 번호로 내 신청 찾기」에서 번호를 넣어 다시 확인해 보세요.</p></div>`
       : `<div class="ms-empty"><p>이 휴대폰에 저장된 신청 내역이 없습니다.</p>
            <p>신청을 마치면 이 화면에서 진행 상태를 보실 수 있습니다.<br>
-              다른 기기에서 신청하셨다면 아래에 확인 번호를 넣어 주세요.</p></div>`;
+              다른 기기에서 신청하셨다면 아래 「확인 번호로 내 신청 찾기」를 눌러 주세요.</p></div>`;
     return;
   }
-  box.innerHTML = msRows.map((r) => {
+  box.innerHTML = msRows.map((r, i) => {
     const st = (r.status || "접수").trim();
     const reply = (r.citizen_reply || "").trim();
+    const nm = (r.benefit_name || "").trim();
+    // 🔎 이 신청이 «어떤 사업»이었는지 다시 볼 수 있게 — 사업명으로 목록에서 찾는다.
+    //    찾으면 기존 상세 화면으로 가고, 못 찾으면(폐지·이름 변경) 카드 안에서
+    //    «왜 못 보는지»만 펼친다. 어느 쪽이든 이 화면이 깨지지 않는다.
+    const idx = findProgramIdxByName(nm);
+    const titleTxt = esc(nm || "(사업명 없음)");
+    const titleHtml = `<button class="ms-open" type="button" data-i="${i}">${titleTxt}` +
+      `<span class="ms-open-go" aria-hidden="true">${idx >= 0 ? "사업 내용 보기 ›" : "자세히 ›"}</span></button>`;
     return `<div class="ms-card">
       <div class="ms-card-top">
         <span class="ms-badge ast-${esc(st)}">${esc(st)}</span>
         ${r.receipt_no ? `<span class="ms-rc"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7.6z"/><path d="M13.4 3v4.6H18"/><path d="M9.4 14.2l1.9 1.9 3.4-3.6"/></svg> ${esc(r.receipt_no)}</span>` : ""}
       </div>
-      <div class="ms-card-title">${esc(r.benefit_name || "(사업명 없음)")}</div>
+      <div class="ms-card-title">${titleHtml}</div>
       <div class="ms-card-meta"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 신청 ${esc(msFmtDateTime(r.created_at))}${
         r.updated_at && r.updated_at !== r.created_at
           ? ` · 갱신 ${esc(msFmtDateTime(r.updated_at))}` : ""}</div>
       ${reply ? `<div class="ms-reply"><p class="ms-reply-k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg> 담당 부서 안내</p>
                    <p class="ms-reply-v">${linkifyHtml(reply)}</p></div>` : ""}
+      <div class="ms-note" hidden></div>
     </div>`;
   }).join("");
+  box.querySelectorAll(".ms-open").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const r = msRows[parseInt(btn.dataset.i, 10)];
+      if (!r) return;
+      const idx = findProgramIdxByName(r.benefit_name);
+      if (idx >= 0) { openDetail(idx); return; }
+      // 폴백 — 화면을 옮기지 않고 카드 안에서 알린다(막다른 길을 만들지 않는다).
+      const card = btn.closest(".ms-card");
+      const note = card ? card.querySelector(".ms-note") : null;
+      if (!note) return;
+      const open = note.hidden;
+      note.hidden = !open;
+      if (open) {
+        note.textContent = "이 사업은 지금 목록에 없어 상세 내용을 보여 드릴 수 없습니다"
+          + "(접수가 끝났거나 이름이 바뀐 경우입니다). 진행 상태와 담당 부서 안내는 위에 그대로 있습니다.";
+      }
+    });
+  });
+}
+
+// 사업명으로 DATA.programs 에서 찾기 — 공백 차이는 무시한다(엑셀↔클라우드 표기 흔들림 대비).
+// 못 찾으면 -1. DATA 가 아직 없을 수도 있으므로(로딩 중) 방어한다.
+function findProgramIdxByName(name) {
+  const key = _normName(name);
+  if (!key || !DATA || !Array.isArray(DATA.programs)) return -1;
+  for (let i = 0; i < DATA.programs.length; i++) {
+    if (_normName(DATA.programs[i].사업명) === key) return i;
+  }
+  return -1;
+}
+
+/* ── 내 신청 화면의 두 갈래: 「신청한 사업」 / 「낸 제안」 ──────────────────
+   왜 나누는가: 성격이 다른 두 가지를 한 목록에 섞으면 «무엇의 상태인지»가 흐려진다.
+   ⚠ 화면(view)을 나누지 않고 «한 화면 안의 갈래»로 둔 이유 — 뒤로가기 기록에
+     갈래 전환이 쌓이면 시민이 뒤로가기를 여러 번 눌러야 목록을 빠져나가게 된다. */
+let msTab = "apply";
+function msSetTab(which) {
+  msTab = which === "proposal" ? "proposal" : "apply";
+  const a = $("msPanelApply"), b = $("msPanelProposal");
+  const ta = $("msTabApply"), tb = $("msTabProposal");
+  if (a) a.hidden = msTab !== "apply";
+  if (b) b.hidden = msTab !== "proposal";
+  if (ta) { ta.classList.toggle("is-on", msTab === "apply"); ta.setAttribute("aria-pressed", msTab === "apply" ? "true" : "false"); }
+  if (tb) { tb.classList.toggle("is-on", msTab === "proposal"); tb.setAttribute("aria-pressed", msTab === "proposal" ? "true" : "false"); }
+  if (msTab === "proposal") msLoadMyProposals();
+}
+
+// 내가 낸 정책제안 — proposals.js 가 기기에 남긴 제안 번호로 조회해 그린다.
+//   ⚠ 서버 미준비·조회 실패는 «조용히 없음»으로 처리한다(기존 방어 원칙).
+async function msLoadMyProposals() {
+  const box = $("mpList");
+  if (!box) return;
+  if (!(window.Proposals && window.Proposals.renderMine)) {
+    box.innerHTML = `<div class="ms-empty"><p>지금은 제안 목록을 볼 수 없습니다.</p></div>`;
+    return;
+  }
+  try { await window.Proposals.renderMine("mpList"); }
+  catch (e) { box.innerHTML = `<div class="ms-empty"><p>지금은 제안 목록을 볼 수 없습니다.</p></div>`; }
 }
 
 // 낭독은 «실제로 달라졌을 때만» — 20초마다 같은 말을 읽지 않게 한다.
@@ -1818,24 +2252,21 @@ async function msLoad(force) {
   }
 }
 
-// 20초 폴링 — «이 화면이 보일 때만». 다른 화면·백그라운드에서는 아무 일도 하지 않는다.
-function msTick() {
-  msFlushDeferred();            // 미뤄 둔 갱신이 있으면 먼저 반영
-  if (!msAuto || msBusy) return;
-  if (document.hidden) return;
-  if (_currentView() !== "mystatus") return;
-  msLoad(false);
-}
+/* ⛔ 폴링(msTick)과 ⏸ 정지 버튼(msPaintAutoBtn)은 2026-08-19 함께 삭제됐다.
+      이제 조회는 openMyStatus() 진입 시 1회 + 앱으로 돌아올 때 1회뿐이다.
+      되살리려면 «둘 다» 되살릴 것 — 스스로 바뀌는 화면에는 정지 수단이 있어야 한다
+      (KWCAG 2.2 «정지 기능 제공»). 한쪽만 되살리면 지침 위반이 된다. */
 
-function msPaintAutoBtn() {
-  const b = $("msAutoBtn");
-  if (!b) return;
-  b.innerHTML = msAuto
-    ? '<span aria-hidden="true">⏸</span> 자동 새로고침 멈추기'
-    : '<span aria-hidden="true">▶</span> 자동 새로고침 켜기';
-  b.setAttribute("aria-label", msAuto
-    ? "자동 새로고침 멈추기 — 지금은 20초마다 진행 상태가 저절로 갱신됩니다."
-    : "자동 새로고침 켜기 — 지금은 진행 상태가 저절로 갱신되지 않습니다.");
+// 앱으로 돌아온 «그 순간» 한 번 따라잡는다. 화면이 가려진 동안은 아무 일도 하지 않는다.
+function msBindVisibility() {
+  if (msVisBound) return;
+  msVisBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    if (_currentView() !== "mystatus") return;
+    msFlushDeferred();
+    try { msLoad(false); } catch (e) { /* 무시 */ }
+  });
 }
 
 // 🧹 이 기기에서 지우기 — 공용 기기(주민센터·도서관 PC, 가족 태블릿)에서
@@ -1860,19 +2291,13 @@ function msClearDevice() {
 }
 
 function openMyStatus() {
-  $("topTitle").textContent = "내 신청 현황";
+  $("topTitle").textContent = "내 신청";
+  msSetTab("apply");            // 들어오면 언제나 «신청한 사업»부터
   msRenderList();               // 있던 내용을 먼저 그려 빈 화면을 보이지 않게
   showView("mystatus");
-  msPaintAutoBtn();
-  // 🔑 되찾기 창구는 «들어올 때마다 접힌 채»로 시작한다.
-  //   ① 보조 링크라는 성격을 유지하고(펼쳐진 채 남으면 상시 통로처럼 보인다)
-  //   ② 공용 기기에서 앞사람이 넣은 이름·되찾은 코드가 화면에 남지 않게 한다.
-  //   ⚠ msRecoverWrap 의 hidden 은 건드리지 않는다 — 서버에 함수가 없어 숨긴 상태를 되살리면 안 된다.
-  if (msRecOpen) msRecToggle();
-  else msRecReset();
   // 앱을 켤 때 프로브가 «네트워크 때문에» 실패했을 수 있다 → 들어온 김에 다시 확인한다.
   if (msAvail !== "ok") { try { msProbe(); } catch (e) { /* 무시 */ } }
-  msLoad(true);                 // 들어온 «그 순간» 한 번 확인(20초를 기다리지 않는다)
+  msLoad(true);                 // 들어온 «그 순간» 한 번 확인
   // 목록 안에서 초점이 빠져나가면 미뤄 둔 갱신을 즉시 반영한다(리스너는 한 번만 건다).
   if (!msFocusBound) {
     const box = $("msList");
@@ -1881,13 +2306,23 @@ function openMyStatus() {
       msFocusBound = true;
     }
   }
-  if (!msTimer) {
-    msTimer = setInterval(msTick, MS_POLL_MS);
-    // 화면이 가려져 있는 동안은 건너뛰므로, 다시 앞으로 나온 «그 순간» 한 번 따라잡는다.
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) { try { msTick(); } catch (e) { /* 무시 */ } }
-    });
-  }
+  msBindVisibility();
+}
+
+// 「확인 번호로 내 신청 찾기」 — 내 신청 화면에서 떼어 낸 별도 화면(2026-08-19).
+//  ⚠ 되찾기(이름+연락처 뒷4자리) 창구는 «들어올 때마다 접힌 채»로 시작한다.
+//    ① 보조 창구라는 성격을 유지하고(펼쳐진 채 남으면 상시 통로처럼 보인다)
+//    ② 공용 기기에서 앞사람이 넣은 이름·되찾은 코드가 화면에 남지 않게 한다.
+//    ⛔ 이 규칙을 없애지 말 것 — 설계 근거는 supabase/조회코드_되찾기.sql 머리말.
+//    ⚠ msRecoverWrap 의 hidden 은 건드리지 않는다 — 서버에 함수가 없어 숨긴 상태를 되살리면 안 된다.
+function openMsCode() {
+  $("topTitle").textContent = "확인 번호로 찾기";
+  const codeEl = $("msCode");
+  if (codeEl) codeEl.value = "";
+  setFieldError("msCode", "msCodeErr", "");
+  if (msRecOpen) msRecToggle();
+  else msRecReset();
+  showView("mscode");
 }
 
 // 홈의 «내 신청 현황» 진입점 노출.
@@ -1958,11 +2393,10 @@ async function initMyStatus() {
 
 // 조회코드 직접 입력 — 기기를 바꾼 분을 위한 통로.
 async function msLookupByCode() {
-  const codeEl = $("msCode"), rcEl = $("msReceipt");
+  const codeEl = $("msCode");
   if (!codeEl) return;
   // 코드는 대문자·숫자만 쓴다 → 공백·하이픈을 지우고 대문자로 맞춘다(적어 둔 것을 그대로 넣어도 되게).
   const code = (codeEl.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const rc = (rcEl ? rcEl.value : "").trim();
   setFieldError("msCode", "msCodeErr", "");
   if (code.length < 8) {
     setFieldError("msCode", "msCodeErr", "확인 번호를 다시 확인해 주세요. (영문 대문자·숫자 10자리)");
@@ -1983,15 +2417,13 @@ async function msLookupByCode() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = orig; }
   }
-  // ⚠ 접수번호는 «2차 비밀번호»가 아니다 — 서버는 조회코드만 본다.
-  //   여기서 하는 일은 이미 받아 온 결과에서 «보고 싶은 건만 골라 주는» 것뿐이므로,
-  //   오류 문구도 두 값을 대조한 것처럼 읽히지 않게 쓴다(2026-08-18 🩷 지적).
-  let matched = rows || [];
-  if (rc) matched = matched.filter((r) => String(r.receipt_no || "").trim() === rc);
+  // ⛔ 「접수번호(선택)」로 결과를 걸러 내던 분기는 2026-08-19 삭제됐다.
+  //    서버는 «조회코드»만 본다 — 접수번호는 2차 비밀번호가 아니었고, 이미 받아 온
+  //    결과를 화면에서 한 번 더 걸러 주는 일에 지나지 않았다. 그런데 칸이 있다는
+  //    사실만으로 「둘 다 맞아야 한다」고 읽혀, 없는 번호를 찾아 헤매게 만들었다.
+  const matched = rows || [];
   if (!matched.length) {
-    setFieldError("msCode", "msCodeErr", rc
-      ? "이 확인 번호로 찾은 신청 중에 그 접수번호와 같은 건이 없습니다. 접수번호를 지우고 다시 찾으시면 이 번호의 신청을 모두 보실 수 있습니다."
-      : "찾은 신청이 없습니다. 확인 번호를 다시 확인해 주세요.");
+    setFieldError("msCode", "msCodeErr", "찾은 신청이 없습니다. 확인 번호를 다시 확인해 주세요.");
     codeEl.focus();
     return;
   }
@@ -2003,11 +2435,12 @@ async function msLookupByCode() {
     at: new Date().toISOString(),
   });
   codeEl.value = "";
-  if (rcEl) rcEl.value = "";
   msPaintEntry();               // 이제 이 기기에도 코드가 있으므로 홈 진입점을 다시 판단
+  // 찾았으면 «목록 화면»으로 데려간다 — 결과가 다른 화면에 생기므로 그냥 두면
+  // 시민이 «어디서 봐야 하나»를 스스로 찾아야 한다(초점·맥락 유실 방지 KWCAG).
+  openMyStatus();
   await msLoad(true);
   msAnnounce(`신청 ${matched.length}건을 찾았습니다. 목록에 추가했습니다.`);
-  focusMain();
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -2357,10 +2790,20 @@ function bindEvents() {
   // IME 조합 확정(스페이스·엔터·다른 키) 직후에도 마지막 글자가 확실히 반영되도록 한 번 더 예약.
   $("listSearch").addEventListener("compositionend", renderListDebounced);
   $("recommendRun").addEventListener("click", runRecommend);
-  // 연락처는 '-' 없이 숫자만 입력
-  $("applyPhone").addEventListener("input", (e) => {
-    e.target.value = e.target.value.replace(/[^0-9]/g, "");
-    setFieldError("applyPhone", "applyPhoneErr", "");   // 고치는 즉시 오류 표시 해제
+  // 고르는 즉시 안내문을 지운다(고쳤는데 빨간 글씨가 남지 않게)
+  $("ageInput").addEventListener("input", () => setRecommendErr(""));
+  $("situationList").addEventListener("change", () => setRecommendErr(""));
+  // 📞 연락처 — 입력하는 동안 010-1234-5678 모양으로 자동으로 맞춘다(커서 유지).
+  //    ⛔ 서버로는 여전히 «숫자만» 나간다(sendApply 참조).
+  $("applyPhone").addEventListener("input", onPhoneInput);
+  // 📎 파일 첨부 선택
+  const applyFilesEl = $("applyFiles");
+  if (applyFilesEl) applyFilesEl.addEventListener("change", onAttachPick);
+  // 목록 정렬(기본순/최신순)
+  const listSortEl = $("listSort");
+  if (listSortEl) listSortEl.addEventListener("change", (e) => {
+    listSort = e.target.value === "new" ? "new" : "default";
+    renderList();
   });
   // 제출은 form 의 submit 으로 받는다 — 버튼 클릭·Enter·휴대폰 자판 «완료» 모두 동작.
   // (버튼이 type="submit" 이라 click 리스너를 따로 달면 두 번 실행된다)
@@ -2415,18 +2858,18 @@ function bindEvents() {
   if (doneStatusBtn) doneStatusBtn.addEventListener("click", openMyStatus);
   const doneCodeCopy = $("doneCodeCopy");
   if (doneCodeCopy) doneCodeCopy.addEventListener("click", copyLookupCode);
-  const msRefreshBtn = $("msRefresh");
-  if (msRefreshBtn) msRefreshBtn.addEventListener("click", () => msLoad(true));
   const msClearBtn = $("msClear");
   if (msClearBtn) msClearBtn.addEventListener("click", msClearDevice);
-  const msAutoBtn = $("msAutoBtn");
-  if (msAutoBtn) msAutoBtn.addEventListener("click", () => {
-    msAuto = !msAuto;
-    msPaintAutoBtn();
-    msAnnounce(msAuto ? "자동 새로고침을 켰습니다. 20초마다 진행 상태가 갱신됩니다."
-                      : "자동 새로고침을 멈췄습니다. 새로고침을 누를 때만 갱신됩니다.");
-    if (msAuto) msTick();
-  });
+  // ⛔ #msRefresh(지금 새로고침)·#msAutoBtn(자동 새로고침 멈추기) 바인딩은
+  //    2026-08-19 폴링 폐지와 함께 삭제됐다(위 «폴링 구조» 주석 참조).
+  // 「신청한 사업 / 낸 제안」 갈래
+  const msTabA = $("msTabApply");
+  if (msTabA) msTabA.addEventListener("click", () => msSetTab("apply"));
+  const msTabP = $("msTabProposal");
+  if (msTabP) msTabP.addEventListener("click", () => msSetTab("proposal"));
+  // 「확인 번호로 내 신청 찾기」 — 별도 화면으로 이동
+  const msCodeEntryBtn = $("msCodeEntry");
+  if (msCodeEntryBtn) msCodeEntryBtn.addEventListener("click", openMsCode);
   const msForm = $("msForm");
   if (msForm) msForm.addEventListener("submit", (e) => { e.preventDefault(); msLookupByCode(); });
   const msCodeEl = $("msCode");

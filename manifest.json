@@ -4,27 +4,29 @@
   "short_name": "상주정책(시민용)",
   "description": "상주시 지원사업을 쉽게 찾고 신청하는 시민용 앱",
   "lang": "ko",
+  "dir": "ltr",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
   "theme_color": "#B84A1C",
   "background_color": "#FDF4EC",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "icon-192-v2.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "icon-512-v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "icon-maskable-512-v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
