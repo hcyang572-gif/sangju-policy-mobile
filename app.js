@@ -56,15 +56,35 @@ const SUPPORT_EMAIL = "hcyang572@korea.kr";
 
 const HOME_TITLE = "상주시 정책플랫폼";
 
+// 화면 전환 슬라이드의 «방향». 규격서 14절 — 앞으로 = 왼쪽으로 밀림, 뒤로 = 오른쪽으로.
+//   히스토리(navStack/popstate)와 어긋나면 «어디로 가는지»를 잘못 알려 주게 되므로,
+//   방향을 정하는 곳은 여기 한 곳뿐이다: 뒤로 갈 때만 _navBackOne() 이 "back" 으로 바꾼다.
+//   showView() 가 한 번 쓰고 곧바로 "fwd" 로 되돌리므로 다음 이동에 새지 않는다.
+//   ※ 움직임 자체는 CSS(.view / #app.nav-back .view)가 그리고,
+//     prefers-reduced-motion:reduce 에서는 CSS 가 통째로 끈다.
+let _navDir = "fwd";
+
 // 내비 스택 항목은 {v: 화면이름, t: 제목}. 뒤로/이후 시 제목까지 복원한다.
 function showView(name, push = true) {
+  // ⚠ «보던 자리»는 화면을 갈아끼우기 «전»에 읽어야 한다.
+  //    먼저 갈아끼우면 새 화면이 짧을 때 문서 높이가 줄면서 브라우저가 스크롤을
+  //    0 으로 깎아 버려, 0 이 기록되고 뒤로 왔을 때 맨 위로 튄다(실제로 겪음).
+  const _leftY = window.scrollY || window.pageYOffset || 0;
+  // 슬라이드 방향을 «화면을 갈아끼우기 전»에 정한다(그래야 새 화면의 첫 프레임부터 맞다).
+  const _appEl = $("app");
+  if (_appEl) _appEl.classList.toggle("nav-back", _navDir === "back");
+  _navDir = "fwd";
   VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
   $("topSub").hidden = name !== "home";   // 부제는 홈에서만 제목 옆에 표시
   if (push) {
     const top = state.navStack[state.navStack.length - 1];
     if (!top || top.v !== name) {
-      state.navStack.push({ v: name, t: $("topTitle").textContent });
+      // 떠나는 화면의 «보던 자리»를 기록해 둔다 → 뒤로 돌아왔을 때 그대로 복원.
+      // (기록하지 않으면 목록→상세→뒤로 에서 목록 맨 위로 튄다)
+      if (top) top.y = _leftY;
+      state.navStack.push({ v: name, t: $("topTitle").textContent, y: 0 });
       state.fwdStack = [];   // 새 이동 → 앞으로(이후) 기록 초기화
+      _armBackTrap();        // 브라우저·OS 뒤로가기를 앱이 받도록 덫을 다시 얹는다
     }
   }
   _updateNavButtons();
@@ -91,20 +111,158 @@ function _updateNavButtons() {
   $("fabBack").hidden = !canBack;
 }
 
+// 화면 안의 «뒤로»(상단 ‹ · 하단 «‹ 뒤로» · 오른쪽 스와이프)도 브라우저 뒤로가기를 부른다.
+// 이렇게 해야 «버튼으로 뒤로»와 «물리 뒤로가기»가 같은 길을 타서 기록이 어긋나지 않는다.
+// (호출 계약은 그대로 — 기존 addEventListener("click", goBack) 들을 고치지 않아도 된다)
 function goBack() {
   if (state.navStack.length <= 1) return;
+  try { history.back(); } catch (e) { _navBackOne(); }
+}
+
+// 실제로 «앱 안에서 한 단계 뒤로» 가는 일꾼. popstate 에서만 부른다.
+function _navBackOne() {
+  if (state.navStack.length <= 1) return;
+  const leaving = state.navStack[state.navStack.length - 1];
+  if (leaving) leaving.y = window.scrollY || window.pageYOffset || 0;
   state.fwdStack.push(state.navStack.pop());     // 현재 화면을 '이후'로 보관
   const top = state.navStack[state.navStack.length - 1];
   $("topTitle").textContent = top.t;             // 이전 화면 제목 복원
+  _navDir = "back";                              // 전환 슬라이드도 «뒤로»(오른쪽으로)
   showView(top.v, false);
+  _restoreScroll(top.y || 0);
+}
+
+// 보던 자리 복원 — showView 가 맨 위로 올리고 초점까지 옮긴 «뒤»에 되돌려야 한다.
+function _restoreScroll(y) {
+  const put = () => { try { window.scrollTo(0, y); } catch (e) {} };
+  put();                                   // 곧바로 한 번
+  if (window.requestAnimationFrame) {      // 화면이 다시 그려진 뒤 한 번 더
+    requestAnimationFrame(() => { put(); requestAnimationFrame(put); });
+  }
 }
 
 function goForward() {
   if (state.fwdStack.length === 0) return;
+  const cur = state.navStack[state.navStack.length - 1];
+  if (cur) cur.y = window.scrollY || window.pageYOffset || 0;
   const next = state.fwdStack.pop();
   state.navStack.push(next);
   $("topTitle").textContent = next.t;            // 이후 화면 제목 복원
   showView(next.v, false);
+  _restoreScroll(next.y || 0);
+  _armBackTrap();                                // 앞으로 갔으니 덫도 다시 얹는다
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   브라우저·OS 뒤로가기 연동 + 작성 중 이탈 보호
+   ────────────────────────────────────────────────────────────────────
+   ⚠ 예전에는 pushState/popstate 가 «한 곳도» 없어서, 안드로이드 물리 뒤로가기를
+      누르면 경고 없이 앱이 통째로 꺼졌다(홈 화면에 설치해 쓸수록 더 자주 겪음).
+   방식: «되돌리기 덫» — 앱 안에 있는 동안 히스토리에 우리 항목 한 칸을 늘 얹어 둔다.
+      뒤로가기 → 그 칸이 소모되며 popstate → 우리가 한 단계 처리하고 덫을 다시 얹는다.
+      홈에서 더 갈 곳이 없을 때만 덫을 얹지 않아 앱이 닫힌다.
+   ⚠ 「덫을 얹는다」를 빼먹으면 그 다음 뒤로가기에 앱이 꺼진다. 새 이동 경로를
+      만들면 반드시 _armBackTrap() 이 불리는지 확인할 것.
+   ════════════════════════════════════════════════════════════════════ */
+const _TRAP = "sjBackTrap";
+let _modalStack = [];      // 열려 있는 모달 [{id, close}] — 뒤로가기는 «모달만» 닫는다
+let _exitArmed = false;    // 홈에서 «한 번 더 누르면 닫힘» 대기 상태
+
+// 작성 중인지 볼 화면과 입력칸(체크상자는 제외 — 글을 쓴 것이 아니다)
+const DIRTY_FIELDS = {
+  apply: ["applyName", "applyPhone", "applyMemo"],
+  inquiry: ["inquiryMemo", "inquiryContact"],
+  pwrite: ["pwTitle", "pwBody", "pwNick", "pwRegion", "pwPin"],
+};
+const DIRTY_MSG = "작성 중인 내용이 사라집니다. 나가시겠습니까?";
+
+function _currentView() {
+  for (let i = 0; i < VIEWS.length; i++) {
+    const el = $("view-" + VIEWS[i]);
+    if (el && !el.hidden) return VIEWS[i];
+  }
+  return "home";
+}
+
+// 지금 화면이 «작성 중»인가 — 한 글자라도 있으면 참. 아무것도 안 썼으면 묻지 않는다.
+function _isDirtyView() {
+  const ids = DIRTY_FIELDS[_currentView()];
+  if (!ids) return false;
+  for (let i = 0; i < ids.length; i++) {
+    const el = $(ids[i]);
+    if (el && String(el.value || "").trim() !== "") return true;
+  }
+  return false;
+}
+
+function _armBackTrap() {
+  try {
+    if (history.state && history.state[_TRAP]) return;   // 이미 덫 위에 있다
+    const st = {};
+    st[_TRAP] = true;
+    history.pushState(st, "");
+  } catch (e) { /* 히스토리를 못 쓰는 환경 — 기존 동작 그대로 */ }
+}
+
+function _closeTopModal() {
+  if (!_modalStack.length) return false;
+  const top = _modalStack[_modalStack.length - 1];
+  try { top.close(); } catch (e) { _modalStack.pop(); }
+  return true;
+}
+
+function _onPopState() {
+  // ① 모달이 열려 있으면 «모달만» 닫는다(화면은 그대로, 앱도 안 꺼짐)
+  if (_closeTopModal()) { _armBackTrap(); return; }
+  // ② 작성 중이면 한 번 묻는다 — 취소하면 있던 자리 그대로
+  if (_isDirtyView() && !window.confirm(DIRTY_MSG)) { _armBackTrap(); return; }
+  // ③ 앱 안에서 한 단계 뒤로
+  if (state.navStack.length > 1) { _navBackOne(); _armBackTrap(); return; }
+  // ④ 홈(뿌리) — 실수로 앱이 꺼지지 않게 «한 번 더»를 알린 뒤 닫는다
+  if (_exitArmed) { _exitArmed = false; try { history.back(); } catch (e) {} return; }
+  _exitArmed = true;
+  window.setTimeout(function () { _exitArmed = false; }, 2000);
+  _toast("한 번 더 누르면 앱이 닫힙니다");
+  _armBackTrap();
+}
+
+// 브라우저 새로고침·탭 닫기용(앱 «안»의 화면 이동은 위 confirm 이 맡는다)
+function _onBeforeUnload(e) {
+  if (!_isDirtyView()) return;
+  e.preventDefault();
+  e.returnValue = "";
+  return "";
+}
+
+// 짧은 알림 — 인라인 style/script 없이 클래스만 쓴다(CSP 준수)
+function _toast(msg) {
+  let el = $("sjToast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "sjToast";
+    el.className = "sj-toast";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add("on");
+  window.clearTimeout(_toast._t);
+  _toast._t = window.setTimeout(function () { el.classList.remove("on"); }, 2000);
+}
+
+function initHistory() {
+  // ⚠ 브라우저의 «자동 스크롤 복원»을 끈다.
+  //    켜져 있으면 뒤로가기 뒤에 브라우저가 «그 히스토리 칸에 기록해 둔 위치»(0)로
+  //    우리 복원값을 덮어써, 목록으로 돌아왔을 때 맨 위로 튄다. 우리가 직접 되돌린다.
+  try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch (e) {}
+  try {
+    const root = { sjRoot: true };
+    history.replaceState(root, "");     // 이 페이지의 첫 칸을 «우리 것»으로 표시
+  } catch (e) { /* 무시 */ }
+  _armBackTrap();
+  window.addEventListener("popstate", _onPopState);
+  window.addEventListener("beforeunload", _onBeforeUnload);
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -273,7 +431,7 @@ function linkifyHtml(s) {
     const detail = !!m[1];                       // '자세히 보기: 주소' 형태인가
     out += esc(text.slice(last, m.index));
     const href = esc(url);
-    const label = detail ? `🔗 자세히 보기 (${urlHost(url)})` : urlHost(url);
+    const label = detail ? `자세히 보기 (${urlHost(url)})` : urlHost(url);
     out += `<a class="${detail ? "link-btn" : "ext-link"}" href="${href}"`
       + ` target="_blank" rel="noopener noreferrer" title="${href}">`
       + `${esc(label)}<span aria-hidden="true"> ↗</span>`
@@ -452,11 +610,11 @@ function showInitError(e) {
     ? '<div class="empty err-box" role="alert">' +
       '<div class="err-title">⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
       '<div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>' +
-      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>'
+      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 다시 시도</button></div></div>'
     : '<div class="empty err-box" role="alert">' +
-      '<div class="err-title">🛠 사업 정보를 준비 중입니다.</div>' +
+      '<div class="err-title">' + '<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 6.6a3.6 3.6 0 0 1 4.9-3.3l-2.7 2.7 1.4 1.4 2.7-2.7a3.6 3.6 0 0 1-4.6 4.7L6.8 18.9a2 2 0 1 1-2.8-2.8z"/></svg>' + ' 사업 정보를 준비 중입니다.</div>' +
       '<div class="err-desc">데이터 파일(data.json)을 읽지 못했습니다.<br>잠시 후 다시 시도해 주세요.</div>' +
-      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button">🔄 다시 시도</button></div></div>';
+      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 다시 시도</button></div></div>';
   const rb = $("initRetry");
   if (rb) rb.addEventListener("click", () => location.reload());
 }
@@ -492,7 +650,7 @@ function noticeUpdate(msg) {
 function updateBusy() {
   const busyViews = ["apply", "inquiry", "pwrite", "done"];
   if (busyViews.some((v) => { const el = $("view-" + v); return el && !el.hidden; })) return true;
-  return ["teamModal", "versionModal", "installModal", "pinModal", "reportModal"]
+  return ["teamModal", "versionModal", "installModal", "pinModal", "reportModal", "helpModal"]
     .some((id) => { const m = $(id); return m && !m.hidden; });
 }
 
@@ -606,6 +764,7 @@ async function init() {
   renderCategoryChips();
   renderSituations();
   bindEvents();
+  initHistory();          // 브라우저·OS 뒤로가기 연동(덫 얹기 + popstate 받기)
   showView("home", false);
   checkNewPrograms();
   initInApp();
@@ -624,17 +783,31 @@ async function init() {
 
 // ---------- 홈 화면에 추가(앱처럼 쓰기) 안내 ----------
 const A2HS_DISMISS_KEY = "sangju_a2hs_dismissed";
+// 「처음 1회만」 — 한 번 띄운 뒤로는 홈에 다시 뜨지 않는다(양호창님 결정).
+// 지운 것이 아니다: 언제든 헤더 「안내」 › 「홈 화면에 추가하는 법」에서 볼 수 있다.
+const A2HS_SEEN_KEY = "sangju_a2hs_seen";
 function isStandalone() {
   // 이미 홈 화면 앱으로 실행 중이면 안내가 불필요
   return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
          window.navigator.standalone === true;
 }
 function initA2HS() {
-  let dismissed = false;
+  let dismissed = false, seen = false;
   try { dismissed = localStorage.getItem(A2HS_DISMISS_KEY) === "1"; } catch (e) {}
-  // 홈 상단 안내 띠: 한 번 닫았거나, 이미 설치(standalone) 상태거나,
-  // 인앱 브라우저 배너가 떠 있으면(겹침 방지) 숨긴다.
-  $("a2hsTip").hidden = dismissed || isStandalone() || !$("inappBanner").hidden;
+  try { seen = localStorage.getItem(A2HS_SEEN_KEY) === "1"; } catch (e) {}
+  // 홈 상단 안내 띠: «처음 1회»에만 뜬다. 한 번 닫았거나, 이미 한 번 띄웠거나,
+  // 이미 설치(standalone) 상태거나, 인앱 브라우저 배너가 떠 있으면(겹침 방지) 숨긴다.
+  const show = !dismissed && !seen && !isStandalone() && $("inappBanner").hidden;
+  $("a2hsTip").hidden = !show;
+  // 띄운 «그 순간» 봤다고 적어 둔다 → 다음 방문부터는 헤더 「안내」에서만 볼 수 있다.
+  if (show) { try { localStorage.setItem(A2HS_SEEN_KEY, "1"); } catch (e) {} }
+}
+
+// ---------- 헤더 「안내」 — 설치 방법·불편신고를 한 곳에 ----------
+function closeHelp() { $("helpModal").hidden = true; window.ModalA11y && ModalA11y.close("helpModal"); }
+function openHelp() {
+  $("helpModal").hidden = false;
+  window.ModalA11y && ModalA11y.open("helpModal", closeHelp);
 }
 function closeInstallGuide() { $("installModal").hidden = true; window.ModalA11y && ModalA11y.close("installModal"); }
 function openInstallGuide() {
@@ -734,7 +907,7 @@ async function copyLookupCode() {
   }
   if (msg) {
     msg.textContent = ok
-      ? "조회코드를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
+      ? "확인 번호를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
       : "복사하지 못했습니다. 화면의 코드를 직접 적어 주세요.";
   }
 }
@@ -750,7 +923,7 @@ function checkNewPrograms() {
     const seenSet = new Set(seen);
     newProgramNames = names.filter((n) => !seenSet.has(n));
     if (newProgramNames.length) {
-      $("newBannerText").textContent = `🆕 새로 추가된 지원사업 ${newProgramNames.length}건이 있어요!`;
+      $("newBannerText").textContent = `새로 추가된 지원사업 ${newProgramNames.length}건이 있어요!`;
       $("newBanner").hidden = false;
     }
   }
@@ -761,9 +934,19 @@ function checkNewPrograms() {
 // ---------- 홈: 카테고리 칩 ----------
 function renderCategoryChips() {
   const box = $("categoryChips");
-  box.innerHTML = DATA.categories.map((c) =>
-    `<button class="chip" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
-  box.querySelectorAll(".chip").forEach((el) => {
+  // 맨 앞의 «전체» 칩 — 홈에 있던 큰 버튼 「전체 사업 보기」를 여기로 옮긴 것이다.
+  //   · 홈의 버튼 총량을 상한(3개) 안으로 줄이면서 «전체 보기» 길은 그대로 남긴다.
+  //   · data-cat 이 없으므로 «분야 필터»가 아니다 → 아래 분야 칩 바인딩에서 제외하고,
+  //     ui.js 의 «자주 찾는 8개만 펴기»(chip-more)에서도 제외한다(.chip-all).
+  box.innerHTML = `<button class="chip chip-all" type="button">전체</button>` +
+    DATA.categories.map((c) =>
+      `<button class="chip" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+  const allChip = box.querySelector(".chip-all");
+  if (allChip) allChip.addEventListener("click", () => {
+    state.selectedCats = new Set();
+    openList({ title: "전체 사업" });
+  });
+  box.querySelectorAll(".chip:not(.chip-all)").forEach((el) => {
     el.addEventListener("click", () => {
       state.selectedCats = new Set([el.dataset.cat]);
       openList({ title: el.dataset.cat });
@@ -772,12 +955,18 @@ function renderCategoryChips() {
 }
 
 // ---------- 맞춤추천: 상황 체크 ----------
+// 한 번에 펴 보이는 선택지는 «8개»까지(규격서 0절 개수 상한 — 시민앱은 엄격히).
+// 상황 17개를 한꺼번에 늘어놓지 않고 자주 고르는 8개만 펴고 나머지는 접는다.
+// ⚠ «없앤 것»이 아니다 — 버튼에 남은 개수를 적어 두어 사라진 줄 알지 않게 한다.
+const SITUATION_OPEN = 8;
+
 function renderSituations() {
   const box = $("situationList");
   box.innerHTML = DATA.situation_map.map(([label, cat], i) =>
-    `<label class="situation" data-cat="${esc(cat)}">
+    `<label class="situation${i >= SITUATION_OPEN ? " sit-more" : ""}" data-cat="${esc(cat)}">
        <input type="checkbox" data-i="${i}" /> <span>${esc(label)}</span>
      </label>`).join("");
+  buildSituationToggle(box);
   box.querySelectorAll(".situation").forEach((el) => {
     const cb = el.querySelector("input");
     cb.addEventListener("change", () => {
@@ -786,6 +975,32 @@ function renderSituations() {
       else state.situations.delete(el.dataset.cat);
     });
   });
+}
+
+// 접힌 상황을 펴고 접는 버튼 — 분야 칩의 「분야 전체 보기」와 «같은 모양·같은 말투».
+function buildSituationToggle(box) {
+  const hidden = DATA.situation_map.length - SITUATION_OPEN;
+  const old = document.getElementById("situationMore");
+  if (old) old.parentNode.removeChild(old);
+  if (hidden <= 0) return;
+  const btn = document.createElement("button");
+  btn.id = "situationMore";
+  btn.type = "button";
+  btn.className = "chip-toggle tap";
+  btn.setAttribute("aria-controls", "situationList");
+  btn.setAttribute("aria-expanded", "false");
+  const paint = (open) => {
+    // 개수를 «글자»로 적는다 — 접혀 있어도 무엇이 몇 개 더 있는지 알 수 있어야 한다.
+    btn.textContent = open ? "접기" : `더 보기 (${hidden})`;
+    btn.classList.toggle("is-open", open);
+  };
+  paint(false);
+  btn.addEventListener("click", () => {
+    const open = box.classList.toggle("sits-open");
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    paint(open);
+  });
+  box.parentNode.insertBefore(btn, box.nextSibling);
 }
 
 // 나이 → 연령 카테고리 (PC 앱 _age_categories 동일 규칙)
@@ -837,6 +1052,20 @@ function openList({ title, onlyNames }) {
   renderList();                    // 목록 진입은 즉시 렌더(지연 없음)
 }
 
+/* 스켈레톤 — 목록을 아직 못 불러왔을 때 자리만 잡아 두는 회색 블록.
+   규격서 14절: 1.2s 순환·반짝임 없음·데이터가 오면 곧바로 교체.
+   ⚠ 정보를 움직임에만 담지 않는다 → 낭독용 「불러오는 중입니다.」를 함께 둔다.
+   ⚠ 이미 그릴 내용이 있으면 «부르지 않는다»(캐시로 즉시 뜨는 경우 굳이 애니메이션하지 않음). */
+function skeletonHtml(n) {
+  let out = '<div class="sk-list" aria-hidden="true">';
+  for (let i = 0; i < (n || 3); i++) {
+    out += '<div class="sk-card"><span class="sk-line w70"></span>' +
+      '<span class="sk-line"></span><span class="sk-line w45"></span></div>';
+  }
+  return out + '</div><p class="sr-only" role="status">불러오는 중입니다.</p>';
+}
+window.skeletonHtml = skeletonHtml;   // proposals.js 도 같은 모양을 쓴다
+
 function renderList() {
   const q = $("listSearch").value;
   const cats = (!listOnlyNames && state.selectedCats.size) ? state.selectedCats : null;
@@ -849,9 +1078,19 @@ function renderList() {
   const box = $("listResults");
   if (results.length === 0) {
     const isAlways = cats && [...cats].some((c) => (DATA.always_show || []).includes(c));
+    // 빈 화면에도 «다음에 무엇을 할지»를 둔다(규격서 0절·12절). 버튼은 하나만.
     box.innerHTML = `<p class="empty">${isAlways
       ? "현재 등록된 해당 분야 사업이 없습니다.<br>새로운 사업이 등록되면 이곳에 표시됩니다."
-      : "조건에 맞는 사업이 없습니다.<br>검색어나 분야를 바꿔보세요."}</p>`;
+      : "조건에 맞는 사업이 없습니다.<br>검색어나 분야를 바꿔보세요."}
+      <button class="empty-action tap" type="button" id="emptyAll">전체 사업 보기</button></p>`;
+    const ea = $("emptyAll");
+    if (ea) ea.addEventListener("click", () => {
+      state.selectedCats = new Set();
+      listOnlyNames = null;
+      $("listSearch").value = "";
+      $("topTitle").textContent = "전체 사업";
+      renderList();
+    });
     return;
   }
   box.innerHTML = results.map((p) => {
@@ -860,30 +1099,38 @@ function renderList() {
     // 📌 접수 안내(비고): 마감/재접수 시기 등 — 있는 사업만 짧은 표식
     const note = (p.비고 || "").trim();
     const noteFlag = note
-      ? `<span class="note-flag"><span aria-hidden="true">📌</span> 접수 안내</span>`
+      ? `<span class="note-flag"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 받는 방법</span>`
       : "";
     // 키보드 접근(KWCAG 2.2): role=button + tabindex 로 Tab 이동·Enter/Space 실행 가능
     // ⚠ 예전에는 aria-label 로 이름만 읽어줘서, 화면낭독기 이용자에게는 카드 안의
     //    «내용 요약·담당팀·접수 안내»가 통째로 가려졌다(aria-label 이 하위 텍스트를 덮음).
     // → aria-labelledby(제목) + aria-describedby(요약·담당·안내)로 바꿔
     //    보이는 정보를 그대로 읽게 한다. 색만으로 알리지 않도록 '접수 안내 있음'은 글자로도 둔다.
-    const tid = `cardT${idx}`, did = `cardD${idx}`, mid = `cardM${idx}`;
-    return `<div class="card" data-idx="${idx}" role="button" tabindex="0"
-      aria-labelledby="${tid}" aria-describedby="${did} ${mid}">
-      <h3 id="${tid}">${esc(p.사업명)}</h3>
+    const did = `cardD${idx}`, mid = `cardM${idx}`;
+    // 카드 안에 «상세 열기»와 «신청하기» 두 가지 행동이 있다.
+    //   ⚠ 예전처럼 카드 전체를 role="button" 으로 두면, 그 «안»에 또 버튼을 넣을 수 없다
+    //      (컨트롤 중첩 — 키보드·낭독기에서 어느 것을 누르는지 알 수 없게 된다).
+    //   → 제목을 진짜 <button>(.card-open)으로 만들고, CSS 의 ::after 로 카드 전체를 덮어
+    //     «카드 아무 데나 눌러도 상세»가 되게 한다. 신청 버튼만 그 위로 올린다(z-index).
+    //     제목 버튼이므로 Tab 이동·Enter/Space 가 브라우저 기본으로 동작한다.
+    //   ⚠ 목록에서 바로 신청하면 상세를 안 볼 수 있으므로, 신청서 맨 위에 사업명을 띄운다
+    //     (openApply 가 #applyTitle 에 넣는다 — 잘못 신청 방지).
+    return `<div class="card" data-idx="${idx}">
+      <h3><button class="card-open" type="button" aria-describedby="${did} ${mid}">${esc(p.사업명)}</button></h3>
       <p id="${did}">${esc(previewText(p.내용 || p.대상자상세기준))}</p>
       <span class="card-meta" id="${mid}">
         <span class="team" data-team="${esc(teamName)}" title="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
       </span>
+      <button class="card-apply tap" type="button" aria-label="${esc(p.사업명)} 신청하기">신청하기</button>
     </div>`;
   }).join("");
   box.querySelectorAll(".card").forEach((el) => {
     applyTeamColor(el.querySelector(".team"), el.querySelector(".team").dataset.team);
-    const open = () => openDetail(parseInt(el.dataset.idx, 10));
-    el.addEventListener("click", open);
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
-    });
+    const idx = parseInt(el.dataset.idx, 10);
+    const openBtn = el.querySelector(".card-open");
+    if (openBtn) openBtn.addEventListener("click", () => openDetail(idx));
+    const applyBtn = el.querySelector(".card-apply");
+    if (applyBtn) applyBtn.addEventListener("click", (e) => { e.stopPropagation(); openApply(idx); });
   });
 }
 
@@ -912,14 +1159,14 @@ function openDetail(idx) {
   const tel = (p.연락처 || "").trim();
   const telDigits = tel.replace(/[^0-9+]/g, "");
   const telHtml = tel
-    ? `<a class="tel-link" href="tel:${esc(telDigits)}" aria-label="${esc(tel)} 전화 걸기"><span aria-hidden="true">📞</span> ${esc(tel)}</a>`
+    ? `<a class="tel-link" href="tel:${esc(telDigits)}" aria-label="${esc(tel)} 전화 걸기"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.4 3.6h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.4 5.8a2 2 0 0 1 2-2.2z"/></svg> ${esc(tel)}</a>`
     : "";
   // 📌 접수 안내(비고) — 접수 마감·재접수 시기 등. 값이 없으면 아무것도 렌더링하지 않는다.
   // 색만으로 구분하지 않도록 아이콘(📌)+'접수 안내' 문구를 함께 두고, role=note 로 읽히게 한다.
   const note = (p.비고 || "").trim();
   const noteHtml = note
-    ? `<div class="notice-box" role="note" aria-label="접수 안내">
-         <p class="notice-k"><span aria-hidden="true">📌</span> 접수 안내</p>
+    ? `<div class="notice-box" role="note" aria-label="받는 방법">
+         <p class="notice-k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 받는 방법</p>
          <p class="notice-v">${linkifyHtml(note)}</p>
        </div>`
     : "";
@@ -927,15 +1174,15 @@ function openDetail(idx) {
     <h2>${esc(p.사업명)}</h2>
     ${tags ? `<div class="detail-tags">${tags}</div>` : ""}
     ${noteHtml}
-    ${block("📄 사업 내용", p.내용)}
-    ${block("👥 지원 대상", p.대상자상세기준)}
-    ${block("📝 이용 방법", p.이용방법)}
-    ${block("📎 필요 서류", p.필요서류)}
+    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.6h5.6a3 3 0 0 1 2.4 1.2 3 3 0 0 1 2.4-1.2H20v13h-5.6a3 3 0 0 0-2.4 1.2 3 3 0 0 0-2.4-1.2H4z"/><path d="M12 5.8v13"/></svg> 사업 내용', p.내용)}
+    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="7.6" r="2.8"/><circle cx="16.4" cy="9" r="2.4"/><path d="M2.8 19.4a5.2 5.2 0 0 1 10.4 0"/><path d="M14.4 19.4a4.2 4.2 0 0 1 6.8 0"/></svg> 지원 대상', p.대상자상세기준)}
+    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4.2L20 8.2 15.8 4 4 15.8z"/><path d="m14.4 5.4 4.2 4.2"/></svg> 이용 방법', p.이용방법)}
+    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15h-.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg> 필요 서류', p.필요서류)}
     <div id="formsDownload"></div>
-    ${blockHtml("🏢 담당", chargeHtml)}
-    ${blockHtml("☎ 연락처", telHtml)}
-    ${blockText("📅 종료일", p.종료일)}
-    <button class="big-btn primary full" id="detailApply">✋ 신청하기</button>
+    ${blockHtml('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 9.6V20h15.2V9.6"/><path d="M3 9.4 5.2 4h13.6L21 9.4a2.9 2.9 0 0 1-5.7 0 2.9 2.9 0 0 1-5.7 0 2.9 2.9 0 0 1-5.6 0z"/></svg> 담당', chargeHtml)}
+    ${blockHtml('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.4 3.6h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.4 5.8a2 2 0 0 1 2-2.2z"/></svg> 연락처', telHtml)}
+    ${blockText('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 종료일', p.종료일)}
+    <button class="big-btn primary full" id="detailApply"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11"/></svg> 신청하기</button>
   `;
   showView("detail");
   const teamEl = $("detailContent").querySelector(".detail-team");
@@ -968,7 +1215,7 @@ async function renderFormsDownload(p, idx) {
     return `<li class="forms-dl-item">
         <a class="forms-dl-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer"
            download="${esc(nm)}" aria-label="${aria}">
-          <span class="forms-dl-name"><span aria-hidden="true">📄</span> ${esc(nm)}</span>
+          <span class="forms-dl-name"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.6h5.6a3 3 0 0 1 2.4 1.2 3 3 0 0 1 2.4-1.2H20v13h-5.6a3 3 0 0 0-2.4 1.2 3 3 0 0 0-2.4-1.2H4z"/><path d="M12 5.8v13"/></svg> ${esc(nm)}</span>
           <span class="forms-dl-meta">${esc(metaTxt)}</span>
           <span class="forms-dl-go" aria-hidden="true">내려받기 ⬇</span>
         </a>
@@ -976,7 +1223,7 @@ async function renderFormsDownload(p, idx) {
   }).join("");
   if (!items) { host.innerHTML = ""; return; }
   host.innerHTML = `<div class="detail-block">
-      <div class="k">📎 필요서류 서식 다운로드</div>
+      <div class="k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15h-.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg> 필요서류 서식 다운로드</div>
       <div class="v"><ul class="forms-dl-list">${items}</ul></div>
     </div>`;
 }
@@ -990,8 +1237,8 @@ function openApply(idx) {
   // 📌 접수 안내(비고)는 '제출 직전'에 한 번 더 보여, 마감된 사업에 그냥 신청하지 않게 한다.
   const note = (p.비고 || "").trim();
   $("applyNotice").innerHTML = note
-    ? `<div class="notice-box" role="note" aria-label="접수 안내">
-         <p class="notice-k"><span aria-hidden="true">📌</span> 접수 안내</p>
+    ? `<div class="notice-box" role="note" aria-label="받는 방법">
+         <p class="notice-k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 받는 방법</p>
          <p class="notice-v">${linkifyHtml(note)}</p>
        </div>`
     : "";
@@ -1102,7 +1349,7 @@ async function sendApply() {
       btn.disabled = false;
       btn.textContent = orig;
       alert((e && e.message) ||
-        "이 브라우저에서는 안전한 조회코드를 만들 수 없어 신청을 진행할 수 없습니다.");
+        "이 브라우저에서는 안전한 확인 번호를 만들 수 없어 신청을 진행할 수 없습니다.");
       return;
     }
   }
@@ -1200,9 +1447,9 @@ function openPrivacy() {
   showView("privacy");
 }
 
-// ---------- 오류 문의 ----------
+// ---------- 불편신고 (옛 「오류 문의」) ----------
 function openInquiry() {
-  $("topTitle").textContent = "오류 · 문의(개발자)";
+  $("topTitle").textContent = "불편신고";
   $("inquiryMemo").value = "";
   $("inquiryContact").value = "";
   showView("inquiry");
@@ -1212,17 +1459,19 @@ async function sendInquiry() {
   const memo = $("inquiryMemo").value.trim();
   const contact = $("inquiryContact").value.trim();
   if (!memo) {
-    alert("문의 내용을 입력해 주세요.");
+    alert("어떤 점이 불편하셨는지 적어 주세요.");
     return;
   }
   const key = window.WEB3FORMS_KEY || "";
   if (!key || key.indexOf("여기에") !== -1) {
-    alert("문의 전송 설정이 아직 완료되지 않았습니다.\n관리자에게 문의해 주세요.");
+    alert("보내기 설정이 아직 끝나지 않았습니다.\n담당자에게 알려 주세요.");
     return;
   }
   const payload = { type: "inquiry", 문의내용: memo, 연락처: contact, 전달주소: SUPPORT_EMAIL };
   const form = {
     access_key: key,
+    // ⚠ 제목의 [오류문의] 태그는 PC 자동접수.py 가 메일을 가려내는 «약속»이다.
+    //   화면 문구는 「불편신고」로 바뀌었지만 이 태그는 절대 바꾸지 않는다.
     subject: "[오류문의] 상주시 정책플랫폼(모바일)",
     from_name: "상주시 정책플랫폼(모바일)",
     "문의내용": memo,
@@ -1242,17 +1491,17 @@ async function sendInquiry() {
     });
     const j = await res.json();
     if (!j.success) throw new Error(j.message || "전송 실패");
-    $("topTitle").textContent = "문의 완료";
-    $("doneProgram").textContent = "문의가 접수되었습니다";
+    $("topTitle").textContent = "불편신고 완료";
+    $("doneProgram").textContent = "불편신고가 접수되었습니다";
     // 직전 신청 완료의 접수번호가 남아있지 않도록 숨긴다(문의는 접수번호가 없음)
     if ($("doneReceipt")) { $("doneReceipt").textContent = ""; $("doneReceipt").hidden = true; }
     // 조회코드 상자·«내 신청 현황» 버튼도 함께 감춘다(문의는 조회 대상이 아님)
     setDoneCode("");
     if ($("doneStatus")) $("doneStatus").hidden = true;
-    document.querySelector("#view-done h2").textContent = "문의해 주셔서 감사합니다";
+    document.querySelector("#view-done h2").textContent = "알려 주셔서 감사합니다";
     document.querySelector("#view-done .done-desc").innerHTML =
-      "담당자에게 문의 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
-    state.navStack = [{ v: "home", t: HOME_TITLE }, { v: "done", t: "문의 완료" }];
+      "담당자에게 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
+    state.navStack = [{ v: "home", t: HOME_TITLE }, { v: "done", t: "불편신고 완료" }];
     state.fwdStack = [];
     showView("done", false);
   } catch (e) {
@@ -1478,6 +1727,9 @@ function msRenderList() {
   const box = $("msList");
   if (!box) return;
   const hasCodes = loadLookupEntries().length > 0;
+  // 이 휴대폰에 확인 번호는 있는데 «아직 한 번도» 못 불러온 상태 → 스켈레톤으로 자리를 잡는다.
+  // (이미 불러온 내용이 있으면 이 줄을 지나지 않는다 — 20초 갱신마다 회색 블록이 번쩍이지 않게)
+  if (hasCodes && !msLoaded && !msErr && !msRows.length) { box.innerHTML = skeletonHtml(2); return; }
   if (msErr) {
     box.innerHTML = `<div class="ms-empty"><p>지금은 진행 상태를 불러오지 못했습니다.</p>
       <p>인터넷 연결을 확인하신 뒤 «지금 새로고침»을 눌러 주세요.</p></div>`;
@@ -1486,10 +1738,10 @@ function msRenderList() {
   if (!msRows.length) {
     box.innerHTML = hasCodes
       ? `<div class="ms-empty"><p>조회되는 신청 내역이 없습니다.</p>
-           <p>아래 칸에 조회코드를 넣어 다시 확인해 보세요.</p></div>`
+           <p>아래 칸에 확인 번호를 넣어 다시 확인해 보세요.</p></div>`
       : `<div class="ms-empty"><p>이 휴대폰에 저장된 신청 내역이 없습니다.</p>
            <p>신청을 마치면 이 화면에서 진행 상태를 보실 수 있습니다.<br>
-              다른 기기에서 신청하셨다면 아래에 조회코드를 넣어 주세요.</p></div>`;
+              다른 기기에서 신청하셨다면 아래에 확인 번호를 넣어 주세요.</p></div>`;
     return;
   }
   box.innerHTML = msRows.map((r) => {
@@ -1498,13 +1750,13 @@ function msRenderList() {
     return `<div class="ms-card">
       <div class="ms-card-top">
         <span class="ms-badge ast-${esc(st)}">${esc(st)}</span>
-        ${r.receipt_no ? `<span class="ms-rc"><span aria-hidden="true">🧾</span> ${esc(r.receipt_no)}</span>` : ""}
+        ${r.receipt_no ? `<span class="ms-rc"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7.6z"/><path d="M13.4 3v4.6H18"/><path d="M9.4 14.2l1.9 1.9 3.4-3.6"/></svg> ${esc(r.receipt_no)}</span>` : ""}
       </div>
       <div class="ms-card-title">${esc(r.benefit_name || "(사업명 없음)")}</div>
-      <div class="ms-card-meta"><span aria-hidden="true">🗓</span> 신청 ${esc(msFmtDateTime(r.created_at))}${
+      <div class="ms-card-meta"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 신청 ${esc(msFmtDateTime(r.created_at))}${
         r.updated_at && r.updated_at !== r.created_at
           ? ` · 갱신 ${esc(msFmtDateTime(r.updated_at))}` : ""}</div>
-      ${reply ? `<div class="ms-reply"><p class="ms-reply-k"><span aria-hidden="true">💬</span> 담당 부서 안내</p>
+      ${reply ? `<div class="ms-reply"><p class="ms-reply-k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg> 담당 부서 안내</p>
                    <p class="ms-reply-v">${linkifyHtml(reply)}</p></div>` : ""}
     </div>`;
   }).join("");
@@ -1591,10 +1843,10 @@ function msPaintAutoBtn() {
 //    ⚠ 지우는 것은 «이 기기의 보관값»뿐 — 신청 자체는 그대로 살아 있다.
 function msClearDevice() {
   const n = loadLookupEntries().length;
-  if (!n) { msAnnounce("이 기기에 보관된 조회코드가 없습니다."); return; }
+  if (!n) { msAnnounce("이 휴대폰에 보관된 확인 번호가 없습니다."); return; }
   const ok = confirm(
-    `이 기기에 보관된 조회코드 ${n}건을 지웁니다.\n` +
-    "지운 뒤에는 적어 두신 조회코드를 다시 입력해야 진행 상태를 보실 수 있습니다.\n" +
+    `이 휴대폰에 보관된 확인 번호 ${n}건을 지웁니다.\n` +
+    "지운 뒤에는 적어 두신 확인 번호를 다시 입력해야 진행 상태를 보실 수 있습니다.\n" +
     "신청 자체가 취소되지는 않습니다.\n" +
     "지울까요?");
   if (!ok) return;
@@ -1604,7 +1856,7 @@ function msClearDevice() {
   msPaintEntry();               // 보관 코드가 0건이 되면 홈 진입점도 다시 판단한다
   const up = $("msUpdated");
   if (up) up.textContent = "";
-  msAnnounce("이 기기에 보관된 조회코드를 모두 지웠습니다.");
+  msAnnounce("이 휴대폰에 보관된 확인 번호를 모두 지웠습니다.");
 }
 
 function openMyStatus() {
@@ -1713,7 +1965,7 @@ async function msLookupByCode() {
   const rc = (rcEl ? rcEl.value : "").trim();
   setFieldError("msCode", "msCodeErr", "");
   if (code.length < 8) {
-    setFieldError("msCode", "msCodeErr", "조회코드를 다시 확인해 주세요. (영문 대문자·숫자 10자리)");
+    setFieldError("msCode", "msCodeErr", "확인 번호를 다시 확인해 주세요. (영문 대문자·숫자 10자리)");
     codeEl.focus();
     return;
   }
@@ -1738,8 +1990,8 @@ async function msLookupByCode() {
   if (rc) matched = matched.filter((r) => String(r.receipt_no || "").trim() === rc);
   if (!matched.length) {
     setFieldError("msCode", "msCodeErr", rc
-      ? "이 조회코드로 찾은 신청 중에 그 접수번호와 같은 건이 없습니다. 접수번호를 지우고 조회하시면 이 코드의 신청을 모두 보실 수 있습니다."
-      : "조회되는 신청이 없습니다. 조회코드를 다시 확인해 주세요.");
+      ? "이 확인 번호로 찾은 신청 중에 그 접수번호와 같은 건이 없습니다. 접수번호를 지우고 다시 찾으시면 이 번호의 신청을 모두 보실 수 있습니다."
+      : "찾은 신청이 없습니다. 확인 번호를 다시 확인해 주세요.");
     codeEl.focus();
     return;
   }
@@ -1807,7 +2059,7 @@ function msRecHideEntry() {
   const codeEl = $("msCode");
   if (codeEl) { try { codeEl.focus(); } catch (e) { /* 무시 */ } }
   // 낭독 이용자에게는 «사라졌다»는 사실만 담백하게 알린다(서버 사정을 설명하지 않는다).
-  msAnnounce("지금은 조회코드 되찾기를 이용할 수 없습니다. 적어 두신 조회코드로 조회해 주세요.");
+  msAnnounce("지금은 확인 번호 되찾기를 이용할 수 없습니다. 적어 두신 확인 번호로 찾아 주세요.");
 }
 
 function msRecToggle() {
@@ -1858,7 +2110,7 @@ async function msRecCopyCodes() {
   }
   if (msg) {
     msg.textContent = ok
-      ? "조회코드를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
+      ? "확인 번호를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
       : "복사하지 못했습니다. 화면의 코드를 직접 적어 주세요.";
   }
 }
@@ -1946,7 +2198,7 @@ async function msRecoverSubmit() {
 
   msPaintEntry();          // 이제 이 기기에도 코드가 있으므로 홈 진입점을 다시 판단
   await msLoad(true);      // ③ 그 다음은 «기존 화면 그대로»
-  msAnnounce(`조회코드 ${codes.length}건을 찾았습니다. 목록에 추가했습니다. 코드는 아래 상자에 있으니 적어 두세요.`);
+  msAnnounce(`확인 번호 ${codes.length}건을 찾았습니다. 목록에 추가했습니다. 번호는 아래 상자에 있으니 적어 두세요.`);
 }
 
 // ---------- 모달 접근성: 포커스 트랩 + Esc 닫기 + 호출 버튼으로 복귀 (KWCAG 2.2) ----------
@@ -1984,6 +2236,10 @@ const ModalA11y = (function () {
     };
     document.addEventListener("keydown", keyHandler, true);
     active[modalId] = { keyHandler, opener };
+    // 뒤로가기가 «모달만» 닫도록 스택에 얹는다. 다섯 모달의 열기 경로가 모두 이 함수를 지난다.
+    _modalStack = _modalStack.filter((m) => m.id !== modalId);
+    _modalStack.push({ id: modalId, close: close });
+    _armBackTrap();
 
     // 첫 포커스 이동(렌더 직후)
     const items = focusables(modal);
@@ -2004,6 +2260,7 @@ const ModalA11y = (function () {
   //   다음 화면 이동 때까지 안 뜬다. 다섯 모달의 닫기 경로가 모두 이 함수를
   //   지나므로 여기 한 곳에서 처리한다(app.js 3개 + proposals.js 2개).
   function close(modalId) {
+    _modalStack = _modalStack.filter((m) => m.id !== modalId);
     const opener = teardown(modalId);
     if (opener && typeof opener.focus === "function") {
       try { opener.focus(); } catch (e) {}
@@ -2116,8 +2373,25 @@ function bindEvents() {
   // 신청 폼 안에서 처리방침 열기 — 돌아오면 작성 중이던 내용이 남아 있어야 하므로
   // 화면 전환(showView)만 하고 폼은 초기화하지 않는다.
   $("applyPrivacyLink").addEventListener("click", openPrivacy);
-  $("inquiryLink").addEventListener("click", (e) => { e.preventDefault(); openInquiry(); });
+  // 푸터의 「오류 문의」 링크는 헤더 「안내」 안으로 옮겨 갔다 — 남아 있으면 그대로 쓴다(옛 캐시 대비).
+  const inqLink = $("inquiryLink");
+  if (inqLink) inqLink.addEventListener("click", (e) => { e.preventDefault(); openInquiry(); });
   $("inquirySend").addEventListener("click", sendInquiry);
+  // ── 헤더 「안내」 ─────────────────────────────────────────────────
+  const helpBtnEl = $("helpBtn");
+  if (helpBtnEl) helpBtnEl.addEventListener("click", openHelp);
+  const helpCloseEl = $("helpClose");
+  if (helpCloseEl) helpCloseEl.addEventListener("click", closeHelp);
+  const helpModalEl = $("helpModal");
+  if (helpModalEl) helpModalEl.addEventListener("click", (e) => {
+    if (e.target.id === "helpModal") closeHelp();     // 바깥 누르기로 닫기
+  });
+  // 안내 › 홈 화면에 추가하는 법 — 모달 중첩을 막으려 「안내」를 먼저 닫는다.
+  const helpInstallEl = $("helpInstall");
+  if (helpInstallEl) helpInstallEl.addEventListener("click", () => { closeHelp(); openInstallGuide(); });
+  // 안내 › 불편신고 — 화면(view-inquiry)으로 넘어가므로 모달을 닫고 간다.
+  const helpInquiryEl = $("helpInquiry");
+  if (helpInquiryEl) helpInquiryEl.addEventListener("click", () => { closeHelp(); openInquiry(); });
   // 개인정보 처리방침 (푸터 링크 → 전용 화면, '처음으로'로 복귀)
   $("privacyLink").addEventListener("click", openPrivacy);
   // 버전 라벨 + 버전별 개선사항(체인지로그) 모달

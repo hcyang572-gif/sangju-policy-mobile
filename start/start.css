@@ -108,7 +108,8 @@ body {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: .02em;
-  color: var(--accent-text);
+  /* 규격서 2절 — 아이브로는 주조 #B84A1C, 제목(.brand-title)은 글자색 #33241C 로 «색»까지 구분한다. */
+  color: var(--primary);
 }
 
 .brand-title {
@@ -138,7 +139,11 @@ main {
   margin: 0 auto;
   padding: 8px 16px 0;
 }
-main:focus { outline: none; }   /* 건너뛰기 링크 도착 시 테두리가 뜨지 않게 */
+/* 건너뛰기 링크 도착 지점(main[tabindex="-1"])은 «마우스 클릭»으로 초점이 갔을 때만 외곽선을 숨긴다.
+   ⚠ 그냥 `main:focus { outline: none }` 으로 두면 키보드로 건너뛰기를 쓴 이용자가
+     «어디에 도착했는지» 알 수 없다 — :not(:focus-visible) 를 반드시 유지할 것.
+     (전수 점검 2026-08-19: 초점 표시를 outline:none 으로 지우지 않는다) */
+main:focus:not(:focus-visible) { outline: none; }
 
 .intro {
   text-align: center;

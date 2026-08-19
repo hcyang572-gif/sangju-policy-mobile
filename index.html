@@ -41,7 +41,7 @@
   <meta property="og:image" content="https://hcyang572-gif.github.io/sangju-policy-mobile/share.png" />
   <meta property="og:url" content="https://hcyang572-gif.github.io/sangju-policy-mobile/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="style.css?v=0.4.2" />
+  <link rel="stylesheet" href="style.css?v=0.4.3" />
 </head>
 <body>
   <!-- 반복 영역 건너뛰기(KWCAG 2.2): 키보드 첫 Tab에서만 노출, 본문(main#app)으로 즉시 이동 -->
@@ -55,9 +55,18 @@
       <div class="topbar-titles">
         <span class="brand-eyebrow">시민 참여형</span>
         <h1 id="topTitle">상주시 정책플랫폼</h1>
-        <span id="topSub" class="topsub">수요자 기반 정책 플랫폼</span>
+        <!-- ⚠ #topSub 는 요소를 지우면 app.js showView() 의 $("topSub").hidden 이 터진다.
+           양호창님 지시로 «수요자 기반 정책 플랫폼» 문구만 비웠다(요소·id·class 유지). -->
+        <span id="topSub" class="topsub"></span>
       </div>
       <span class="brand-tag">시민용</span>
+      <!-- 「안내」 — 홈에서 덜어낸 «홈 화면에 추가하는 법»·«불편신고»를 여기 한 곳에 모았다.
+           (설계안 ②「옮긴 것」: 설치 안내 띠·푸터 오류문의 → 헤더 «안내»)
+           헤더 아이콘 «하나»라 홈 화면의 버튼 개수 상한(3개)에 영향을 주지 않는다. -->
+      <button id="helpBtn" class="help-btn tap" type="button" aria-haspopup="dialog">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9.4a2.4 2.4 0 1 1 3.2 2.3c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 16.8h.01"/></svg>
+        <span>안내</span>
+      </button>
     </div>
   </header>
   <div class="topline"></div>
@@ -69,10 +78,10 @@
          저절로 바꾸지 않는다. 여기서 알리고, «새로고침»을 누를 때만 반영한다.
          (자동 변경이 없으므로 «정지 기능»이 따로 필요 없다 — KWCAG 6.2.2) -->
     <div id="dataRtBanner" class="rt-banner" role="status" aria-live="polite" hidden>
-      <span aria-hidden="true">🔔</span>
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8.6a6 6 0 1 0-12 0c0 5-2 6.4-2 6.4h16s-2-1.4-2-6.4"/><path d="M10.3 18.8a2 2 0 0 0 3.4 0"/></svg>
       <span id="dataRtText" class="rt-banner-text"></span>
       <button id="dataRtBtn" class="rt-banner-btn" type="button">새로고침</button>
-      <button id="dataRtClose" class="rt-banner-close" type="button" aria-label="알림 닫기">✕</button>
+      <button id="dataRtClose" class="rt-banner-close" type="button" aria-label="알림 닫기"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
 
     <!-- 홈 -->
@@ -86,17 +95,16 @@
         <span id="newBannerText"></span>
         <span class="new-banner-actions">
           <button id="newBannerView" type="button">보기</button>
-          <button id="newBannerClose" type="button" aria-label="닫기">✕</button>
+          <button id="newBannerClose" type="button" aria-label="닫기"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </span>
       </div>
       <!-- 2026 시정구호 — 이미지에 담긴 «글»이 곧 내용이므로 장식 이미지가 아니다.
            aria-hidden 을 쓰지 말고 alt 에 전문을 넣는다(대체텍스트 필수, KWCAG 5.1.1).
            반응형: 좁은 화면은 2줄형(글자가 더 큼), 600px 이상은 1줄형.
            picture+source(media) 라 브라우저가 «필요한 파일 하나만» 내려받는다. -->
-      <p class="lead">상주시 지원사업을 쉽게 찾아보세요</p>
       <!-- 인앱 브라우저(카톡·네이버 등) 안내: 진짜 브라우저로 열어야 설치 가능 -->
       <div id="inappBanner" class="inapp-banner" hidden>
-        <span class="inapp-emoji" aria-hidden="true">📲</span>
+        <svg class="ic inapp-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/><path d="M12 14.5V7.5m0 0-2.4 2.4M12 7.5l2.4 2.4"/></svg>
         <div class="inapp-body">
           <div id="inappText" class="inapp-text"></div>
           <div class="inapp-actions">
@@ -104,55 +112,49 @@
             <button id="inappCopy" class="inapp-btn ghost" type="button" hidden>주소 복사</button>
           </div>
         </div>
-        <button id="inappClose" class="inapp-close" type="button" aria-label="닫기">✕</button>
+        <button id="inappClose" class="inapp-close" type="button" aria-label="닫기"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <!-- ⚠ HTML 규격: button 안에 button(또는 role="button")을 넣을 수 없다(중첩 컨트롤).
            바깥은 div 로 두고 «안내 열기»와 «닫기»를 형제 버튼으로 분리 → 키보드로 각각 조작 가능 -->
       <div id="a2hsTip" class="a2hs-tip" hidden>
         <button id="a2hsOpen" class="a2hs-open" type="button">
-          <span class="a2hs-emoji" aria-hidden="true">📲</span>
+          <svg class="ic a2hs-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/><path d="M12 14.5V7.5m0 0-2.4 2.4M12 7.5l2.4 2.4"/></svg>
           <span class="a2hs-text">홈 화면에 추가하면 <b>앱처럼</b> 써요</span>
           <span class="a2hs-go">방법 보기 ›</span>
         </button>
-        <button id="a2hsClose" class="a2hs-close" type="button" aria-label="설치 안내 닫기">✕</button>
+        <button id="a2hsClose" class="a2hs-close" type="button" aria-label="설치 안내 닫기"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="search-box">
-        <input id="homeSearch" type="search" placeholder="🔍 사업명·내용으로 검색" aria-label="사업명·내용으로 검색" />
+        <svg class="ic search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+        <input id="homeSearch" type="search" placeholder="어떤 지원이 필요하세요?" aria-label="어떤 지원이 필요하세요? 사업명이나 내용으로 찾기" />
       </div>
+      <!-- 분야 칩 — 시안 A: 검색 바로 아래에서 «무엇이 있는지» 먼저 보인다.
+           ui.js(시각 레이어)가 ① 분야 이름에 맞는 인라인 SVG 를 넣고
+           ② 자주 찾는 8개만 펴 두고 나머지는 「분야 전체 보기」로 접는다(데이터·필터는 그대로). -->
+      <h2 class="section-title">분야별로 찾기</h2>
+      <div id="categoryChips" class="chips"></div>
+
+      <!-- 홈의 «주된 행동»은 하나뿐이다(규격서 0절 개수 상한: 주요 버튼 1 · 버튼 총량 3).
+           예전의 「전체 사업 보기」 큰 버튼은 분야 줄 맨 앞의 «전체» 칩으로 옮겼다 —
+           기능은 그대로 남고, 홈에서 눈에 보이는 버튼만 줄었다. -->
       <div class="big-actions">
-        <button class="big-btn" data-go="all"><span aria-hidden="true">📋</span><span>전체 사업 보기</span></button>
-        <button class="big-btn primary" data-go="recommend"><span aria-hidden="true">🙋</span><span>나에게 맞는 사업 찾기</span></button>
+        <button class="big-btn primary" data-go="recommend"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.5 5.3 5.7.8-4.1 4 1 5.7-5.1-2.8-5.1 2.8 1-5.7-4.1-4 5.7-.8z"/></svg><span>나에게 맞는 사업 찾기</span></button>
       </div>
 
       <!-- 내 신청 현황 진입점 — 서버에 조회 함수(check_application_status)가 있을 때만
            app.js 가 hidden 을 푼다(없으면 «조용히» 감춘 채로 둔다: 기존 방어 원칙).
            접근명은 «내 신청 현황» 한 마디로 짧게 하고, 설명줄은 aria-describedby 로 잇는다
            (카드 글자 전체가 이름이 되면 낭독이 길어져 무엇을 누르는지 늦게 알게 된다). -->
-      <button id="myStatusEntry" class="status-card" data-go="mystatus" type="button" hidden
+      <button id="myStatusEntry" class="status-card is-moved" data-go="mystatus" type="button" hidden
               aria-label="내 신청 현황" aria-describedby="myStatusEntryDesc">
-        <span class="status-card-icon" aria-hidden="true">🧾</span>
+        <svg class="ic status-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7.6z"/><path d="M13.4 3v4.6H18"/><path d="M9.4 14.2l1.9 1.9 3.4-3.6"/></svg>
         <span class="status-card-text">
           <span class="status-card-title">내 신청 현황</span>
           <span id="myStatusEntryDesc" class="status-card-desc">신청하신 사업이 지금 어디까지 진행됐는지 확인해요</span>
         </span>
-        <span class="status-card-arrow" aria-hidden="true">›</span>
+        <svg class="ic status-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
       </button>
 
-      <!-- 정책참여: 지원사업과 다른 갈래임을 색·구분선으로 명확히 분리 -->
-      <div class="home-divider" role="separator" aria-hidden="true"></div>
-      <h2 class="section-label propose-label"><span aria-hidden="true">🗳</span> 시민 정책참여</h2>
-      <!-- 접근명(aria-label)을 따로 두지 않는다. 카드 안 «보이는 글자»가 그대로 접근명이 되어야
-           «정책참여 눌러» 같은 음성 명령이 매칭된다(장식 아이콘·화살표는 aria-hidden 이라 제외됨). -->
-      <button class="propose-card" data-go="propose" type="button">
-        <span class="propose-card-icon" aria-hidden="true">🗳</span>
-        <span class="propose-card-text">
-          <span class="propose-card-title">정책참여 (시민 제안)</span>
-          <span class="propose-card-desc">이런 정책 어때요? 시민이 직접 제안·공감해요</span>
-        </span>
-        <span class="propose-card-arrow" aria-hidden="true">›</span>
-      </button>
-      <h2 class="section-title">분야별로 찾기</h2>
-      <div id="categoryChips" class="chips"></div>
     </section>
 
     <!-- 목록 -->
@@ -160,7 +162,8 @@
       <!-- section 은 이름(heading)이 있어야 보조기기가 영역을 구분한다. 화면 제목은 상단바가 맡으므로 화면에는 숨기고 낭독만 -->
       <h2 class="sr-only">지원사업 목록</h2>
       <div class="search-box sticky">
-        <input id="listSearch" type="search" placeholder="🔍 결과 안에서 검색" aria-label="결과 안에서 검색" />
+        <svg class="ic search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+        <input id="listSearch" type="search" placeholder="결과 안에서 찾기" aria-label="결과 안에서 찾기" />
       </div>
       <p id="listMeta" class="list-meta" aria-live="polite"></p>
       <div id="listResults" class="cards"></div>
@@ -177,7 +180,7 @@
       </div>
       <label class="field-label" id="situationLabel">② 해당하는 상황을 모두 선택</label>
       <div id="situationList" class="situations" role="group" aria-labelledby="situationLabel"></div>
-      <button id="recommendRun" class="big-btn primary full">맞는 사업 찾기 →</button>
+      <button id="recommendRun" class="big-btn primary full">맞는 사업 찾기 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg></button>
     </section>
 
     <!-- 상세 -->
@@ -191,7 +194,6 @@
       <h2 id="applyTitle" class="apply-title">신청하기</h2>
       <!-- 📌 접수 안내(비고): 해당 사업에 값이 있을 때만 JS가 채운다 -->
       <div id="applyNotice"></div>
-      <p class="apply-hint">아래 내용을 작성해 제출하면 담당 부서로 바로 접수됩니다.</p>
       <!-- form 시맨틱: 화면낭독기가 «입력 양식»으로 인식하고, 휴대폰 자판의 «완료»로도 제출된다.
            novalidate — 브라우저 기본 풍선말은 낭독기 지원이 고르지 않아, 아래 자체 오류 안내를 쓴다. -->
       <form id="applyForm" novalidate>
@@ -206,8 +208,8 @@
                required aria-required="true" aria-describedby="applyPhoneErr" />
         <p id="applyPhoneErr" class="field-err" role="alert" hidden></p>
 
-        <label class="field-label" for="applyMemo">문의사항 (선택)</label>
-        <textarea id="applyMemo" class="text-input" rows="4" placeholder="궁금한 점이나 추가로 전달할 내용"></textarea>
+        <label class="field-label" for="applyMemo">더 하실 말씀 <span class="opt">(없으면 비워 두세요)</span></label>
+        <textarea id="applyMemo" class="text-input" rows="4" placeholder="궁금한 점이나 더 알리고 싶은 내용"></textarea>
 
         <!-- ⚖ 개인정보 수집·이용 동의 (개인정보 보호법 §15) — 없으면 수집 자체가 위법.
              구 PC앱 apply_view.py 의 «고지문 + 필수 동의 체크 + 미체크 시 차단»을 그대로 복원한다.
@@ -229,27 +231,29 @@
           <p class="consent-more">자세한 내용은 <button type="button" id="applyPrivacyLink" class="link-btn">개인정보 처리방침</button>에서 확인하실 수 있습니다.</p>
         </fieldset>
 
-        <button id="applySend" type="submit" class="big-btn primary full"><span aria-hidden="true">✋</span> 신청서 제출하기</button>
+        <button id="applySend" type="submit" class="big-btn primary full"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11"/></svg> 신청서 보내기</button>
       </form>
-      <p class="apply-note">※ 제출하면 담당 부서로 바로 접수됩니다.</p>
+      <p class="apply-note">※ 보내면 담당 부서로 바로 접수됩니다.</p>
     </section>
 
-    <!-- 오류 문의 -->
+    <!-- 불편신고(옛 「오류 문의」) — 메일 제목의 [오류문의] 태그는 자동접수.py 가 쓰므로 그대로 둔다 -->
     <section id="view-inquiry" class="view" hidden>
-      <h2 class="apply-title">오류 · 문의(개발자)</h2>
-      <p class="apply-hint">이용 중 불편하거나 오류가 있으면 알려주세요. 담당자에게 전달됩니다.</p>
-      <label class="field-label" for="inquiryMemo">문의 내용</label>
+      <h2 class="apply-title">불편신고</h2>
+      <p class="apply-hint">쓰시다가 불편한 점이 있으면 알려 주세요. 담당자에게 전달됩니다.</p>
+      <label class="field-label" for="inquiryMemo">어떤 점이 불편하셨나요</label>
       <textarea id="inquiryMemo" class="text-input" rows="6" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
       <label class="field-label" for="inquiryContact">연락처 (선택)</label>
       <input id="inquiryContact" class="text-input" type="text" placeholder="회신받을 연락처나 이메일" />
-      <button id="inquirySend" class="big-btn primary full"><span aria-hidden="true">📨</span> 문의 보내기</button>
+      <button id="inquirySend" class="big-btn primary full"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.8 6.6 8.2 6 8.2-6"/></svg> 불편신고 보내기</button>
       <p class="apply-note">※ 보내면 hcyang572@korea.kr 로 전달됩니다.</p>
     </section>
 
     <!-- 신청 완료 -->
     <section id="view-done" class="view" hidden>
       <div class="done-box">
-        <div class="done-check" aria-hidden="true">✅</div>
+        <!-- 상상주도 — 장식이므로 alt=""(낭독하지 않는다). 아래에서 살짝 떠오르며 «한 번만» 나타난다 -->
+        <img class="mascot" src="assets/sangsang1.png" width="120" height="120" alt="" />
+        <svg class="ic done-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>
         <h2>신청이 접수되었습니다</h2>
         <p id="doneProgram" class="done-program"></p>
         <p id="doneReceipt" class="done-receipt" role="status" aria-live="polite" hidden></p>
@@ -257,16 +261,16 @@
              기기를 바꾸거나 저장자료를 지우면 이 코드로만 다시 볼 수 있어 «적어 두세요»를 강조한다.
              (문의 완료 화면에서는 JS 가 이 상자를 숨긴다) -->
         <div id="doneCodeBox" class="code-box" hidden>
-          <p class="code-box-k"><span aria-hidden="true">🔑</span> 이 코드를 꼭 적어 두세요</p>
+          <p class="code-box-k"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21l-1.6 2.2M17.4 12v2.6"/></svg> 이 번호를 꼭 적어 두세요</p>
           <p id="doneCode" class="code-box-v"></p>
-          <p class="code-box-desc">진행 상태를 확인할 때 쓰는 <b>조회코드</b>입니다.<br>
+          <p class="code-box-desc">진행 상태를 확인할 때 쓰는 <b>확인 번호</b>입니다.<br>
              이 휴대폰에는 저장해 두었지만, 다른 기기에서 보시려면 이 코드가 필요합니다.<br>
              이 코드를 아는 사람은 누구나 이 신청의 진행 상태와 담당 부서 안내문을 볼 수 있습니다. 문자·메신저로 다른 사람에게 보내지 마시고, 비밀번호처럼 본인만 보관해 주세요.</p>
-          <button id="doneCodeCopy" class="code-copy-btn" type="button"><span aria-hidden="true">📋</span> 코드 복사</button>
+          <button id="doneCodeCopy" class="code-copy-btn" type="button"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.6 6h.01M3.6 12h.01M3.6 18h.01"/></svg> 번호 복사</button>
           <p id="doneCodeMsg" class="code-copy-msg" role="status" aria-live="polite"></p>
         </div>
         <p class="done-desc">담당 부서로 신청 내용이 전달되었습니다.<br>처리 결과는 담당자가 연락처로 안내드립니다.</p>
-        <button id="doneStatus" class="big-btn full" type="button" hidden><span aria-hidden="true">🧾</span> 내 신청 현황 보기</button>
+        <button id="doneStatus" class="big-btn full" type="button" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7.6z"/><path d="M13.4 3v4.6H18"/><path d="M9.4 14.2l1.9 1.9 3.4-3.6"/></svg> 내 신청 현황 보기</button>
         <button id="doneHome" class="big-btn primary full">처음으로</button>
       </div>
     </section>
@@ -275,19 +279,18 @@
     <section id="view-mystatus" class="view" hidden>
       <h2 class="sr-only">내 신청 현황</h2>
       <p class="apply-hint">이 휴대폰으로 신청하신 내역의 진행 상태입니다.
-        개인정보 보호를 위해 <b>조회코드</b>를 아는 경우에만 조회되며, 이름·연락처는 표시하지 않습니다.
-        여러 사람이 함께 쓰는 휴대폰이나 컴퓨터에서 보셨다면, 확인이 끝난 뒤 아래 「이 기기에서 지우기」를 눌러 주세요.</p>
+        이름·연락처는 표시하지 않으며, <b>확인 번호</b>를 아는 경우에만 보입니다.</p>
 
       <div class="ms-toolbar">
         <span id="msUpdated" class="ms-updated"></span>
-        <button id="msRefresh" class="ms-tool-btn" type="button"><span aria-hidden="true">🔄</span> 지금 새로고침</button>
+        <button id="msRefresh" class="ms-tool-btn" type="button"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 지금 새로고침</button>
         <!-- ⏸ 자동 갱신 정지(KWCAG 2.2 «정지 기능 제공») — 화면이 스스로 바뀌는 이상
              멈춰 두고 천천히 보거나 낭독을 들을 수 있어야 한다. 상태는 «글자»가 알려 준다. -->
         <button id="msAutoBtn" class="ms-tool-btn" type="button"><span aria-hidden="true">⏸</span> 자동 새로고침 멈추기</button>
         <!-- 🧹 공용 기기(주민센터·도서관 PC, 가족 태블릿)에서 앞사람의 조회코드가 남지 않게
              시민이 «스스로» 지울 수 있어야 한다. 지우는 것은 이 기기의 보관값뿐이다. -->
         <button id="msClear" class="ms-tool-btn" type="button"
-                aria-label="이 기기에서 지우기 — 이 기기에 보관된 조회코드를 모두 지웁니다."><span aria-hidden="true">🧹</span> 이 기기에서 지우기</button>
+                aria-label="이 휴대폰에서 지우기 — 이 휴대폰에 보관된 확인 번호를 모두 지웁니다."><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13.8 4.6 5.6 5.6-7.4 7.4H6.4l-2.8-2.8z"/><path d="M20.4 20.4H9.6"/></svg> 이 휴대폰에서 지우기</button>
       </div>
 
       <div id="msList" class="ms-list"></div>
@@ -295,10 +298,10 @@
       <p id="msAnnounce" class="sr-only" role="status" aria-live="polite"></p>
 
       <div class="ms-manual">
-        <h3 class="ms-manual-title"><span aria-hidden="true">📱</span> 다른 기기에서 신청하셨나요?</h3>
-        <p class="apply-hint">신청 완료 화면에서 받으신 <b>조회코드</b>를 입력하시면 이 기기에서도 확인할 수 있습니다.</p>
+        <h3 class="ms-manual-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/></svg> 다른 기기에서 신청하셨나요?</h3>
+        <p class="apply-hint">신청을 마칠 때 받으신 <b>확인 번호</b>를 넣으시면 이 휴대폰에서도 보입니다.</p>
         <form id="msForm" novalidate>
-          <label class="field-label" for="msCode">조회코드 <span class="req">(필수)</span></label>
+          <label class="field-label" for="msCode">확인 번호 <span class="req">(필수)</span></label>
           <input id="msCode" class="text-input" type="text" autocomplete="off" autocapitalize="characters"
                  spellcheck="false" maxlength="20" placeholder="예: A7KQ3M9XTB"
                  aria-describedby="msCodeHelp msCodeErr" />
@@ -311,7 +314,7 @@
                  aria-describedby="msReceiptHelp" />
           <p id="msReceiptHelp" class="field-help">여러 건을 신청하신 경우, 특정 건만 보시려면 접수번호를 함께 넣으세요.</p>
 
-          <button id="msLookup" class="big-btn primary full" type="submit">조회하기</button>
+          <button id="msLookup" class="big-btn primary full" type="submit">내 신청 찾기</button>
         </form>
 
         <!-- 🔑 조회코드 «되찾기» — 코드를 적어 두지 않고 기기를 바꾼 분을 위한 «보조» 창구.
@@ -324,12 +327,12 @@
                 app.js 가 이 블록 전체를 «조용히» 숨깁니다. -->
         <div id="msRecoverWrap" class="ms-recover">
           <button id="msRecoverToggle" class="link-btn ms-recover-toggle" type="button"
-                  aria-expanded="false" aria-controls="msRecoverPanel"><span aria-hidden="true">🔑</span>조회코드를 잊으셨나요?</button>
+                  aria-expanded="false" aria-controls="msRecoverPanel"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21l-1.6 2.2M17.4 12v2.6"/></svg>확인 번호를 잊으셨나요?</button>
 
           <div id="msRecoverPanel" class="ms-recover-panel" hidden>
             <p class="apply-hint">신청하실 때 적어 주신 <b>이름</b>과 <b>연락처 뒷 4자리</b>가 모두 맞으면
-              <b>조회코드</b>를 다시 알려 드립니다. 주민등록번호는 받지 않습니다.<br>
-              최근 1년 안에 신청하신 내역만 찾으며, 조회코드 외에는 아무것도 알려 드리지 않습니다.</p>
+              <b>확인 번호</b>를 다시 알려 드립니다. 주민등록번호는 받지 않습니다.<br>
+              최근 1년 안에 신청하신 내역만 찾으며, 확인 번호 외에는 아무것도 알려 드리지 않습니다.</p>
             <form id="msRecoverForm" novalidate>
               <label class="field-label" for="msRecName">이름 <span class="req">(필수)</span></label>
               <input id="msRecName" class="text-input" type="text" autocomplete="name"
@@ -344,17 +347,17 @@
               <p id="msRecPhone4Help" class="field-help">신청서에 적으신 휴대전화 번호의 마지막 네 자리 숫자입니다.</p>
               <p id="msRecErr" class="field-err" role="alert" hidden></p>
 
-              <button id="msRecoverBtn" class="big-btn primary full" type="submit"><span aria-hidden="true">🔑</span> 조회코드 찾기</button>
+              <button id="msRecoverBtn" class="big-btn primary full" type="submit"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21l-1.6 2.2M17.4 12v2.6"/></svg> 확인 번호 찾기</button>
             </form>
 
             <!-- 되찾은 코드 — 완료 화면과 «같은» 상자를 써서 「적어 두세요」가 같은 무게로 보이게 한다. -->
-            <div id="msRecResult" class="code-box ms-recover-result" tabindex="-1" role="group" aria-label="되찾은 조회코드" hidden>
-              <p class="code-box-k"><span aria-hidden="true">🔑</span> 이 코드를 꼭 적어 두세요</p>
+            <div id="msRecResult" class="code-box ms-recover-result" tabindex="-1" role="group" aria-label="되찾은 확인 번호" hidden>
+              <p class="code-box-k"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21l-1.6 2.2M17.4 12v2.6"/></svg> 이 번호를 꼭 적어 두세요</p>
               <p id="msRecCodes" class="code-box-v"></p>
               <p class="code-box-desc">이 기기에도 보관했으니 지금은 위 목록에서 바로 보실 수 있습니다.<br>
                  다만 <b>기기를 바꾸거나 저장자료를 지우면 다시 사라집니다.</b> 메모장·수첩에 적어 두세요.<br>
                  이 코드를 아는 사람은 누구나 해당 신청의 진행 상태와 담당 부서 안내문을 볼 수 있습니다. 비밀번호처럼 본인만 보관해 주세요.</p>
-              <button id="msRecCopy" class="code-copy-btn" type="button"><span aria-hidden="true">📋</span> 코드 복사</button>
+              <button id="msRecCopy" class="code-copy-btn" type="button"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.6 6h.01M3.6 12h.01M3.6 18h.01"/></svg> 번호 복사</button>
               <p id="msRecCopyMsg" class="code-copy-msg" role="status" aria-live="polite"></p>
             </div>
           </div>
@@ -367,7 +370,7 @@
     <!-- 정책참여: 제안 목록 -->
     <section id="view-propose" class="view" hidden>
       <div class="propose-hero">
-        <h2 class="propose-hero-title"><span aria-hidden="true">🗳</span> 시민 정책제안</h2>
+        <h2 class="propose-hero-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L14 5v14l-6.8-4.5H4z"/><path d="M17.4 9.2a4.4 4.4 0 0 1 0 5.6"/></svg> 정책 제안</h2>
         <div class="propose-hero-sub">"이런 정책 어때요?" 시민이 직접 제안해요</div>
       </div>
       <p class="legal-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
@@ -382,7 +385,7 @@
       <!-- 실시간 알림 띠: 새 제안이 들어와도 화면을 저절로 바꾸지 않고 여기서 알린다.
            (자동 변경이 없으므로 «정지 기능»이 따로 필요 없다) -->
       <div id="ppRtBanner" class="rt-banner" role="status" aria-live="polite" hidden>
-        <span aria-hidden="true">🔔</span>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8.6a6 6 0 1 0-12 0c0 5-2 6.4-2 6.4h16s-2-1.4-2-6.4"/><path d="M10.3 18.8a2 2 0 0 0 3.4 0"/></svg>
         <span id="ppRtText" class="rt-banner-text"></span>
         <button id="ppRtBtn" class="rt-banner-btn" type="button">새로고침</button>
       </div>
@@ -399,7 +402,7 @@
 
     <!-- 정책참여: 제안 작성 -->
     <section id="view-pwrite" class="view" hidden>
-      <h2 id="pwriteTitle" class="apply-title"><span aria-hidden="true">🗳</span> 정책 제안하기</h2>
+      <h2 id="pwriteTitle" class="apply-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L14 5v14l-6.8-4.5H4z"/><path d="M17.4 9.2a4.4 4.4 0 0 1 0 5.6"/></svg> 정책 제안하기</h2>
       <p class="apply-hint">닉네임으로 자유롭게 제안하세요. 실명·연락처는 적지 마세요.</p>
 
       <label class="field-label" for="pwCategory">제안 분야</label>
@@ -420,7 +423,7 @@
       <label class="field-label" for="pwPin">수정용 PIN (숫자 4자리) <span class="req">*</span></label>
       <input id="pwPin" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="예: 1234 (본인 수정/삭제용)" />
       <p class="apply-note left">※ PIN은 본인 글 수정·삭제에만 쓰입니다.<br>
-        PIN을 잊으셨나요? <button id="pwPinHelp" class="foot-link-btn" type="button">오류 문의</button>로 연락 주시면 확인 후 도와드립니다.</p>
+        PIN을 잊으셨나요? <button id="pwPinHelp" class="foot-link-btn" type="button">불편신고</button>로 연락 주시면 확인 후 도와드립니다.</p>
 
       <!-- 도배방지 허니팟(사람 눈엔 안 보임) -->
       <input id="pwHoney" class="pp-honey" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" />
@@ -430,7 +433,7 @@
         <span>허위·욕설·개인정보(실명·전화·주민번호)를 포함하지 않음에 동의합니다.</span>
       </label>
 
-      <button id="pwSubmit" class="big-btn primary full">제안 등록</button>
+      <button id="pwSubmit" class="big-btn primary full">제안 보내기</button>
       <p class="apply-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
     </section>
     <!-- △△△ 정책참여 끝 △△△ -->
@@ -453,9 +456,9 @@
         <ul class="privacy-ul">
           <li><b>지원사업 신청 시</b> — 이름, 연락처(휴대전화), (작성 시) 문의사항, 신청한 사업명<br>
             <span class="privacy-sub">※ 접수 과정에서 <b>접수번호</b>가 자동 생성되며, 담당 부서가 <b>처리상태·처리메모</b>를 함께 기록합니다.<br>
-            ※ 신청 시 이용자 휴대폰에서 <b>조회코드</b>(무작위 영문·숫자 10자리, 개인정보 아님)가 만들어져 함께 저장되고 이 기기에도 보관됩니다. 「내 신청 현황」에서 <b>본인 신청의 진행 상태·담당 부서 안내문</b>을 확인하는 데만 쓰이며, 이 코드로는 이름·연락처를 조회할 수 없습니다.<br>
-            ※ 조회코드는 본인 확인을 대신하는 값입니다. 코드를 알고 있는 사람은 누구나 해당 신청의 진행 상태와 담당 부서 안내문을 볼 수 있으므로, 비밀번호처럼 본인만 보관해 주세요. 이 기기에 보관된 코드는 「내 신청 현황」 화면의 「이 기기에서 지우기」로 언제든 지울 수 있으며, 마지막 확인일로부터 180일이 지나면 자동으로 지워집니다.<br>
-            ※ 조회코드를 잊으신 경우, 「내 신청 현황」 화면의 <b>「조회코드를 잊으셨나요?」</b>에서 <b>본인확인 목적으로 입력하신 이름과 연락처 뒷 4자리를 이미 접수된 신청 내역과 대조</b>하여, 모두 일치하면 <b>조회코드만</b> 다시 알려 드립니다. 이때 <b>주민등록번호는 수집하지 않으며</b>, 대조에 쓰인 이름·연락처 뒷 4자리는 <b>별도로 저장하지 않습니다.</b> 최근 1년 이내 신청 내역에 한하며, 이름이 같아도 연락처가 서로 다른 신청이 있으면 알려 드리지 않습니다. 무단 조회를 막기 위해 접속지점별 시도 횟수를 제한하며, 이때 <b>원문 IP 주소를 저장하지 않고 복원할 수 없도록 변환한 값과 시도 횟수만</b> 최대 1일간 보관합니다.<br>
+            ※ 신청 시 이용자 휴대폰에서 <b>확인 번호</b>(무작위 영문·숫자 10자리, 개인정보 아님)가 만들어져 함께 저장되고 이 기기에도 보관됩니다. 「내 신청 현황」에서 <b>본인 신청의 진행 상태·담당 부서 안내문</b>을 확인하는 데만 쓰이며, 이 번호로는 이름·연락처를 조회할 수 없습니다.<br>
+            ※ 확인 번호는 본인 확인을 대신하는 값입니다. 번호를 알고 있는 사람은 누구나 해당 신청의 진행 상태와 담당 부서 안내문을 볼 수 있으므로, 비밀번호처럼 본인만 보관해 주세요. 이 기기에 보관된 번호는 「내 신청 현황」 화면의 「이 휴대폰에서 지우기」로 언제든 지울 수 있으며, 마지막 확인일로부터 180일이 지나면 자동으로 지워집니다.<br>
+            ※ 확인 번호를 잊으신 경우, 「내 신청 현황」 화면의 <b>「확인 번호를 잊으셨나요?」</b>에서 <b>본인확인 목적으로 입력하신 이름과 연락처 뒷 4자리를 이미 접수된 신청 내역과 대조</b>하여, 모두 일치하면 <b>확인 번호만</b> 다시 알려 드립니다. 이때 <b>주민등록번호는 수집하지 않으며</b>, 대조에 쓰인 이름·연락처 뒷 4자리는 <b>별도로 저장하지 않습니다.</b> 최근 1년 이내 신청 내역에 한하며, 이름이 같아도 연락처가 서로 다른 신청이 있으면 알려 드리지 않습니다. 무단 조회를 막기 위해 접속지점별 시도 횟수를 제한하며, 이때 <b>원문 IP 주소를 저장하지 않고 복원할 수 없도록 변환한 값과 시도 횟수만</b> 최대 1일간 보관합니다.<br>
             ※ <b>신청자의 이메일 주소는 수집하지 않습니다.</b> 결과 안내는 위 연락처로 담당자가 연락드립니다.<br>
             ※ 이 모바일 앱에는 <b>파일 첨부 기능이 없습니다.</b></span></li>
           <li><b>정책참여(시민 제안)</b> — 닉네임, (선택) 동네, 제안 내용 / 공감 시 기기식별값(localStorage) / 본인확인용 PIN(임의 숫자, 개인정보 아님)</li>
@@ -465,7 +468,7 @@
         <h3 class="privacy-h">2. 개인정보의 수집·이용 목적</h3>
         <ul class="privacy-ul">
           <li>지원사업 신청 접수·처리 및 담당 부서 안내</li>
-          <li>조회코드를 잊으신 경우 <b>본인확인</b> — 입력하신 이름·연락처 뒷 4자리를 접수된 신청 내역과 대조하여 조회코드를 다시 안내</li>
+          <li>확인 번호를 잊으신 경우 <b>본인확인</b> — 입력하신 이름·연락처 뒷 4자리를 접수된 신청 내역과 대조하여 확인 번호를 다시 안내</li>
           <li>시민 정책제안 검토·반영</li>
           <li>이용 중 오류·문의에 대한 응대</li>
         </ul>
@@ -520,11 +523,20 @@
   </main>
 
   <!-- 엄지로 누르기 편한 하단 뒤로가기 버튼(상단 버튼과 별개) -->
+
+  <!-- 하단 탭바 — 시안 A 목업의 탭 4개. data-go 는 app.js bindEvents() 가 «자동으로» 잡으므로
+       로직을 건드리지 않는다. 홈 버튼과 «현재 화면» 강조는 ui.js(시각 레이어)가 맡는다.
+       홈에서 덜어낸 «정책참여·내 신청»의 진입점이 여기로 옮겨 왔다(기능 유지). -->
+  <nav id="tabBar" class="tabbar" aria-label="주요 메뉴">
+    <button class="tabbar-btn tap" type="button" data-tab="home"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.2 12 4l9 7.2"/><path d="M5.8 10.4V20h12.4v-9.6"/></svg><span>홈</span></button>
+    <button class="tabbar-btn tap" type="button" data-tab="recommend" data-go="recommend"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.5 5.3 5.7.8-4.1 4 1 5.7-5.1-2.8-5.1 2.8 1-5.7-4.1-4 5.7-.8z"/></svg><span>맞춤 찾기</span></button>
+    <button class="tabbar-btn tap" type="button" data-tab="propose" data-go="propose"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L14 5v14l-6.8-4.5H4z"/><path d="M17.4 9.2a4.4 4.4 0 0 1 0 5.6"/></svg><span>정책 제안</span></button>
+    <button class="tabbar-btn tap" type="button" data-tab="mystatus" data-go="mystatus"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7.6z"/><path d="M13.4 3v4.6H18"/><path d="M9.4 14.2l1.9 1.9 3.4-3.6"/></svg><span>내 신청</span></button>
+  </nav>
   <button id="fabBack" class="fab-back" hidden aria-label="뒤로가기">‹ 뒤로</button>
 
   <footer class="foot">
-    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear"><span aria-hidden="true">⚙</span> 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
-    <div class="foot-inquiry">오류 문의 <button id="inquiryLink" class="foot-mail-btn" type="button">hcyang572@korea.kr</button></div>
+    <div class="foot-team"><button id="teamBtn" class="gear-btn" type="button"><span class="gear"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.7 1.7 0 0 0 .35 1.9l.06.06a2 2 0 1 1-2.84 2.84l-.06-.06a1.7 1.7 0 0 0-1.9-.35 1.7 1.7 0 0 0-1.03 1.56v.17a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.9.35l-.06.06A2 2 0 1 1 3.8 16.4l.06-.06a1.7 1.7 0 0 0 .35-1.9 1.7 1.7 0 0 0-1.56-1.03H2.5a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.35-1.9L3.74 6.3A2 2 0 1 1 6.58 3.5l.06.06a1.7 1.7 0 0 0 1.9.35h.08A1.7 1.7 0 0 0 9.65 2.3v-.17a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.9-.35l.06-.06a2 2 0 1 1 2.84 2.84l-.06.06a1.7 1.7 0 0 0-.35 1.9v.08a1.7 1.7 0 0 0 1.56 1.03h.17a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z"/></svg> 톱니바퀴</span></button> 제6기 미래상주 희망연구팀</div>
     <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <button id="versionBtn" class="foot-link-btn" type="button" aria-label="v0.0.2 — 버전 정보 및 이용 안내 보기">v0.0.2</button></div>
   </footer>
 
@@ -532,7 +544,7 @@
   <div id="teamModal" class="modal-backdrop" hidden>
     <div class="team-card" role="dialog" aria-modal="true" aria-labelledby="teamModalTitle">
       <div class="team-card-head">
-        <span class="team-gear" aria-hidden="true">⚙</span>
+        <svg class="ic team-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.7 1.7 0 0 0 .35 1.9l.06.06a2 2 0 1 1-2.84 2.84l-.06-.06a1.7 1.7 0 0 0-1.9-.35 1.7 1.7 0 0 0-1.03 1.56v.17a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.9.35l-.06.06A2 2 0 1 1 3.8 16.4l.06-.06a1.7 1.7 0 0 0 .35-1.9 1.7 1.7 0 0 0-1.56-1.03H2.5a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.35-1.9L3.74 6.3A2 2 0 1 1 6.58 3.5l.06.06a1.7 1.7 0 0 0 1.9.35h.08A1.7 1.7 0 0 0 9.65 2.3v-.17a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.9-.35l.06-.06a2 2 0 1 1 2.84 2.84l-.06.06a1.7 1.7 0 0 0-.35 1.9v.08a1.7 1.7 0 0 0 1.56 1.03h.17a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z"/></svg>
         <div>
           <div class="team-card-title" id="teamModalTitle">톱니바퀴</div>
           <div class="team-card-sub">제6기 미래상주 희망연구팀</div>
@@ -550,11 +562,43 @@
     </div>
   </div>
 
+  <!-- 「안내」 모달 — 홈에서 덜어낸 두 가지를 여기 모았다(설계안 ②「옮긴 것」).
+       ① 홈 화면에 추가하는 법(예전 홈 상단 설치 안내 띠 — 이제 처음 1회만 뜬다)
+       ② 불편신고(예전 푸터 「오류 문의」)
+       ⚠ 모달 열기/닫기는 ModalA11y 를 지나므로 Esc·바깥 누르기·뒤로가기 한 번에 모두 닫힌다. -->
+  <div id="helpModal" class="modal-backdrop" hidden>
+    <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+      <div class="install-head">
+        <svg class="ic install-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9.4a2.4 2.4 0 1 1 3.2 2.3c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 16.8h.01"/></svg>
+        <div>
+          <div class="install-title" id="helpModalTitle">안내</div>
+        </div>
+      </div>
+      <ul class="help-list">
+        <li>
+          <button id="helpInstall" class="help-row tap" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/><path d="M12 14.5V7.5m0 0-2.4 2.4M12 7.5l2.4 2.4"/></svg>
+            <span class="help-row-t">홈 화면에 추가하는 법</span>
+            <svg class="ic help-row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+          </button>
+        </li>
+        <li>
+          <button id="helpInquiry" class="help-row tap" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg>
+            <span class="help-row-t">불편신고</span>
+            <svg class="ic help-row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+          </button>
+        </li>
+      </ul>
+      <button id="helpClose" class="big-btn primary full" type="button">닫기</button>
+    </div>
+  </div>
+
   <!-- 홈 화면에 추가(앱처럼 쓰기) 안내 모달 -->
   <div id="installModal" class="modal-backdrop" hidden>
     <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="installModalTitle">
       <div class="install-head">
-        <span class="install-emoji" aria-hidden="true">📲</span>
+        <svg class="ic install-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/><path d="M12 14.5V7.5m0 0-2.4 2.4M12 7.5l2.4 2.4"/></svg>
         <div>
           <div class="install-title" id="installModalTitle">앱처럼 설치하기</div>
           <div class="install-sub">홈 화면에 추가하면 한 번에 열려요</div>
@@ -562,15 +606,15 @@
       </div>
       <div class="install-guide">
         <div class="install-os">
-          <div class="install-os-name"><span aria-hidden="true">🍎</span> 아이폰 (Safari)</div>
+          <div class="install-os-name"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/></svg> 아이폰 (Safari)</div>
           <ol>
-            <li>아래 <b>공유 버튼</b> <span class="ico" aria-hidden="true">⬆️</span> 누르기</li>
+            <li>아래 <b>공유 버튼</b> <svg class="ic ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.4V4m0 0-3.4 3.4M12 4l3.4 3.4"/><path d="M5.6 12.4V19a1.6 1.6 0 0 0 1.6 1.6h9.6A1.6 1.6 0 0 0 18.4 19v-6.6"/></svg> 누르기</li>
             <li><b>‘홈 화면에 추가’</b> 선택</li>
             <li>오른쪽 위 <b>‘추가’</b> 누르기</li>
           </ol>
         </div>
         <div class="install-os">
-          <div class="install-os-name"><span aria-hidden="true">🤖</span> 안드로이드 (Chrome)</div>
+          <div class="install-os-name"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/></svg> 안드로이드 (Chrome)</div>
           <ol>
             <li>오른쪽 위 <b>⋮ 메뉴</b> 누르기</li>
             <li><b>‘홈 화면에 추가’</b> 또는 <b>‘앱 설치’</b> 선택</li>
@@ -586,17 +630,17 @@
   <div id="pinModal" class="modal-backdrop" hidden>
     <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="pinModalTitle">
       <div class="install-head">
-        <span class="install-emoji" aria-hidden="true">🔒</span>
+        <svg class="ic install-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10" width="15" height="10.5" rx="2.5"/><path d="M8 10V7.2a4 4 0 0 1 8 0V10"/></svg>
         <div>
           <div class="install-title" id="pinModalTitle">본인 확인</div>
           <div class="install-sub">작성 시 정한 4자리 PIN을 입력하세요</div>
         </div>
       </div>
       <input id="pinInput" class="text-input" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" aria-label="PIN 4자리 입력" />
-      <p class="apply-note left">PIN을 잊으셨나요? <button id="pinHelp" class="foot-link-btn" type="button">오류 문의</button>로 연락 주시면 확인 후 도와드립니다.</p>
+      <p class="apply-note left">PIN을 잊으셨나요? <button id="pinHelp" class="foot-link-btn" type="button">불편신고</button>로 연락 주시면 확인 후 도와드립니다.</p>
       <div class="pp-modal-actions">
-        <button id="pinEdit" class="big-btn full" type="button"><span aria-hidden="true">✏</span> 수정</button>
-        <button id="pinDelete" class="big-btn full pp-danger" type="button"><span aria-hidden="true">🗑</span> 삭제</button>
+        <button id="pinEdit" class="big-btn full" type="button"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4.2L20 8.2 15.8 4 4 15.8z"/><path d="m14.4 5.4 4.2 4.2"/></svg> 수정</button>
+        <button id="pinDelete" class="big-btn full pp-danger" type="button"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9.2 7V4.6h5.6V7"/><path d="m6.6 7 1 13h8.8l1-13"/></svg> 삭제</button>
       </div>
       <button id="pinCancel" class="big-btn primary full">취소</button>
     </div>
@@ -606,7 +650,7 @@
   <div id="reportModal" class="modal-backdrop" hidden>
     <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
       <div class="install-head">
-        <span class="install-emoji" aria-hidden="true">🚩</span>
+        <svg class="ic install-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4"/><path d="M6 5h11l-2 3.6 2 3.6H6"/></svg>
         <div>
           <div class="install-title" id="reportModalTitle">제안 신고</div>
           <div class="install-sub">부적절한 내용을 알려주세요</div>
@@ -629,7 +673,7 @@
   <div id="versionModal" class="modal-backdrop" hidden>
     <div class="install-card changelog-card" role="dialog" aria-modal="true" aria-labelledby="versionModalTitle">
       <div class="install-head">
-        <span class="install-emoji" aria-hidden="true">📋</span>
+        <svg class="ic install-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.6 6h.01M3.6 12h.01M3.6 18h.01"/></svg>
         <div>
           <div class="install-title" id="versionModalTitle">버전 정보 · 이용 안내</div>
           <div class="install-sub">상주시 정책플랫폼</div>
@@ -638,24 +682,24 @@
 
       <!-- 📌 이용 안내 (기존 푸터 항목을 이곳으로 통합) -->
       <div class="cl-guide">
-        <h3 class="cl-sec-h"><span aria-hidden="true">📌</span> 이용 안내</h3>
+        <h3 class="cl-sec-h"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 이용 안내</h3>
         <button id="installLink" class="cl-guide-row" type="button">
-          <span class="cl-guide-emoji" aria-hidden="true">📲</span>
+          <svg class="ic cl-guide-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.6h3"/><path d="M12 14.5V7.5m0 0-2.4 2.4M12 7.5l2.4 2.4"/></svg>
           <span class="cl-guide-txt">홈 화면에 앱처럼 추가하기</span>
-          <span class="cl-guide-go" aria-hidden="true">›</span>
+          <svg class="ic cl-guide-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
         </button>
         <button id="openBrowserLink" class="cl-guide-row" type="button">
-          <span class="cl-guide-emoji" aria-hidden="true">🌐</span>
+          <svg class="ic cl-guide-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5a13 13 0 0 1 0 17 13 13 0 0 1 0-17z"/></svg>
           <span class="cl-guide-txt">다른 브라우저(크롬·사파리)로 열기</span>
-          <span class="cl-guide-go" aria-hidden="true">›</span>
+          <svg class="ic cl-guide-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
         </button>
         <div class="cl-guide-row static">
-          <span class="cl-guide-emoji" aria-hidden="true">🔗</span>
+          <svg class="ic cl-guide-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13.6a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.7l-1.2 1.2"/><path d="M14 10.4a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.2-1.2"/></svg>
           <span class="cl-guide-txt cl-guide-url">hcyang572-gif.github.io/sangju-policy-mobile</span>
         </div>
       </div>
 
-      <h3 class="cl-sec-h"><span aria-hidden="true">📋</span> 버전별 개선사항</h3>
+      <h3 class="cl-sec-h"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.6 6h.01M3.6 12h.01M3.6 18h.01"/></svg> 버전별 개선사항</h3>
       <div id="changelogBody" class="changelog-body"></div>
       <button id="versionClose" class="big-btn primary full" type="button">닫기</button>
     </div>
@@ -663,9 +707,11 @@
 
   <!-- 공통 버전·개선사항 단일 소스(앱 스크립트보다 먼저 로드) -->
   <!-- 눌림 반응(파동)+햅틱. 앱 로직과 무관하게 «듣기만» 한다(passive·capture) -->
-  <script src="tap.js?v=0.4.2" defer></script>
-  <script src="version.js?v=0.4.2"></script>
-  <script src="config.js?v=0.4.2"></script>
+  <script src="tap.js?v=0.4.3" defer></script>
+  <!-- 시각 레이어: 분야 칩 아이콘·접기 · 하단 탭바 · 동적 이모지 → SVG. 앱 로직에 관여하지 않는다 -->
+  <script src="ui.js?v=0.4.3" defer></script>
+  <script src="version.js?v=0.4.3"></script>
+  <script src="config.js?v=0.4.3"></script>
   <!-- Supabase 클라이언트 (사업목록 하이브리드 조회·정책참여·서식·신청접수)
        ※ 세 앱(모바일웹·cloudui·webui) 모두 «같은 버전·같은 해시»를 쓴다. 하나만 바꾸지 말 것.
        · 버전 고정: @2 (뜬 범위)는 CDN이 언제든 다른 코드를 내려줄 수 있어 2.112.0 으로 못박음.
@@ -679,10 +725,10 @@
           integrity="sha384-De+l/Df7qym5QBDVocD3+gW1S7IjR3epf+6KbRDjB3FCCzM/LqVTwqckT6FhFar8"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- 서식 스토리지 공용 헬퍼(세 앱 공통). app.js 보다 먼저 로드 -->
-  <script src="forms.js?v=0.4.2"></script>
+  <script src="forms.js?v=0.4.3"></script>
   <!-- 신청 접수 공용 헬퍼(세 앱 공통·byte-identical). app.js 보다 먼저 로드 -->
-  <script src="apply_client.js?v=0.4.2"></script>
-  <script src="app.js?v=0.4.2"></script>
-  <script src="proposals.js?v=0.4.2"></script>
+  <script src="apply_client.js?v=0.4.3"></script>
+  <script src="app.js?v=0.4.3"></script>
+  <script src="proposals.js?v=0.4.3"></script>
 </body>
 </html>

@@ -108,7 +108,7 @@ window.SangjuApply = (function () {
       }
     } catch (e) { bytes = null; }
     if (!bytes) {
-      throw new Error("이 브라우저에서는 안전한 조회코드를 만들 수 없습니다. "
+      throw new Error("이 브라우저에서는 안전한 확인 번호를 만들 수 없습니다. "
         + "브라우저를 최신으로 올리시거나 다른 브라우저에서 신청해 주세요.");
     }
     for (i = 0; i < n; i++) {

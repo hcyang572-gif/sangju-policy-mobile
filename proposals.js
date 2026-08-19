@@ -53,7 +53,7 @@
   const STATUS_BADGE = {
     "접수": { cls: "st-accept", label: "접수" },
     "검토중": { cls: "st-review", label: "검토중" },
-    "반영": { cls: "st-done", label: "반영 ✅" },
+    "반영": { cls: "st-done", label: "반영" },
     "불채택": { cls: "st-reject", label: "불채택" },
     "보류": { cls: "st-hold", label: "보류" },
   };
@@ -102,7 +102,7 @@
   // 원인별 안내 + 다시 시도 버튼(빈 목록 자리에 그대로 렌더)
   function errBoxHtml(kind, retryId) {
     const btn = retryId
-      ? `<div class="err-actions"><button id="${retryId}" class="err-retry" type="button">🔄 다시 시도</button></div>`
+      ? `<div class="err-actions"><button id="${retryId}" class="err-retry" type="button"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 다시 시도</button></div>`
       : "";
     if (kind === "conn") {
       return `<div class="empty err-box" role="alert">
@@ -112,13 +112,13 @@
     }
     if (kind === "perm") {
       return `<div class="empty err-box" role="alert">
-        <div class="err-title">🔒 접근 권한이 없어 불러오지 못했습니다.</div>
+        <div class="err-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10" width="15" height="10.5" rx="2.5"/><path d="M8 10V7.2a4 4 0 0 1 8 0V10"/></svg> 접근 권한이 없어 불러오지 못했습니다.</div>
         <div class="err-desc">일시적인 설정 문제일 수 있습니다.<br>계속되면 관리 부서로 알려 주세요.</div>
         ${btn}</div>`;
     }
     if (kind === "setup") {
       return `<div class="empty err-box" role="alert">
-        <div class="err-title">🛠 정책참여 기능을 준비 중입니다.</div>
+        <div class="err-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 6.6a3.6 3.6 0 0 1 4.9-3.3l-2.7 2.7 1.4 1.4 2.7-2.7a3.6 3.6 0 0 1-4.6 4.7L6.8 18.9a2 2 0 1 1-2.8-2.8z"/></svg> 정책참여 기능을 준비 중입니다.</div>
         <div class="err-desc">DB 설정(SQL) 적용 후 이용할 수 있습니다.</div>
         ${btn}</div>`;
     }
@@ -203,6 +203,8 @@
     if (!client) { $("ppList").innerHTML = dbUnavailableMsg(); $("ppMore").hidden = true; return; }
     pstate.loading = true;
     $("ppListMeta").textContent = pstate.items.length ? `${pstate.items.length}개 표시` : "불러오는 중...";
+    // 첫 쪽이라 화면에 그릴 것이 «아직 없을 때»만 스켈레톤을 깐다(더 보기에서는 쓰지 않는다).
+    if (!pstate.items.length && window.skeletonHtml) $("ppList").innerHTML = window.skeletonHtml(3);
 
     const from = pstate.page * PAGE;
     const to = from + PAGE - 1;
@@ -235,7 +237,9 @@
   function renderList() {
     const box = $("ppList");
     if (pstate.items.length === 0) {
-      box.innerHTML = `<div class="empty">아직 등록된 제안이 없습니다.<br>첫 제안을 남겨보세요! 🗳</div>`;
+      // 빈 화면에는 상상주도 캐릭터가 CSS(.empty::before)로 «한 번만» 떠오른다.
+      // 장식을 겹쳐 쓰지 않도록 예전의 확성기 아이콘은 뺐다(규격서 0절 깔끔함).
+      box.innerHTML = `<div class="empty">아직 등록된 제안이 없습니다.<br>첫 제안을 남겨보세요!</div>`;
       $("ppListMeta").textContent = "0개";
       $("ppMore").hidden = true;
       return;
@@ -251,7 +255,7 @@
         </div>
         <h3>${esc(p.title)}</h3>
         <div class="pp-card-meta">
-          <span class="pp-like">👍 ${Number(p.like_count) || 0}</span>
+          <span class="pp-like"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 21V10l4.5-7 1 .6a2 2 0 0 1 .9 2.2L12.5 9H19a2 2 0 0 1 2 2.4l-1.5 7A2.4 2.4 0 0 1 17 20.5H7z"/><path d="M7 10.5H4V21h3"/></svg> ${Number(p.like_count) || 0}</span>
           <span class="pp-date">${fmtDate(p.created_at)}</span>
         </div>
       </div>`;
@@ -314,18 +318,18 @@
       <div class="pd-body">${esc(p.body)}</div>
 
       <div class="pd-like-box">
-        <div class="pd-like-count" aria-live="polite">👍 공감 <b id="pdLikeCount">${Number(p.like_count) || 0}</b></div>
-        <button id="pdLikeBtn" class="big-btn full ${liked ? "pp-liked" : "primary"}">${liked ? "👍 공감함 (취소)" : "👍 공감하기"}</button>
+        <div class="pd-like-count" aria-live="polite"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 21V10l4.5-7 1 .6a2 2 0 0 1 .9 2.2L12.5 9H19a2 2 0 0 1 2 2.4l-1.5 7A2.4 2.4 0 0 1 17 20.5H7z"/><path d="M7 10.5H4V21h3"/></svg> 공감 <b id="pdLikeCount">${Number(p.like_count) || 0}</b></div>
+        <button id="pdLikeBtn" class="big-btn full ${liked ? "pp-liked" : "primary"}">${liked ? "공감함 (취소)" : "공감하기"}</button>
       </div>
 
       <div class="pd-section-title">진행 상황</div>
       <ul class="pd-timeline">${timeline}</ul>
 
-      ${reply ? `<div class="pd-reply"><div class="pd-reply-title">💬 담당부서 답변</div><div class="pd-reply-body">${esc(reply)}</div></div>` : ""}
+      ${reply ? `<div class="pd-reply"><div class="pd-reply-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg> 담당부서 답변</div><div class="pd-reply-body">${esc(reply)}</div></div>` : ""}
 
       <div class="pd-actions">
         <button id="pdEditDel" class="big-btn full">본인 글 수정/삭제 (PIN)</button>
-        <button id="pdReport" class="big-btn full pp-ghost" aria-label="이 제안 신고하기"><span aria-hidden="true">🚩</span> 신고</button>
+        <button id="pdReport" class="big-btn full pp-ghost" aria-label="이 제안 신고하기"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4"/><path d="M6 5h11l-2 3.6 2 3.6H6"/></svg> 신고</button>
       </div>
       <p class="apply-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
     `;
@@ -354,7 +358,16 @@
         $("pdLikeCount").textContent = newCount;
         p.like_count = newCount;
       }
-      btn.textContent = nowLiked ? "👍 공감함 (취소)" : "👍 공감하기";
+      // 규격서 14절 «공감 하트» — 눌리면 살짝 커졌다 제자리(.25s), 숫자도 함께 바뀐다.
+      //   ⚠ 정보를 움직임에만 담지 않는다: 숫자·버튼 글자(「공감함 (취소)」)가 결과를 말한다.
+      //   ⚠ 저감모션 설정에서는 CSS 가 이 애니메이션을 끈다(클래스는 붙되 움직이지 않는다).
+      const likeBox = document.querySelector(".pd-like-count");
+      if (likeBox) {
+        likeBox.classList.remove("like-pop");
+        void likeBox.offsetWidth;              // 다시 재생되도록 흐름을 한 번 끊는다
+        likeBox.classList.add("like-pop");
+      }
+      btn.textContent = nowLiked ? "공감함 (취소)" : "공감하기";
       btn.classList.toggle("pp-liked", nowLiked);
       btn.classList.toggle("primary", !nowLiked);
     } catch (e) {
@@ -419,7 +432,7 @@
         p_nick: nick, p_region: region || null, p_pin: pin,
       });
       if (error) throw error;
-      alert("제안이 등록되었습니다. 감사합니다! 🗳");
+      alert("제안이 등록되었습니다. 감사합니다!");
       // 목록으로 복귀 + 새로고침
       goBack();
       pstate.sort = "new";
@@ -476,7 +489,7 @@
     fillCategorySelects();
     editing = { id: pinTarget.id, pin: pin };
     $("topTitle").textContent = "제안 수정하기";
-    $("pwriteTitle").textContent = "✏ 제안 수정하기";
+    $("pwriteTitle").textContent = "제안 수정하기";
     $("pwTitle").value = pinTarget.title || "";
     $("pwBody").value = pinTarget.body || "";
     $("pwNick").value = pinTarget.author_nick || "";
@@ -531,7 +544,7 @@
   // 작성/수정 폼을 작성 기본 상태로 되돌린다
   function resetWriteForm() {
     editing = null;
-    $("pwriteTitle").textContent = "🗳 정책 제안하기";
+    $("pwriteTitle").textContent = "정책 제안하기";
     $("pwSubmit").textContent = "제안 등록";
   }
 
