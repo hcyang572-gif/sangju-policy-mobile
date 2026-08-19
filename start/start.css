@@ -1,0 +1,361 @@
+/* ═══════════════════════════════════════════════════════════════
+   start.css — 공유용 «안내 페이지» (시민용 / 공무원용 고르기)
+   ─────────────────────────────────────────────────────────────
+   목적: 카톡 링크로 처음 들어온 사람이 «이게 무엇을 하는 곳인지» 바로 알고,
+        시민용·공무원용 중 자기 것을 고르게 한다. 개편·버전 자랑은 넣지 않는다.
+   팔레트: 시안 A「감빛 온기」 — 시민앱 style.css 의 토큰을 그대로 옮겼다.
+   ⚠ 이 파일은 시민앱 style.css 와 «독립»이다. 시민앱을 고쳐도 여기엔 영향이 없고,
+     반대로 여기를 고쳐도 앱에 영향이 없다(선택 화면 하나만 담당).
+   ⚠ 인라인 <style>·style= 금지(CSP). 눌림 반응은 tap.js + :active 로만.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #FDF4EC;          /* 바탕 크림 */
+  --card: #FFFFFF;        /* 카드 */
+  --text: #33241C;        /* 글자 — 흰 14.89 / 크림 13.71 */
+  --muted: #6E5A4C;       /* 보조 텍스트 — 흰 6.50 / 크림 5.98 (AA) */
+  --border: #EADCCE;      /* 장식 경계선 */
+  --primary: #B84A1C;     /* 주조(감빛 주홍) — 흰 글자 5.21 (AA) */
+  --primary-press: #93380F;
+  --accent-text: #A8431A; /* 밝은 배경 위 주황 글자 — 흰 6.03 / 크림 5.55 */
+  --civic: #0E7C86;       /* 청록 — 흰 글자 4.95 (AA) */
+  --civic-dark: #0A5F68;  /* 청록 진하게 — 흰 7.37 */
+  --civic-soft: #E4F1F2;  /* 청록 안내상자 바탕 — 그 위 --civic-dark 글자 6.6 */
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* hidden 속성은 display 를 지정한 요소에서도 항상 우선 (시민앱과 같은 규약) */
+[hidden] { display: none !important; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Malgun Gothic", "맑은 고딕", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+  /* 노치 대응(viewport-fit=cover 와 짝) */
+  padding:
+    env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* 키보드 포커스 가시성(KWCAG 2.2) — 마우스 클릭엔 안 뜨고 키보드 탐색 시에만 */
+:focus-visible {
+  outline: 3px solid var(--accent-text);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* 화면에는 안 보이지만 보조기기는 읽는 제목 */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 반복 영역 건너뛰기 — 첫 Tab 에서만 나타난다 */
+.skip-link {
+  position: absolute;
+  left: 8px; top: -60px;
+  z-index: 999;
+  padding: 10px 16px;
+  background: var(--primary);
+  color: #FFFFFF;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 0 0 8px 8px;
+  transition: top .15s;
+}
+.skip-link:focus { top: 0; }
+
+/* ───────────── 머리말: 여기가 어디인지 ───────────── */
+.head {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px 16px 4px;
+  text-align: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.brand-titles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.brand-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--accent-text);
+}
+
+.brand-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--text);
+}
+
+/* 2026 시정구호 — 좁은 화면은 2줄형, 600px 이상은 1줄형(picture/source) */
+.slogan {
+  display: block;
+  margin: 12px auto 0;
+}
+.slogan img {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* ───────────── 본문 ───────────── */
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 8px 16px 0;
+}
+main:focus { outline: none; }   /* 건너뛰기 링크 도착 시 테두리가 뜨지 않게 */
+
+.intro {
+  text-align: center;
+  margin: 10px auto 18px;
+  max-width: 660px;
+}
+
+.intro-title {
+  margin: 0 0 6px;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--accent-text);
+}
+
+.intro-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--text);
+  word-break: keep-all;   /* 한글이 낱말 가운데서 끊기지 않게 */
+}
+
+.intro-note {
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+  word-break: keep-all;
+}
+
+/* ───────────── 두 갈래 선택 ───────────── */
+.picks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+/* 카드 전체가 링크다 — 손가락이 어디를 눌러도 열린다(터치 타깃 최대) */
+.pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 14px 16px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-top-width: 5px;
+  border-radius: 16px;
+  text-decoration: none;
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(51, 36, 28, .06);
+  transition: box-shadow .15s, transform .1s;
+}
+.pick:active { transform: scale(.99); }
+.pick:hover { box-shadow: 0 4px 14px rgba(51, 36, 28, .12); }
+
+.pick-citizen { border-top-color: var(--primary); }
+.pick-admin { border-top-color: var(--civic); }
+
+.pick-badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: #FFFFFF;
+}
+.pick-citizen .pick-badge { background: var(--primary); }
+.pick-admin .pick-badge { background: var(--civic); }
+
+.pick-head {
+  font-size: 1.1875rem;
+  font-weight: 800;
+  text-align: center;
+  word-break: keep-all;
+}
+
+.pick-sub {
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+  word-break: keep-all;
+}
+
+/* QR — 한 변 160px 이상. 옆 사람이 화면을 찍을 수 있을 만큼 크게 둔다.
+   흰 여백(quiet zone)은 PNG 안에 들어 있으므로 배경을 흰색으로 유지한다. */
+.pick-qr {
+  width: clamp(160px, 41vw, 200px);
+  height: auto;
+  margin: 4px 0 2px;
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  image-rendering: pixelated;   /* 축소해도 모듈 경계가 뭉개지지 않게 */
+}
+
+/* 버튼처럼 보이는 부분 — 실제 링크는 카드 전체다(중첩 <a>·<button> 없음) */
+.pick-btn {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  min-height: 48px;   /* 터치 타깃 44px 이상 */
+}
+.pick-citizen .pick-btn { background: var(--primary); }
+.pick-citizen:active .pick-btn { background: var(--primary-press); }
+.pick-admin .pick-btn { background: var(--civic); }
+.pick-admin:active .pick-btn { background: var(--civic-dark); }
+
+/* 공무원용 안내 — 시민이 잘못 들어가 당황하지 않게 분명히 적는다 */
+.pick-warn {
+  display: block;
+  margin-top: 2px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--civic-soft);
+  color: var(--civic-dark);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-align: center;
+  word-break: keep-all;
+}
+
+/* ───────────── 이용 안내 ───────────── */
+.tips {
+  margin: 18px auto 0;
+  max-width: 660px;
+  padding: 12px 16px;
+  background: #FBEDE0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.tips-title {
+  margin: 0 0 4px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--accent-text);
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+.tips-list li { word-break: keep-all; }
+
+/* ───────────── 꼬리말 ───────────── */
+.foot {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 16px 16px 24px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.foot p { margin: 2px 0; }
+.foot a {
+  color: var(--accent-text);
+  font-weight: 700;
+  /* 링크임을 색 말고도 알 수 있게 밑줄을 남긴다(KWCAG 색에 무관한 인식) */
+}
+
+/* ───────────── 넓은 화면: 카드 두 장을 나란히 ───────────── */
+@media (min-width: 720px) {
+  .picks { grid-template-columns: 1fr 1fr; gap: 18px; }
+  .pick { gap: 8px; padding: 18px 16px 20px; }
+  .head { padding-top: 28px; }
+  .brand-logo { width: 52px; height: 52px; }
+  .brand-title { font-size: 1.75rem; }
+  .slogan img { max-width: 560px; }
+  .intro-title { font-size: 1.25rem; }
+  .intro-text { font-size: 1rem; }
+}
+
+/* 아주 낮은 화면(가로로 눕힌 폰)에서는 QR 을 조금 줄여 한 화면에 담는다 */
+@media (max-height: 620px) and (min-width: 720px) {
+  .pick-qr { width: clamp(160px, 22vw, 176px); }
+  .slogan { margin-top: 8px; }
+}
+
+/* ───────────── 눌림 반응(파동) — tap.js 와 짝 ─────────────
+   파동은 «본문 위에 뜨는 고정 레이어»라 누른 요소의 레이아웃을 건드리지 않는다. */
+.tap-ripple {
+  position: fixed;
+  z-index: 9999;
+  width: 20px; height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  background: rgba(184, 74, 28, .30);   /* 주조 #B84A1C */
+  pointer-events: none;
+  transform: scale(0);
+  animation: tapRipple .45s cubic-bezier(.2, .6, .3, 1) forwards;
+}
+@keyframes tapRipple { to { transform: scale(6); opacity: 0; } }
+.is-pressed { filter: brightness(.94); }
+
+/* ───────────── 움직임 최소화(OS "동작 줄이기" 존중) ─────────────
+   KWCAG 2.2 «깜빡임과 번쩍임 사용 제한» — 시민앱과 같은 규약 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001s !important;
+    scroll-behavior: auto !important;
+  }
+  .pick:active { transform: none; }
+  .tap-ripple { display: none; }
+  .is-pressed { filter: none; }
+}
+
+/* ───────────── 고대비 모드(윈도우 «고대비») ───────────── */
+@media (forced-colors: active) {
+  .pick { border: 2px solid; }
+  .pick-btn { border: 2px solid; }
+}

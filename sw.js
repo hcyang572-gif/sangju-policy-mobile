@@ -22,9 +22,11 @@
 // 배포 버전 — 버전정보.json 의 "version" 및 version.js 의 APP_VERSION 과 항상 같은 값.
 // ⚠ 손으로 고치지 말고 루트의 `py -3 자원버전_동기화.py` 를 돌리면
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
-const ASSET_V = "0.4.1";
+const ASSET_V = "0.4.2";
 
-const CACHE = "sangju-v31";   // v31: 0.4.1 - 배포해도 옛 화면이 남던 캐시 결함 수정(프리캐시 HTTP 캐시 우회·버전 쿼리) 반영, 자원버전 0.4.1
+const CACHE = "sangju-v32";   // v32: 0.4.2 - 하위 경로 문서(/start/)가 앱 홈 캐시를 덮어쓰던 결함 수정
+//      [0.4.2 예정] documentFirst 가 /start/ 같은 하위 페이지 응답까지 «앱 홈 캐시 키»에
+//      덮어써, 오프라인에서 앱 홈에 안내 페이지가 뜨던 결함 수정(루트 문서일 때만 루트 키에 저장)
 //      + activate 가 공무원앱 캐시(sangju-admin-*)까지 지우던 결함 수정(앱 분리 대칭)
 // v29: 🎨 시안 A「감빛 온기」 적용(팔레트·헤더 제목/배지·시정구호 확대·눌림 파동 tap.js) + 표기 「상주시 정책플랫폼」 통일
 // v28: 🔑 조회코드 «되찾기» 창구 신설(이름+연락처 뒷4자리 → 조회코드만)
@@ -175,22 +177,43 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(cacheFirst(req));
 });
 
+// 이 앱의 «루트 문서»인지 판별한다 — documentFirst 가 루트 키에 캐시해도 되는 경우.
+// ⚠ scope 아래에는 루트 말고도 «/» 로 끝나는 다른 페이지가 있다(예: 시민앱 안내 페이지 /start/).
+//    fetch 라우팅은 pathname.endsWith("/") 만 보므로 그런 페이지도 documentFirst 를 탄다.
+//    예전엔 성공 응답을 무조건 u("index.html")·u("./") 에 넣었는데, 그러면 이용자가
+//    /start/ 를 한 번만 열어도 «앱 홈의 캐시된 HTML 이 안내 페이지로 덮어써져»
+//    오프라인·불안정 네트워크에서 앱 홈에 안내 페이지가 뜬다(카톡 공유 경로에서 흔함).
+//    → 루트일 때만 루트 키에 담고, 하위 페이지는 «아예 담지 않는다»(프리캐시 대상도 아님).
+//    이 조건을 «성공하면 무조건 캐시»로 단순화하지 말 것.
+const SCOPE_PATH = new URL(SCOPE).pathname;
+function isAppRoot(href) {
+  try {
+    const p = new URL(href).pathname;
+    return p === SCOPE_PATH || p === SCOPE_PATH + "index.html";
+  } catch (e) {
+    return false;
+  }
+}
+
 // 문서 network-first: HTTP 캐시를 건너뛰고(서버 재검증) 받아온다. 실패 시 캐시 폴백.
 async function documentFirst(req) {
   const cache = await caches.open(CACHE);
+  const root = isAppRoot(req.url);          // 루트 문서일 때만 루트 키를 건드린다
   try {
     const res = await fetch(new Request(req.url, {
       cache: "no-cache",            // 서버에 재검증 — 옛 HTML 이 10분간 남던 문제 차단
       credentials: "same-origin",
       redirect: "follow",
     }));
-    if (res && res.ok && res.type === "basic") {
+    if (res && res.ok && res.type === "basic" && root) {
       cache.put(u("index.html"), res.clone());
       cache.put(u("./"), res.clone());
     }
     return res;
   } catch (e) {
-    const cached = (await cache.match(req)) || (await cache.match(u("index.html")));
+    // 루트가 아닌 문서(/start/ 등)는 «자기 URL 로 담긴 것만» 폴백한다.
+    // 앱 홈 HTML 을 대신 내주면 주소는 /start/ 인데 내용은 앱인 «가짜 화면»이 된다.
+    const cached = (await cache.match(req)) || (root ? await cache.match(u("index.html")) : null);
     if (cached) return cached;
     throw e;
   }

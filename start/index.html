@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <!-- ═══ 콘텐츠 보안 정책(CSP) ═══════════════════════════════════════════
+       이 안내 페이지는 «자기 자신»만 불러온다. 외부 스크립트·이미지·통신이 전혀 없다.
+       ⚠ 시민앱과 같은 원칙 — 인라인 <script>·<style>·style= 속성·on*= 핸들러 «0건».
+          (인라인을 새로 넣으면 'unsafe-inline' 이 없어 차단된다)
+       ⚠ 두 앱으로 «이동»하는 링크는 페이지 이동이라 아래 지시어의 대상이 아니다. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; connect-src 'none'" />
+  <!-- 저시력자 화면확대 허용(KWCAG 2.2): maximum-scale·user-scalable=no 사용 금지 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#B84A1C" />
+  <title>상주시 정책플랫폼 — 시작하기</title>
+  <meta name="description" content="상주시의 각종 지원사업을 한곳에서 찾아보고 휴대폰으로 바로 신청하세요. 시민용과 공무원용 중에서 고르세요." />
+  <link rel="canonical" href="https://hcyang572-gif.github.io/sangju-policy-mobile/start/" />
+
+  <link rel="icon" type="image/png" href="icon-192.png?v=0.4.1" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=0.4.1" />
+
+  <!-- 카카오톡/SNS 링크 미리보기 카드 (Open Graph) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="상주시 정책플랫폼 — 시작하기" />
+  <meta property="og:description" content="상주시 지원사업을 한곳에서 찾고 신청하세요. 시민용·공무원용을 골라 들어가시면 됩니다." />
+  <meta property="og:image" content="https://hcyang572-gif.github.io/sangju-policy-mobile/share.png" />
+  <meta property="og:url" content="https://hcyang572-gif.github.io/sangju-policy-mobile/start/" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- ?v= 는 캐시 우회용. 이 폴더는 시민앱 서비스워커 scope(/) 안이지만
+       프리캐시 목록에는 «일부러» 넣지 않아 항상 최신을 받는다. -->
+  <link rel="stylesheet" href="start.css?v=0.4.1" />
+</head>
+<body>
+  <!-- 반복 영역 건너뛰기(KWCAG 2.2) -->
+  <a href="#main" class="skip-link">본문 바로가기</a>
+
+  <header class="head">
+    <div class="brand">
+      <img src="sangsang1.png?v=0.4.1" class="brand-logo" alt="상상주도" width="512" height="512" />
+      <div class="brand-titles">
+        <span class="brand-eyebrow">시민 참여형</span>
+        <h1 class="brand-title">상주시 정책플랫폼</h1>
+      </div>
+    </div>
+    <!-- 2026 시정구호 — 이미지에 담긴 «글»이 곧 내용이므로 장식이 아니다.
+         alt 에 전문을 그대로 넣는다(대체텍스트 필수, KWCAG 5.1.1). -->
+    <picture class="slogan">
+      <source media="(min-width: 600px)" srcset="slogan-wide.png?v=0.4.1" width="1201" height="122" />
+      <img src="slogan-stack.png?v=0.4.1" width="901" height="183"
+           alt="이상을 꿈꾸고, 현실로 만드는, 대한민국의 중심 상주입니다." />
+    </picture>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <!-- ① 여기가 무엇을 하는 곳인지 -->
+    <section class="intro" aria-labelledby="introTitle">
+      <h2 id="introTitle" class="intro-title">상주시의 지원사업을 한곳에서</h2>
+      <p class="intro-text">
+        청년·농업·출산·소상공인·어르신 등 상주시의 각종 지원사업을 한곳에서 찾아보고,
+        나에게 맞는 사업을 추천받아 휴대폰으로 바로 신청할 수 있습니다.
+        필요한 정책을 직접 제안할 수도 있습니다.
+      </p>
+      <p class="intro-note">설치할 것이 없습니다. 링크를 누르면 바로 열립니다.</p>
+    </section>
+
+    <!-- ② 두 갈래 선택 -->
+    <section class="picks" aria-labelledby="picksTitle">
+      <h2 id="picksTitle" class="sr-only">시민용과 공무원용 중에서 고르기</h2>
+
+      <a class="pick pick-citizen"
+         href="https://hcyang572-gif.github.io/sangju-policy-mobile/"
+         aria-label="시민용 열기 — 지원사업 찾고 신청하기">
+        <span class="pick-badge">시민용</span>
+        <span class="pick-head">지원사업 찾고 신청하기</span>
+        <span class="pick-sub">맞춤 추천 · 간편 신청 · 정책 제안</span>
+        <img class="pick-qr" src="qr-citizen.png?v=0.4.1" width="468" height="468"
+             alt="시민용 앱 주소 QR 코드" />
+        <span class="pick-btn">시민용 열기</span>
+      </a>
+
+      <a class="pick pick-admin"
+         href="https://hcyang572-gif.github.io/sangju-policy-admin/"
+         aria-label="공무원용 열기 — 접수 확인하고 사업 관리하기, 상주시 공무원 전용이며 로그인이 필요합니다">
+        <span class="pick-badge">공무원용</span>
+        <span class="pick-head">접수 확인하고 사업 관리하기</span>
+        <span class="pick-sub">실시간 접수 현황 · 통계</span>
+        <img class="pick-qr" src="qr-admin.png?v=0.4.1" width="468" height="468"
+             alt="공무원용 앱 주소 QR 코드" />
+        <span class="pick-btn">공무원용 열기</span>
+        <span class="pick-warn">상주시 공무원 전용 (로그인 필요)</span>
+      </a>
+    </section>
+
+    <!-- ③ 이용 안내 -->
+    <section class="tips" aria-labelledby="tipsTitle">
+      <h2 id="tipsTitle" class="tips-title">이용 안내</h2>
+      <ul class="tips-list">
+        <li>휴대폰 카메라로 QR을 비추거나, 버튼을 누르세요.</li>
+        <li>홈 화면에 추가하면 앱처럼 쓸 수 있습니다.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p class="foot-org">상주시 · 제6기 미래상주 희망연구팀</p>
+    <p class="foot-inquiry">문의 <a href="mailto:hcyang572@korea.kr">hcyang572@korea.kr</a></p>
+  </footer>
+
+  <!-- 눌림 반응(파동·진동). 시민앱과 같은 파일을 그대로 복사해 쓴다. -->
+  <script src="tap.js?v=0.4.1"></script>
+</body>
+</html>
