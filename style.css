@@ -1851,3 +1851,38 @@ h1, h2, h3,
   .gear-btn .ic { transition: none; }
   .gear-btn:active .ic { transform: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2026-08-19 전수 점검(🔵손길) — 실제 기기에서만 드러나는 결함 두 가지
+   ⚠ 이 절은 «파일 맨 끝»에 둔다(앞선 규칙을 덮어써야 한다).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── ⓐ 아이폰 사파리: 입력칸을 누르면 화면이 «저절로 확대»되던 문제 ──────
+   iOS 사파리는 입력 요소의 글자가 16px «미만»이면 초점이 갈 때 페이지를 확대하고,
+   빠져나와도 원래 배율로 돌아오지 않는다. 그러면 신청서를 쓰는 내내 화면이 잘려
+   보이고 좌우 스크롤이 생긴다(어르신 이용자에게 특히 치명적).
+   ⛔ 해결책으로 viewport 에 maximum-scale·user-scalable=no 를 넣는 것은 금지다
+      (KWCAG 2.2 확대 허용 — index.html 주석 참조). 글자를 16px 로 올리는 것이 정답이다.
+   ✔ 규격서 15절도 «입력 16px» 를 규정하므로 이 값이 규격에 맞는 값이다.
+   ✔ 높이는 그대로다: .text-input 은 min-height 48 + padding 12 로 정확히 48px,
+     .search-box input 은 height 48px 고정이라 글자만 커진다. */
+.text-input,
+select.text-input,
+.search-box input,
+.pp-select,
+.file-input,
+.age-row input {
+  font-size: 1rem;   /* 16px — 그 아래로 내리지 말 것(아이폰 자동 확대가 되살아난다) */
+}
+
+/* ── ⓑ 노치 기기(홈 화면 설치)에서 «결과 안에서 찾기» 검색창이 헤더에 가리던 문제 ──
+   .topbar 는 padding-top: env(safe-area-inset-top) 으로 상태바만큼 키를 키우는데,
+   그 아래 붙어 다니는 .topline(top:58px)·.search-box.sticky(top:61px) 는 안전영역을
+   더하지 않아, 아이폰(안전영역 ≈47px)에서 헤더 «뒤»에 달라붙었다.
+   → 목록을 내리면 검색창이 헤더에 덮여 보이지도 눌리지도 않았다.
+   @supports 로 감싸 env() 를 모르는 브라우저는 기존 값(58/61px)을 그대로 쓴다.
+   안전영역이 0 인 기기에서는 계산 결과가 예전과 완전히 같다. */
+@supports (top: env(safe-area-inset-top)) {
+  .topline { top: calc(58px + env(safe-area-inset-top, 0px)); }
+  .search-box.sticky { top: calc(61px + env(safe-area-inset-top, 0px)); }
+}

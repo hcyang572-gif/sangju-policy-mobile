@@ -157,7 +157,7 @@
       : "";
     if (kind === "conn") {
       return `<div class="empty err-box" role="alert">
-        <div class="err-title">⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>
+        <div class="err-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10.2 9v6M13.8 9v6"/></svg> 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>
         <div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>
         ${btn}</div>`;
     }

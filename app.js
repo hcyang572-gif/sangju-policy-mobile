@@ -179,13 +179,11 @@ const DIRTY_FIELDS = {
 };
 const DIRTY_MSG = "작성 중인 내용이 사라집니다. 나가시겠습니까?";
 
-function _currentView() {
-  for (let i = 0; i < VIEWS.length; i++) {
-    const el = $("view-" + VIEWS[i]);
-    if (el && !el.hidden) return VIEWS[i];
-  }
-  return "home";
-}
+// ⚠ 예전에는 여기에도 _currentView() 가 «한 벌 더» 있었다(화면 목록을 훑어 hidden 이
+//    아닌 것을 고르는 방식). 아래쪽(내비 스택 기준)에 같은 이름의 함수가 또 선언돼 있어
+//    «나중 선언»이 이겨서, 이 자리의 것은 한 번도 불리지 않는 죽은 코드였다.
+//    고쳐도 아무 일이 안 일어나는 함정이라 지웠다 — 정본은 아래 한 곳뿐이다.
+//    ⛔ 이 이름의 함수를 다시 만들지 말 것(같은 함정이 되살아난다).
 
 // 지금 화면이 «작성 중»인가 — 한 글자라도 있으면 참. 아무것도 안 썼으면 묻지 않는다.
 function _isDirtyView() {
@@ -617,7 +615,8 @@ function showInitError(e) {
   const conn = offline || netMsg;
   $("app").innerHTML = conn
     ? '<div class="empty err-box" role="alert">' +
-      '<div class="err-title">⏸ 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
+      // 규격서 10절 — 화면 코드가 만들어 내는 이모지는 인라인 SVG 로 바꾼다(분야 칩만 예외).
+      '<div class="err-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10.2 9v6M13.8 9v6"/></svg> 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
       '<div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>' +
       '<div class="err-actions"><button id="initRetry" class="err-retry" type="button"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 다시 시도</button></div></div>'
     : '<div class="empty err-box" role="alert">' +
@@ -702,6 +701,10 @@ async function recheckCloud(force) {
 const RT_QUIET_VIEWS = ["home", "list", "recommend", "detail"];
 let _rtTimer = null, _rtReloading = false;
 
+// 지금 보고 있는 화면 이름 — «정본은 여기 한 곳뿐»이다.
+//   _isDirtyView()(작성 중 이탈 보호)·_onBenefitsChanged()(실시간 반영)·
+//   msBindVisibility()(내 신청 재조회)가 모두 이 함수를 쓴다.
+//   내비 스택의 꼭대기가 곧 화면이므로 DOM 을 훑을 필요가 없다.
 function _currentView() {
   const top = state.navStack[state.navStack.length - 1];
   return top ? top.v : "home";
@@ -1573,7 +1576,35 @@ function onPhoneInput(e) {
   setFieldError("applyPhone", "applyPhoneErr", "");   // 고치는 즉시 오류 표시 해제
 }
 
+/* 🔁 이중 접수 방지 — «보내는 중»에 한 번 더 들어오지 못하게 막는 빗장.
+   ⚠ 버튼 disabled 만으로는 부족하다:
+     ① 아래에서 완료 화면을 그리기 전에 msProbe() 를 기다리는 «틈»이 있는데,
+        예전에는 그 앞에서 버튼을 이미 되살려 두 번 누르면 두 건이 접수됐다.
+     ② 브라우저에 따라 입력칸에서 Enter 를 눌렀을 때 «비활성 제출 버튼»을 무시하고
+        폼을 그대로 제출하기도 한다(구형 파이어폭스 계열).
+   신청은 되돌릴 수 없는 행동이므로 «코드»로 한 번 더 잠근다. */
+let _applySending = false;
+// 「신청서 보내기」 버튼의 «원래 모습»(아이콘 포함) — 뜻밖의 오류에서 되돌리기 위해 보관.
+let _applySendBtnHtml = "";
+
+/* 뜻밖의 오류로 sendApply 가 중간에 멈췄을 때의 복구.
+   예전에는 여기 아무것도 없어서, 예상 못 한 예외가 나면 버튼이 «제출 중…» 인 채로
+   영영 잠기고 시민에게는 아무 말도 하지 않았다(무엇이 잘못됐는지 알 길이 없었다). */
+function _applyRecover(err) {
+  console.error("[신청] 예기치 못한 오류:", err);
+  _applySending = false;
+  const btn = $("applySend");
+  if (btn) {
+    btn.disabled = false;
+    if (_applySendBtnHtml) btn.innerHTML = _applySendBtnHtml;
+  }
+  setFormError("applyFormErr",
+    "신청 접수 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요. "
+    + "계속 안 되시면 " + SUPPORT_EMAIL + " 로 알려 주세요.");
+}
+
 async function sendApply() {
+  if (_applySending) return;
   const p = DATA.programs[currentIdx];
   const name = $("applyName").value.trim();
   // 📞 화면에는 하이픈이 있지만(010-1234-5678), 여기서부터는 «숫자만» 쓴다.
@@ -1635,7 +1666,11 @@ async function sendApply() {
   };
 
   const btn = $("applySend");
-  const orig = btn.textContent;
+  // ⚠ textContent 로 저장·복원하면 버튼 «안의 SVG 아이콘»이 사라진다(글자만 남는다).
+  //    한 번 보내고 나면 아이콘이 영영 돌아오지 않았다 → innerHTML 로 통째로 보관한다.
+  //    (되찾기 버튼 #msRecoverBtn 은 원래 이 방식이었다 — 규약을 여기에도 맞춘다)
+  const orig = btn.innerHTML;
+  _applySending = true;
   btn.disabled = true;
   btn.textContent = "제출 중...";
 
@@ -1653,8 +1688,9 @@ async function sendApply() {
     try {
       lookupCode = SangjuApply.genLookupCode(10);
     } catch (e) {
+      _applySending = false;
       btn.disabled = false;
-      btn.textContent = orig;
+      btn.innerHTML = orig;
       setFormError("applyFormErr", (e && e.message) ||
         "이 브라우저에서는 안전한 확인 번호를 만들 수 없어 신청을 진행할 수 없습니다.");
       return;
@@ -1758,20 +1794,22 @@ async function sendApply() {
       if (r.ok && !r.fail) attachMsg = `증빙서류 ${r.ok}개를 함께 보냈습니다.`;
       else if (r.ok && r.fail) attachMsg = `증빙서류 ${r.ok}개를 보냈고, ${r.fail}개는 보내지 못했습니다. 담당 부서로 연락해 주세요.`;
       else attachMsg = "증빙서류는 보내지 못했습니다. 신청은 접수되었으니 담당 부서로 연락해 주세요.";
-      btn.disabled = false;
     } else {
       attachMsg = "증빙서류는 보내지 못했습니다. 신청은 접수되었으니 담당 부서로 연락해 주세요.";
     }
   }
 
-  btn.disabled = false;
-  btn.textContent = orig;
-
   // Supabase 저장이 성공했다 = 서버에 닿았다. 앱을 켤 때 프로브가 네트워크 때문에
   // 실패해 «아직 모름»으로 남아 있다면, 완료 화면을 그리기 «전에» 한 번 더 확인한다.
+  // ⚠ 버튼은 이 확인이 끝날 때까지 «잠근 채로» 둔다 — 예전에는 여기서 이미 되살려
+  //    두 번 누르면 신청이 두 건 접수될 수 있었다(되돌릴 수 없는 행동이라 치명적).
   if (supaOK && msAvail !== "ok") {
     try { await msProbe(); } catch (e) { /* 확인 못해도 코드는 보여 준다 */ }
   }
+
+  _applySending = false;
+  btn.disabled = false;
+  btn.innerHTML = orig;
 
   if (supaOK || mailOK) {
     // 접수번호·조회코드는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
@@ -1831,7 +1869,8 @@ async function sendInquiry() {
     botcheck: "",
   };
   const btn = $("inquirySend");
-  const orig = btn.textContent;
+  // ⚠ textContent 로 저장·복원하면 버튼 안의 SVG 아이콘이 사라진다(신청 버튼과 같은 결함).
+  const orig = btn.innerHTML;
   btn.disabled = true;
   btn.textContent = "보내는 중...";
   try {
@@ -1863,7 +1902,7 @@ async function sendInquiry() {
       (e && e.message ? " (" + e.message + ")" : ""));
   } finally {
     btn.disabled = false;
-    btn.textContent = orig;
+    btn.innerHTML = orig;
   }
 }
 
@@ -2779,7 +2818,17 @@ function bindEvents() {
     });
   });
   $("homeSearch").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { state.selectedCats = new Set(); openList({ title: "검색 결과" }); $("listSearch").value = e.target.value; renderList(); }
+    if (e.key !== "Enter") return;
+    // ⌨ 한글(IME) 조합 중의 Enter 는 «글자를 확정하는 키»다 — 검색을 실행하면 안 된다.
+    //    예전에는 「청년」을 치고 Enter 로 마지막 글자를 확정하는 순간 그 Enter 가
+    //    그대로 검색으로 새어 나가, 아직 조합이 끝나지 않은 말로 목록이 열렸다.
+    //    isComposing 이 없는 구형 브라우저를 위해 keyCode 229(IME 처리 중)도 함께 본다.
+    //    확정한 뒤 한 번 더 Enter 를 누르면 검색된다(모든 한글 웹앱의 표준 동작).
+    if (e.isComposing || e.keyCode === 229) return;
+    state.selectedCats = new Set();
+    openList({ title: "검색 결과" });
+    $("listSearch").value = e.target.value;
+    renderList();
   });
   $("homeSearch").addEventListener("search", (e) => {
     if (e.target.value.trim()) { state.selectedCats = new Set(); openList({ title: "검색 결과" }); $("listSearch").value = e.target.value; renderList(); }
@@ -2807,7 +2856,12 @@ function bindEvents() {
   });
   // 제출은 form 의 submit 으로 받는다 — 버튼 클릭·Enter·휴대폰 자판 «완료» 모두 동작.
   // (버튼이 type="submit" 이라 click 리스너를 따로 달면 두 번 실행된다)
-  $("applyForm").addEventListener("submit", (e) => { e.preventDefault(); sendApply(); });
+  _applySendBtnHtml = $("applySend").innerHTML;   // 아이콘까지 그대로 보관(복구용)
+  $("applyForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    // async 함수라 예외가 «조용한 rejection» 이 된다 → 반드시 받아서 버튼을 되살린다.
+    sendApply().catch(_applyRecover);
+  });
   // 입력을 고치면 그 칸의 오류 표시를 즉시 지운다(고쳤는데 빨간 글씨가 남지 않게)
   $("applyName").addEventListener("input", () => setFieldError("applyName", "applyNameErr", ""));
   $("applyConsent").addEventListener("change", () => {

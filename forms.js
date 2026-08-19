@@ -234,7 +234,7 @@ window.SangjuForms = (function () {
   }
   function _uploadErrMsg(err) {
     var k = _kind(err);
-    if (k === "conn") return "⏸ 네트워크가 불안정합니다. 잠시 후 다시 시도해 주세요.";
+    if (k === "conn") return "네트워크가 불안정합니다. 잠시 후 다시 시도해 주세요.";
     if (k === "perm") return "업로드 권한이 없습니다. 관리자에게 서식 저장소 권한 개방을 요청해 주세요.";
     if (k === "setup") return "서식 저장소가 아직 준비되지 않았습니다. 관리자에게 forms_storage.sql 적용을 요청해 주세요.";
     return "서식 처리에 실패했습니다: " + ((err && err.message) || "알 수 없는 오류");

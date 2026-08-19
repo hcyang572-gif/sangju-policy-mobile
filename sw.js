@@ -22,9 +22,17 @@
 // 배포 버전 — 버전정보.json 의 "version" 및 version.js 의 APP_VERSION 과 항상 같은 값.
 // ⚠ 손으로 고치지 말고 루트의 `py -3 자원버전_동기화.py` 를 돌리면
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
-const ASSET_V = "0.4.4";
+const ASSET_V = "0.4.6";
 
-const CACHE = "sangju-v41";   // v41: 🚨 정책참여가 아예 뜨지 않던 결함 수정(2026-08-19).
+const CACHE = "sangju-v42";   // v42: 전수 점검 수정(2026-08-19) — app.js·proposals.js·style.css·version.js 가 바뀌었다.
+//                ⚠ ASSET_V(?v=0.4.4)는 그대로인데 version.js 는 0.4.5 로 올라갔다.
+//                  파일 URL 이 같으므로 «이 캐시 이름을 올려야만» 이용자 브라우저가
+//                  옛 version.js·app.js·style.css 를 버린다(v41 과 같은 상황).
+//                  ⛔ 배포 담당께: 다음 배포 때 루트 `py -3 자원버전_동기화.py` 를 돌려
+//                    ASSET_V 와 index.html 의 ?v= 를 APP_VERSION(0.4.5)에 맞출 것.
+//                  고친 것: 신청 버튼 아이콘 소실·이중 접수 창·홈 검색 한글 조합 Enter·
+//                    아이폰 입력 자동확대(16px)·노치 기기 sticky 검색창 가림.
+//      v41: 🚨 정책참여가 아예 뜨지 않던 결함 수정(2026-08-19).
 //                PIN 해시(pin_hash)를 익명에게서 가리는 조치를 DB 에 넣은 뒤
 //                proposals.js 의 select("*") 호출 4곳이 통째로 401(42501) 이 됐다.
 //                → «쓰는 칸만» 콕 집어 부르도록 고쳤다(COLS_LIST · COLS_DETAIL).
