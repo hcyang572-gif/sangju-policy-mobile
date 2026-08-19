@@ -90,6 +90,26 @@
   };
   const STATUS_ORDER = ["접수", "검토중", "반영", "불채택", "보류"];
 
+  /* ── 조회할 «칸» 목록 (2026-08-19) ───────────────────────────────────────
+     ⚠ 절대 select("*") 를 쓰지 않는다.
+        proposals 에는 본인확인용 PIN 해시(pin_hash)가 들어 있는데, 이것이 익명
+        사용자에게 그대로 나가면 «숫자 4자리»라 몇 초 만에 복원되어 남의 제안을
+        지우거나 고칠 수 있다. 그래서 supabase/제안PIN_해시_익명노출_차단.sql 에서
+        anon 에게는 pin_hash 를 뺀 칸만 허용해 두었다.
+        PostgREST 의 select=* 는 «모든 칸»을 요구하므로, pin_hash 권한이 없는
+        익명 호출은 통째로 401(42501 permission denied) 이 된다.
+        → 화면에서 실제로 쓰는 칸만 «콕 집어» 적는다.
+     ⚠ pin_hash 는 어떤 경우에도 이 목록에 넣지 않는다(넣는 순간 다시 401).
+     ⚠ 화면에 새 칸을 쓰게 되면 여기 한 곳만 고치고, 먼저 SQL 의 grant select(...)
+        목록에 그 칸이 들어 있는지 확인한다.
+     허용된 칸: id, title, body, category, author_nick, region,
+                status, admin_reply, like_count, is_hidden, created_at, updated_at  */
+  // 목록(제안 목록·「내 신청 › 낸 제안」) — 카드에 보이는 값만.
+  //   is_hidden 은 «거르기 조건»으로만 쓰므로 받아 올 필요가 없다.
+  const COLS_LIST = "id,title,category,status,like_count,created_at";
+  // 상세 — 본문·닉네임·지역·담당부서 답변까지. 수정 화면(PIN)도 이 값을 그대로 채운다.
+  const COLS_DETAIL = "id,title,body,category,author_nick,region,status,admin_reply,like_count,created_at";
+
   const $ = (id) => document.getElementById(id);
   // app.js의 전역 esc(클래식 스크립트 전역 렉시컬) 우선, 없으면 동일 규칙으로 이스케이프
   const esc = (typeof window.esc === "function")
@@ -239,7 +259,7 @@
 
     const from = pstate.page * PAGE;
     const to = from + PAGE - 1;
-    let q = client.from("proposals").select("*").eq("is_hidden", false);
+    let q = client.from("proposals").select(COLS_LIST).eq("is_hidden", false);
     if (pstate.cat) q = q.eq("category", pstate.cat);
     if (pstate.sort === "like") q = q.order("like_count", { ascending: false }).order("created_at", { ascending: false });
     else q = q.order("created_at", { ascending: false });
@@ -311,7 +331,7 @@
     // 항상 최신값으로 갱신 시도(목록 캐시가 오래됐을 수 있음)
     if (client) {
       try {
-        const { data, error } = await client.from("proposals").select("*").eq("id", id).single();
+        const { data, error } = await client.from("proposals").select(COLS_DETAIL).eq("id", id).single();
         if (!error && data) p = data;
       } catch (e) {}
     }
@@ -664,7 +684,7 @@
     const client = getClient();
     if (!client || !currentP) return;
     try {
-      const { data, error } = await client.from("proposals").select("*").eq("id", currentP.id).single();
+      const { data, error } = await client.from("proposals").select(COLS_DETAIL).eq("id", currentP.id).single();
       if (!error && data && !$("view-pdetail").hidden) {
         currentP = data;
         renderDetail(data);
@@ -694,7 +714,7 @@
       if (window.skeletonHtml) box.innerHTML = window.skeletonHtml(Math.min(mine.length, 3));
       try {
         const ids = mine.map((e) => e.id);
-        const { data, error } = await client.from("proposals").select("*").in("id", ids);
+        const { data, error } = await client.from("proposals").select(COLS_LIST).in("id", ids);
         if (error) throw error;
         rows = data || [];
       } catch (e) {
