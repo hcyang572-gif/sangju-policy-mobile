@@ -597,10 +597,19 @@ function buildCloudData(local, programs) {
     ? local.always_show : FALLBACK_ALWAYS_SHOW;
   const situations = (local && Array.isArray(local.situation_map) && local.situation_map.length)
     ? local.situation_map : FALLBACK_SITUATION_MAP;
+  /* 🏘 읍·면·동 목록 — 클라우드에서 오는 것은 «사업 목록»뿐이다. 행정구역은
+     내장 data.json(build_data.py 가 만든 것)에만 있으므로 «여기서 그대로 옮겨 담는다».
+     ⚠ 이 세 줄을 빼면 클라우드로 뜬 경우 DATA.region_groups 가 사라져,
+        신청·정책제안의 읍·면·동 선택칸이 «선택해 주세요» 한 줄만 남는다
+        (2026-08-20 실제로 그렇게 비어 있었다 — 아래 always_show·situation_map 과 같은 함정).
+     ⛔ 행정구역을 이 파일에 적어 넣어 메우지 말 것. 단일 출처는 data.json 이다. */
   return {
     generated: (local && local.generated) || "",
     always_show: always,
     situation_map: situations,
+    regions: (local && local.regions) || [],
+    region_groups: (local && local.region_groups) || [],
+    region_etc: (local && local.region_etc) || "",
     categories: buildCategoryList(programs, always),
     programs: programs,
     source: "cloud",
@@ -698,8 +707,21 @@ async function recheckCloud(force) {
 //    ③ 읽기만 하는 화면이면 스스로 새로고침하고, 신청서·문의를 «쓰는 중»이면
 //       화면을 건드리지 않고 알림 띠만 올린다 — 입력하던 내용이 날아가면 안 된다.
 //  · 정책제안(proposals)은 proposals.js 가 이미 따로 구독한다(중복 구독하지 않는다).
+//  · 끊김 대비(2026-08-20): 시연장 와이파이는 흔들린다. WebSocket 이 끊긴 것을
+//    «아무도 모르는» 상태가 가장 나쁘다 — 화면은 멀쩡한데 바뀐 내용이 영영 안 온다.
+//    ① 구독 상태를 받아 두고(SUBSCRIBED 인지), ② 끊기면 점점 늘어나는 간격으로 다시 붙고,
+//    ③ 붙기 전까지는 «보이는 동안만» 20초마다 직접 조회하는 폴백을 돌린다.
+//    실시간이 살아 있으면 폴백은 아예 돌지 않으므로 평소 데이터 사용량은 그대로다.
 const RT_QUIET_VIEWS = ["home", "list", "recommend", "detail"];
+const RT_POLL_MS = 20000;          // 실시간이 죽어 있는 «동안만» 도는 폴백 조회 간격
+const RT_BACKOFF = [2000, 4000, 8000, 15000, 30000];   // 재연결 간격(마지막 값에서 고정)
 let _rtTimer = null, _rtReloading = false;
+let _rtChan = null;                // 지금 붙어 있는 채널(다시 붙기 전에 반드시 떼어 낸다)
+let _rtOk = false;                 // 구독이 살아 있는가
+let _rtTry = 0;                    // 연속 실패 횟수(백오프 단계)
+let _rtRejoinTimer = null, _rtPollTimer = null;
+let _rtTag = null;                 // 지금 «유효한» 채널의 신분증(늦게 온 옛 상태 무시용)
+let _rtEverOk = false;             // 한 번이라도 붙은 적이 있는가(첫 연결과 재연결 구분)
 
 // 지금 보고 있는 화면 이름 — «정본은 여기 한 곳뿐»이다.
 //   _isDirtyView()(작성 중 이탈 보호)·_onBenefitsChanged()(실시간 반영)·
@@ -710,12 +732,26 @@ function _currentView() {
   return top ? top.v : "home";
 }
 
+// 「같은 내용으로 두 번 새로고침하지 않는다」 — 무한 새로고침 안전판.
+//   느린 회선에서는 첫 화면을 내장 data.json 으로 그린다(displaySig = 내장본 서명).
+//   그 상태에서 클라우드 조회가 성공하면 서명이 «항상» 달라 새로고침 → 또 내장본 →
+//   또 새로고침 … 으로 무한 반복이 된다. 한 번 새로고침한 서명을 적어 두고,
+//   돌아와서도 여전히 같은 서명이면 화면을 건드리지 않고 «띠»로만 알린다.
+const RT_RELOAD_KEY = "sangju_rt_reload_sig";
+
 async function _onBenefitsChanged() {
   if (_rtReloading) return;
   try {
     const cloud = await loadCloudData();
     if (!cloud || cloud.sig === displaySig) return;   // 실제 변화가 있을 때만
     if (RT_QUIET_VIEWS.indexOf(_currentView()) >= 0) {
+      let prev = null;
+      try { prev = sessionStorage.getItem(RT_RELOAD_KEY); } catch (e) {}
+      if (prev === cloud.sig) {           // 이 내용 때문에 이미 한 번 새로고침했다
+        noticeUpdate("사업 정보가 새로 갱신되었습니다");
+        return;
+      }
+      try { sessionStorage.setItem(RT_RELOAD_KEY, cloud.sig); } catch (e) {}
       _rtReloading = true;
       location.reload();
     } else {
@@ -724,26 +760,96 @@ async function _onBenefitsChanged() {
   } catch (e) { /* 조용히 넘긴다 — 다음 이벤트나 재진입 때 다시 본다 */ }
 }
 
+// 실시간이 죽어 있는 동안만 도는 폴백 조회. «보고 있을 때»만 돈다(숨어 있으면 건너뜀).
+function _rtStartPoll() {
+  if (_rtPollTimer !== null) return;      // ⚠ !_rtPollTimer 로 쓰면 타이머 id 0 을 «없음»으로 오인한다
+  _rtPollTimer = setInterval(() => {
+    if (document.hidden || _rtOk || _rtReloading) return;
+    _onBenefitsChanged();
+  }, RT_POLL_MS);
+}
+function _rtStopPoll() {
+  if (_rtPollTimer === null) return;
+  clearInterval(_rtPollTimer);
+  _rtPollTimer = null;
+}
+
+// 구독 상태가 바뀔 때 한 곳에서만 처리한다(폴백 켜기/끄기 + 재연결 예약).
+function _rtSetOk(ok) {
+  const was = _rtOk;
+  _rtOk = !!ok;
+  if (_rtOk) {
+    _rtTry = 0;
+    _rtStopPoll();
+    // 끊겼다가 «다시» 붙은 경우에만 그 사이의 변경을 확인한다.
+    // (첫 연결에서는 확인하지 않는다 — init 이 방금 클라우드를 읽었다.)
+    if (!was && _rtEverOk) _onBenefitsChanged();
+    _rtEverOk = true;
+  } else {
+    _rtStartPoll();
+    _rtScheduleRejoin();
+  }
+}
+
+function _rtScheduleRejoin() {
+  if (_rtRejoinTimer !== null) return;
+  const wait = RT_BACKOFF[Math.min(_rtTry, RT_BACKOFF.length - 1)];
+  _rtTry += 1;
+  _rtRejoinTimer = setTimeout(() => {
+    _rtRejoinTimer = null;
+    if (!_rtOk) initBenefitsRealtime();
+  }, wait);
+}
+
 function initBenefitsRealtime() {
   const sb = cloudClient();
   if (!sb || !sb.channel) return;                     // 클라우드 미설정이면 예전대로 동작
   try {
-    sb.channel("benefits-rt-citizen")
+    // ★ 신분증을 «떼어 내기 전에» 갈아 끼운다. 옛 채널이 removeChannel 때 즉시 CLOSED 를
+    //   알려도 그 콜백은 옛 신분증을 들고 있어 새 채널 상태를 뒤집지 못한다.
+    const mine = {};
+    _rtTag = mine;
+    // 이전 채널이 남아 있으면 반드시 떼어 낸다(같은 이름으로 두 번 붙으면 서버가 거부한다).
+    if (_rtChan) {
+      try { sb.removeChannel(_rtChan); } catch (e) {}
+      _rtChan = null;
+    }
+    const ch = sb.channel("benefits-rt-citizen")
       .on("postgres_changes", { event: "*", schema: "public", table: "benefits" }, () => {
         clearTimeout(_rtTimer);
         _rtTimer = setTimeout(_onBenefitsChanged, 1500);   // 몰아치는 이벤트를 한 번으로
       })
-      .subscribe();
+      .subscribe((status) => {
+        // 떼어 낸 옛 채널이 뒤늦게 CLOSED 를 알려도 새 채널 상태를 뒤집지 않게 한다.
+        if (_rtTag !== mine) return;
+        // SUBSCRIBED 외의 상태(CHANNEL_ERROR·TIMED_OUT·CLOSED)는 «지금 안 온다»는 뜻이다.
+        if (status === "SUBSCRIBED") _rtSetOk(true);
+        else _rtSetOk(false);
+      });
+    _rtChan = ch;
   } catch (e) {
-    console.warn("[실시간] 사업 구독 실패 — 재진입 시 재조회로 동작합니다:", e);
+    console.warn("[실시간] 사업 구독 실패 — 폴백 조회로 동작합니다:", e);
+    _rtSetOk(false);
   }
+}
+
+// 네트워크가 돌아왔거나 화면이 다시 보이면 «기다리지 않고» 즉시 다시 붙는다.
+function _rtWakeUp() {
+  if (_rtOk) return;
+  clearTimeout(_rtRejoinTimer); _rtRejoinTimer = null;
+  _rtTry = 0;
+  initBenefitsRealtime();
+  _onBenefitsChanged();      // 붙는 동안 놓친 변경도 바로 확인
 }
 function initFreshness() {
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) recheckCloud(false);
+    if (document.hidden) return;
+    recheckCloud(false);
+    _rtWakeUp();          // 화면이 다시 보이면 끊긴 실시간을 즉시 되살린다
   });
   window.addEventListener("focus", () => recheckCloud(false));
-  window.addEventListener("online", () => recheckCloud(true));
+  window.addEventListener("online", () => { recheckCloud(true); _rtWakeUp(); });
+  window.addEventListener("offline", () => _rtSetOk(false));
 }
 
 async function init() {
@@ -928,6 +1034,7 @@ async function copyLookupCode() {
       ok = true;
     } catch (e2) { ok = false; }
   }
+  if (ok) flashCopied($("doneCodeBox"));   // 📋 찰칵 — 복사된 상자를 한 번 밝힌다
   if (msg) {
     msg.textContent = ok
       ? "확인 번호를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
@@ -1054,7 +1161,17 @@ function runRecommend() {
   }
   setRecommendErr("");
   state.selectedCats = cats;
-  openList({ title: "맞춤 추천 결과" });
+  /* ⏳ 「찾는 중」 0.6초 — 결과는 이미 손에 있지만 «곧바로» 내놓지 않는다.
+     왜: 누르자마자 목록이 튀어나오면 「내가 넣은 나이·상황을 보긴 한 걸까?」 싶어진다.
+         0.6초 동안 스켈레톤 두 장을 보여 주면 «나를 위해 찾아봤다»가 되고,
+         그 사이에 눈이 상단의 결과 건수(#listMeta)로 옮겨 간다.
+     ⚠ 규격서 14절 — 스켈레톤은 1.2s 순환·반짝임 없음. 기존 skeletonHtml() 을 «그대로» 쓴다
+       (새 모양을 만들지 않는다 — 정책참여·내 신청과 같은 모양이어야 한다).
+     ⚠ 낭독기에는 skeletonHtml() 안의 「불러오는 중입니다.」(role=status)가 읽힌다.
+     ⚠ 0.6초 «뒤»에 화면이 저절로 바뀌는 것은 KWCAG 6.2.2 의 «자동 변경»이 아니다 —
+       시민이 버튼을 눌러 «시작시킨» 한 번의 동작이 끝나는 것이다(정지 기능 대상 아님).
+     ⛔ 시간을 늘리지 말 것. 0.6초를 넘으면 «연출»이 아니라 «느린 앱»이 된다. */
+  openList({ title: "맞춤 추천 결과", pending: true });
 }
 
 // 맞춤 찾기 안내문 — 빈 문자열이면 숨긴다(다른 화면의 setFieldError 와 같은 규칙).
@@ -1102,13 +1219,28 @@ function syncListToolbar() {
   if (sel) sel.value = listSort;
 }
 
-function openList({ title, onlyNames }) {
+let _listPendingTimer = 0;
+function openList({ title, onlyNames, pending }) {
   listOnlyNames = onlyNames || null;
   $("topTitle").textContent = title || "사업 목록";
   $("listSearch").value = "";
   renderListDebounced.cancel();   // 이전 화면에서 대기 중이던 검색 렌더는 버린다
   syncListToolbar();
   showView("list");
+  // ⏳ 앞선 「찾는 중」이 아직 대기 중이면 취소한다 — 겹치면 옛 결과가 새 결과를 덮어쓴다
+  if (_listPendingTimer) { clearTimeout(_listPendingTimer); _listPendingTimer = 0; }
+  if (pending && window.skeletonHtml) {
+    // 맞춤 추천에서만 온다(runRecommend). 다른 경로는 지금까지처럼 «즉시» 그린다.
+    $("listMeta").textContent = "";
+    $("listResults").innerHTML = window.skeletonHtml(2);
+    _listPendingTimer = window.setTimeout(function () {
+      _listPendingTimer = 0;
+      // 그 사이 다른 화면으로 갔으면 그리지 않는다(엉뚱한 화면을 덮어쓰지 않게)
+      const v = $("view-list");
+      if (v && !v.hidden) renderList();
+    }, 600);
+    return;
+  }
   renderList();                    // 목록 진입은 즉시 렌더(지연 없음)
 }
 
@@ -1232,6 +1364,18 @@ function openDetail(idx) {
   const telHtml = tel
     ? `<a class="tel-link" href="tel:${esc(telDigits)}" aria-label="${esc(tel)} 전화 걸기"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.4 3.6h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.4 5.8a2 2 0 0 1 2-2.2z"/></svg> ${esc(tel)}</a>`
     : "";
+  /* ☎ 「전화로 문의」 — 앱에서 막히면 어르신은 «결국 전화»를 거신다.
+     본문 속 작은 링크(위 telHtml)만으로는 번호를 찾아 눌러야 해서 그 지점에서 이탈한다.
+     → 신청 버튼 바로 아래에 «같은 무게»의 큰 버튼을 둔다.
+     ⚠ 연락처가 없는 사업에서는 «아예 만들지 않는다» — 눌러도 아무 일이 없는 버튼은
+        없느니만 못하다(현재 자료 기준 연락처 없는 사업이 실제로 존재한다).
+     ⚠ 주조색(primary)을 쓰지 않는다 — 이 화면의 «주요 버튼»은 「신청하기」 하나다(규격서 0절).
+     ⚠ <a href="tel:"> 이므로 PC 브라우저에서는 아무 앱도 열리지 않을 수 있다.
+        그래서 버튼 «글자 안»에 번호를 그대로 적어 둔다 — 못 걸어도 번호는 읽힌다. */
+  const callHtml = tel
+    ? `<a class="big-btn full detail-call" href="tel:${esc(telDigits)}" role="button"
+          aria-label="담당 부서 ${esc(tel)} 로 전화 걸기"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.4 3.6h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.4 5.8a2 2 0 0 1 2-2.2z"/></svg> 전화로 문의 ${esc(tel)}</a>`
+    : "";
   // 📌 접수 안내(비고) — 접수 마감·재접수 시기 등. 값이 없으면 아무것도 렌더링하지 않는다.
   // 색만으로 구분하지 않도록 아이콘(📌)+'접수 안내' 문구를 함께 두고, role=note 로 읽히게 한다.
   const note = (p.비고 || "").trim();
@@ -1254,6 +1398,7 @@ function openDetail(idx) {
     ${blockHtml('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.4 3.6h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.4 5.8a2 2 0 0 1 2-2.2z"/></svg> 연락처', telHtml)}
     ${blockText('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 종료일', p.종료일)}
     <button class="big-btn primary full" id="detailApply"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11"/></svg> 신청하기</button>
+    ${callHtml}
   `;
   showView("detail");
   const teamEl = $("detailContent").querySelector(".detail-team");
@@ -1484,6 +1629,62 @@ async function uploadAttachments(receiptNo, ticket) {
 }
 
 // ---------- 신청 (이메일 생성) ----------
+/* 🏘 읍·면·동 선택칸 채우기 — 신청 폼(#applyRegion)·정책제안 폼(#pwRegion) 공용.
+   ⚠ 목록의 «단일 출처»는 data.json 이다(build_data.py 가 만든다).
+      ⛔ 25개 행정구역을 JS·HTML 에 복사해 넣지 말 것 — 행정구역이 바뀌면 두 곳이 어긋난다.
+   ⚠ <optgroup>(읍/면/동/기타)으로 묶는다. 25개를 한 줄로 늘어놓으면 어르신이 찾지 못한다.
+   ⚠ 첫 항목은 «선택해 주세요»(빈 값)로 둔다 — 함창읍이 기본으로 잡혀 있으면
+      아무 생각 없이 넘겨 통계가 통째로 오염된다(2026-08-20 양호창님 지시).
+   ⚠ keep: 목록에 «없는» 값(예전 자유 입력으로 올린 제안을 수정할 때)을 살려 두는 자리.
+      그냥 두면 select 가 값을 버려 시민이 적어 둔 동네가 «조용히» 사라진다.
+   ⚠ data.json 이 옛 판이라 regions 가 없을 수도 있다 → 그때는 칸을 그대로 두고
+      «조용히» 물러난다(기존 방어 원칙). 그 경우 아래 검증도 통과시킨다. */
+function regionGroups() {
+  if (DATA && Array.isArray(DATA.region_groups) && DATA.region_groups.length) return DATA.region_groups;
+  if (DATA && Array.isArray(DATA.regions) && DATA.regions.length) return [["", DATA.regions]];
+  return [];
+}
+function regionList() {
+  const out = [];
+  regionGroups().forEach(function (g) { (g[1] || []).forEach(function (r) { out.push(r); }); });
+  return out;
+}
+function fillRegionSelect(sel, keep) {
+  if (!sel) return;
+  const groups = regionGroups();
+  if (!groups.length) return;              // 자료가 없으면 손대지 않는다
+  const known = regionList();
+  sel.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = ""; ph.textContent = "선택해 주세요";
+  sel.appendChild(ph);
+  // 목록에 없는 옛 값은 «맨 앞»에 임시로 넣어 둔다(내용이 조용히 바뀌지 않게)
+  const k = String(keep || "").trim();
+  if (k && known.indexOf(k) === -1) {
+    const o = document.createElement("option");
+    o.value = k; o.textContent = k + " (예전 입력)";
+    sel.appendChild(o);
+  }
+  groups.forEach(function (g) {
+    const label = g[0], items = g[1] || [];
+    if (!items.length) return;
+    if (!label) { items.forEach(function (r) { sel.appendChild(regionOption(r)); }); return; }
+    const og = document.createElement("optgroup");
+    og.label = label;
+    items.forEach(function (r) { og.appendChild(regionOption(r)); });
+    sel.appendChild(og);
+  });
+  sel.value = k || "";
+}
+function regionOption(name) {
+  const o = document.createElement("option");
+  o.value = name; o.textContent = name;
+  return o;
+}
+// 정책참여(proposals.js)도 같은 목록·같은 규칙을 쓴다 — 두 벌을 만들지 않는다.
+window.fillRegionSelect = fillRegionSelect;
+window.regionList = regionList;
+
 function openApply(idx) {
   currentIdx = idx;
   const p = DATA.programs[idx];
@@ -1500,8 +1701,12 @@ function openApply(idx) {
   $("applyName").value = "";
   $("applyPhone").value = "";
   $("applyMemo").value = "";
+  // 🏘 읍·면·동 — 신청할 때마다 «선택해 주세요»로 되돌린다(앞 신청의 선택이 남으면 안 된다)
+  fillRegionSelect($("applyRegion"), "");
   // ⚖ 동의는 «신청할 때마다» 새로 받는다(이전 신청의 체크가 남아 있으면 안 된다).
   $("applyConsent").checked = false;
+  // (선택) 동의도 같은 규칙 — 앞 신청의 체크가 남으면 «받은 적 없는 동의»가 된다.
+  if ($("applyConsentOptional")) $("applyConsentOptional").checked = false;
   // 📎 첨부도 «신청할 때마다» 비운다 — 앞 신청에 붙였던 파일이 딸려 가면 안 된다.
   attachFiles = [];
   if ($("applyFiles")) $("applyFiles").value = "";
@@ -1510,6 +1715,9 @@ function openApply(idx) {
   paintAttachWrap();
   attachProbe();                // 서버 준비 여부를 «조용히» 확인(실패해도 무해)
   clearApplyErrors();
+  // 💾 쓰다 만 내용이 «이 사업»에 있으면 띠로 알린다(저절로 채우지는 않는다).
+  //    ⚠ 위에서 칸을 모두 비운 «뒤»에 불러야 한다 — 순서를 바꾸면 띠만 뜨고 값이 지워진다.
+  paintApplyDraftBanner();
   showView("apply");
 }
 
@@ -1529,7 +1737,9 @@ function setFieldError(inputId, errId, msg) {
 function clearApplyErrors() {
   setFieldError("applyName", "applyNameErr", "");
   setFieldError("applyPhone", "applyPhoneErr", "");
+  setFieldError("applyRegion", "applyRegionErr", "");
   setFieldError("applyConsent", "applyConsentErr", "");
+  setFieldError("applyConsentOptional", "applyConsentOptErr", "");
   setFormError("applyFormErr", "");
 }
 
@@ -1612,6 +1822,8 @@ async function sendApply() {
   //       확인번호 되찾기(연락처 뒷 4자리)가 모두 숫자 기준으로 맞춰져 있다.
   const phone = $("applyPhone").value.replace(/[^0-9]/g, "");
   const memo = $("applyMemo").value.trim();
+  // 🏘 읍·면·동 — 필수. 통계로 쓰이므로 «고르지 않은 채» 통과시키지 않는다.
+  const region = ($("applyRegion") ? $("applyRegion").value : "").trim();
 
   // 검증 — 위에서부터 순서대로 확인하고, «첫 번째» 오류 칸으로 초점을 옮긴다.
   clearApplyErrors();
@@ -1627,12 +1839,36 @@ async function sendApply() {
     setFieldError("applyPhone", "applyPhoneErr", "연락처를 다시 확인해 주세요. (숫자 10~11자리)");
     firstBad = firstBad || "applyPhone";
   }
+  /* 🏘 읍·면·동(필수) — 2026-08-20 양호창님 지시.
+     ⚠ 「기타·타지역」이 목록에 있으므로 «고를 수 없어 막히는» 사람은 없다.
+        (귀농·귀촌·전입 지원은 아직 상주시민이 아닌 분이 신청한다 — 그분들의 자리다)
+     ⚠ data.json 이 옛 판이라 목록이 아예 없는 환경에서는 검사하지 않는다.
+        고를 수가 없는데 막으면 신청 자체가 불가능해진다(기존 방어 원칙). */
+  if (regionList().length && !region) {
+    setFieldError("applyRegion", "applyRegionErr", "사시는 읍·면·동을 골라 주세요.");
+    firstBad = firstBad || "applyRegion";
+  }
   // ⚖ 개인정보 수집·이용 동의(필수) — 미동의면 «수집 자체»를 하지 않는다.
   //    구 PC앱 apply_view.py 의 차단 로직과 같은 규칙. 절대 건너뛰지 말 것.
   if (!$("applyConsent").checked) {
     setFieldError("applyConsent", "applyConsentErr",
-      "개인정보 수집·이용에 동의하셔야 신청할 수 있습니다.");
+      "(필수) 성명·연락처 수집·이용에 동의하셔야 신청할 수 있습니다.");
     firstBad = firstBad || "applyConsent";
+  }
+  /* ⚖ (선택) 문의사항·증빙서류 — 개인정보 보호법 §22③
+     «선택 항목에 동의하지 않는다»는 이유로 신청을 막으면 안 된다.
+       → 선택 칸을 «비워 두면» 동의 없이도 신청은 그대로 접수된다(막지 않는다).
+       → 반대로 «적어 두고» 동의는 안 한 경우가 문제다. 그대로 보내면 동의 없이 수집하는 것이고,
+         조용히 지워 보내면 시민이 쓴 글이 말없이 사라진다(둘 다 안 된다).
+         그래서 «어느 쪽이든 고르실 수 있게» 두 길을 다 알려 주고 한 번만 멈춘다.
+     ⛔ 여기서 체크상자를 코드로 켜지 말 것 — 미리 켜 둔 동의는 동의가 아니다.
+     ⛔ 여기서 memo·attachFiles 를 몰래 비우지 말 것 — 시민이 쓴 것을 말없이 버리는 셈이다. */
+  const wantsOptional = !!memo || (attachFiles && attachFiles.length > 0);
+  if (wantsOptional && !$("applyConsentOptional").checked) {
+    setFieldError("applyConsentOptional", "applyConsentOptErr",
+      "문의사항·증빙서류를 함께 보내시려면 (선택) 항목에 동의해 주세요. "
+      + "동의를 원치 않으시면 그 칸을 비우시면 됩니다 — 신청은 그대로 접수됩니다.");
+    firstBad = firstBad || "applyConsentOptional";
   }
   if (firstBad) {
     const el = $(firstBad);
@@ -1649,6 +1885,8 @@ async function sendApply() {
   // 기계 판독용 페이로드(공무원 PC 자동접수가 파싱) — 마커로 감싼다
   const payload = {
     사업명: p.사업명, 신청자: name, 연락처: phone, 문의사항: memo,
+    // 🏘 읍·면·동 — PC 자동접수.py 가 접수대장에 기록한다(키 이름 «읍면동» 고정).
+    읍면동: region,
     담당팀: p.팀명, 담당자이메일: p.담당자이메일, 기관명: p.기관명,
   };
   const form = {
@@ -1658,6 +1896,7 @@ async function sendApply() {
     "사업명": p.사업명,
     "신청자": name,
     "연락처": phone,
+    "읍면동": region || "(미선택)",
     "문의사항": memo || "(없음)",
     "담당팀": p.팀명 || "-",
     "담당자이메일": p.담당자이메일 || "-",
@@ -1737,7 +1976,32 @@ async function sendApply() {
       //       없으므로, 키를 늘 넣으면 «첨부와 무관한 모든 신청»이 저장되지 않는다.
       //    ⛔ attach_count 는 «절대» 보내지 않는다 — 서버만 올린다(정책이 0 을 강제).
       if (attachTicket) insertRow.attach_ticket = attachTicket;
-      const row = await SangjuApply.submitApplication(insertRow);
+      /* 🏘 읍·면·동 — 위 attach_ticket 과 «같은 함정»이 있다.
+         PostgREST 는 표에 없는 컬럼이면 값이 무엇이든 PGRST204 로 INSERT «전체»를 거부한다.
+         그런데 region 은 이제 «필수»라 늘 값이 있으므로, 컬럼이 없는 서버에서는
+         attach_ticket 처럼 «값이 있을 때만 넣기»로는 막을 수 없다 —
+         그대로 두면 supabase/읍면동_260820.sql 을 실행하기 «전»에 배포될 경우
+         모든 신청이 저장에 실패한다(메일로만 접수되고 확인 번호가 안 나온다).
+         → 한 번 넣어 보고, «그 컬럼이 없다»는 뜻의 오류면 빼고 «한 번만» 다시 보낸다.
+         ⚠ 이 되돌림은 컬럼이 생기면 저절로 안 쓰이게 된다(스스로 낫는 구조).
+         ⚠ 메일 경로에는 읍·면·동이 «그대로» 실려 가므로 SQL 적용 전에도 자료는 남는다.
+         ⛔ 재시도를 두 번 이상 돌리지 말 것 — 같은 신청이 두 건 저장될 수 있다. */
+      if (region) insertRow.region = region;
+      let row;
+      try {
+        row = await SangjuApply.submitApplication(insertRow);
+      } catch (e1) {
+        const missingRegion = insertRow.region !== undefined &&
+          /region/i.test(String((e1 && (e1.message || e1.details)) || "")) &&
+          (function () {
+            try { return SangjuApply.errKind(e1) === "setup"; } catch (e2) { return false; }
+          })();
+        if (!missingRegion) throw e1;
+        console.warn("[신청] 서버에 region 컬럼이 아직 없어 읍·면·동을 빼고 다시 보냅니다"
+          + " (supabase/읍면동_260820.sql 미적용). 메일에는 그대로 실려 갑니다.");
+        delete insertRow.region;
+        row = await SangjuApply.submitApplication(insertRow);
+      }
       // ✅ 저장 성공 판정 = «throw 없이 끝났는가». «서버가 행을 돌려줬는가»가 아니다.
       //    submitApplication 은 개인정보 테이블에 RETURNING(.select()) 을 쓰지 않으므로
       //    (그러면 익명에게 SELECT 권한이 없어 저장 자체가 거부된다 — apply_client.js 주석 참조)
@@ -1812,15 +2076,27 @@ async function sendApply() {
   btn.innerHTML = orig;
 
   if (supaOK || mailOK) {
+    // 💾 접수됐으니 이 기기에 남긴 임시 저장을 «즉시» 지운다(보관 규약 ①).
+    //    ⚠ 완료 화면을 그리기 «전»에 지운다 — 뒤로 갔다 오면 옛 내용이 되살아나면 안 된다.
+    clearApplyDraft();
+    hideApplyDraftBanner();
     // 접수번호·조회코드는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
-    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "", attachMsg);
+    //   ⚠ supaOK 를 «함께» 넘긴다 — 저장이 실패했으면 showDone 이 그 사실을 한 줄로 알린다.
+    //     (예전에는 값만 감추고 이유를 말하지 않아, 시민도 담당자도 무슨 일이 있었는지 몰랐다)
+    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "", attachMsg, supaOK);
     attachFiles = [];             // 완료됐으니 비운다(뒤로 갔다 와도 딸려 가지 않게)
     renderAttachList();
   } else {
+    // ⚠ 예전에는 여기서 예외 메시지를 «그대로» 화면에 붙였다.
+    //    두 경로가 모두 실패하는 상황은 대부분 네트워크 문제라, 시민에게는
+    //    「(TypeError: Failed to fetch)」 같은 영어 개발자 문구가 그대로 보였다.
+    //    무슨 뜻인지 알 수 없고, 다음에 무엇을 해야 하는지도 알려 주지 않는다.
+    //    → 화면에는 «지금 할 수 있는 일»만 남기고, 원인은 콘솔에 남긴다(기존 진단 유지).
     const detail = (supaErr && supaErr.message) || (mailErr && mailErr.message) || "";
+    console.warn("[신청] 두 경로 모두 실패 — 원인:", detail, { supaErr, mailErr });
     setFormError("applyFormErr",
-      "신청 접수에 실패했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요." +
-      (detail ? " (" + detail + ")" : ""));
+      "신청 접수에 실패했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요. "
+      + "계속 안 되시면 담당 부서(" + SUPPORT_EMAIL + ")로 알려 주세요.");
   }
 }
 
@@ -1835,6 +2111,9 @@ function openInquiry() {
   $("topTitle").textContent = "불편신고";
   $("inquiryMemo").value = "";
   $("inquiryContact").value = "";
+  // ⚖ 동의는 «보낼 때마다» 새로 받는다(앞서 낸 신고의 체크가 남아 있으면 안 된다).
+  if ($("inquiryConsent")) $("inquiryConsent").checked = false;
+  setFieldError("inquiryConsent", "inquiryConsentErr", "");
   setFormError("inquiryErr", "");
   showView("inquiry");
 }
@@ -1843,10 +2122,20 @@ async function sendInquiry() {
   const memo = $("inquiryMemo").value.trim();
   const contact = $("inquiryContact").value.trim();
   setFormError("inquiryErr", "");
+  setFieldError("inquiryConsent", "inquiryConsentErr", "");
   if (!memo) {
     // (2026-08-19) alert() → 화면 안 안내. 맞춤 찾기·신청 폼과 «같은 방식».
     setFormError("inquiryErr", "어떤 점이 불편하셨는지 적어 주세요.");
     const el = $("inquiryMemo");
+    if (el && el.focus) { try { el.focus(); } catch (err) { /* 무시 */ } }
+    return;
+  }
+  // ⚖ 개인정보 수집·이용 동의(필수) — 미동의면 «수집 자체»를 하지 않는다.
+  //    신청 폼(applyConsent)과 «같은 패턴»이다. 절대 건너뛰지 말 것.
+  if ($("inquiryConsent") && !$("inquiryConsent").checked) {
+    setFieldError("inquiryConsent", "inquiryConsentErr",
+      "개인정보 수집·이용에 동의하셔야 신고를 보내실 수 있습니다.");
+    const el = $("inquiryConsent");
     if (el && el.focus) { try { el.focus(); } catch (err) { /* 무시 */ } }
     return;
   }
@@ -1890,6 +2179,9 @@ async function sendInquiry() {
     if ($("doneStatus")) $("doneStatus").hidden = true;
     // 직전 신청의 첨부 안내가 남지 않게 함께 감춘다
     if ($("doneAttach")) { $("doneAttach").textContent = ""; $("doneAttach").hidden = true; }
+    // ☁ 직전 신청의 «클라우드 저장 실패» 안내도 함께 감춘다.
+    //    불편신고는 클라우드에 저장하지 않으므로 그 줄이 남아 있으면 «거짓 안내»가 된다.
+    if ($("doneCloudWarn")) { $("doneCloudWarn").textContent = ""; $("doneCloudWarn").hidden = true; }
     document.querySelector("#view-done h2").textContent = "알려 주셔서 감사합니다";
     document.querySelector("#view-done .done-desc").innerHTML =
       "담당자에게 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
@@ -1906,7 +2198,13 @@ async function sendInquiry() {
   }
 }
 
-function showDone(p, receiptNo, lookupCode, attachMsg) {
+/* ⚠ supaOK — 클라우드(=공무원앱이 보는 정본)에 저장됐는가.
+     false 면 접수번호·확인 번호가 없고, «왜 없는지»를 아래 doneCloudWarn 이 알린다.
+     ⛔ 인자를 빼지 말 것. 빼면 다시 «값만 조용히 사라지는» 화면으로 돌아간다.
+     ⚠ 부르는 곳이 늘어나면 그곳에서도 반드시 넘길 것(안 넘기면 undefined → 경고가 뜬다).
+        불편신고 완료 화면은 showDone 을 «지나가지 않는다» — sendInquiry 가 직접 그리므로
+        거기서도 이 줄을 감춰 둔다(직전 신청의 안내가 남지 않게). */
+function showDone(p, receiptNo, lookupCode, attachMsg, supaOK) {
   $("topTitle").textContent = "접수 완료";
   // 문의 완료로 바뀌었던 문구를 신청 완료용으로 복원
   document.querySelector("#view-done h2").textContent = "신청이 접수되었습니다";
@@ -1927,6 +2225,18 @@ function showDone(p, receiptNo, lookupCode, attachMsg) {
     at.textContent = m;
     at.hidden = !m;
   }
+  /* ☁ 클라우드 저장 실패 안내 — «접수는 됐지만 온라인 조회는 안 된다»는 사실을 알린다.
+     ⚠ 문구는 supabase/신청정책_복구_진단.sql 에 합의된 «그대로»다. 임의로 바꾸지 말 것
+        (세 앱·SQL 문서가 같은 문장을 쓴다).
+     ⛔ 오류 원문(42501·Failed to fetch 등)을 덧붙이지 말 것 — 콘솔에만 남긴다. */
+  const cw = $("doneCloudWarn");
+  if (cw) {
+    if (supaOK) { cw.textContent = ""; cw.hidden = true; }
+    else {
+      cw.textContent = "온라인 조회 등록에 실패했습니다. 접수는 담당 부서로 정상 전달되었습니다.";
+      cw.hidden = false;
+    }
+  }
   // 🔑 조회코드 안내 — 저장이 성공했고, 서버에 조회 함수가 «없다고 확인되지 않았을 때» 보여 준다.
   //    (함수가 «없다»고 확인된 서버에서만 감춘다. «아직 모름»이면 보여 준다 —
   //     네트워크가 잠깐 흔들렸다는 이유로 시민이 코드를 못 받는 일이 없어야 한다.)
@@ -1937,6 +2247,41 @@ function showDone(p, receiptNo, lookupCode, attachMsg) {
   state.navStack = [{ v: "home", t: HOME_TITLE }, { v: "done", t: "접수 완료" }];
   state.fwdStack = [];
   showView("done", false);
+  playGotgam();          // 🎂 곶감 톡 — «신청»이 끝났을 때만(불편신고 완료에서는 부르지 않는다)
+}
+
+/* 🎂 곶감 톡 — 시안 B「감빛 숨결」(2026-08-20 양호창님 승낙).
+   접수가 끝난 «그 순간»에만 곶감 4알·입자 11개가 «아래에서 위로» 떠올랐다 사라진다.
+   왜 이렇게 만드는가:
+     · [hidden] 을 풀었다 다시 걸면 display:none → block 이 되면서 CSS 애니메이션이
+       «저절로 처음부터» 다시 돈다. 그래서 두 번째 신청에서도 제대로 보인다.
+       (클래스만 토글하면 두 번째부터 애니메이션이 다시 시작되지 않는다 — 실제로 겪는 함정)
+     · 다 돌고 나면 «반드시» 다시 감춘다. 안 감추면 화면에 곶감 그림 다섯 개가
+       투명한 채로 남아 있게 되고(opacity 0), 뒤로 갔다 오면 다시 나타난다.
+   ⚠ 규격서 14절 — 자동 반복 금지. 이 함수는 «부를 때 한 번»만 돈다.
+   ⚠ 저감모션에서는 CSS 가 .gotgam-rise 를 display:none 으로 끄므로 아무것도 보이지 않는다.
+      (그래도 hidden 을 오가는 것은 무해하다 — 그리지 않을 뿐이다)
+   ⛔ setInterval 로 계속 뿌리지 말 것. 광과민성 발작 위험 + 규격 위반. */
+let _gotgamTimer = 0;
+function playGotgam() {
+  try {
+    const box = $("doneGotgam");
+    if (!box) return;
+    if (_gotgamTimer) { clearTimeout(_gotgamTimer); _gotgamTimer = 0; }
+    box.hidden = true;
+    // 강제 리플로우 — 이 한 줄이 있어야 «두 번째 신청»에서도 애니메이션이 다시 돈다
+    void box.offsetWidth;
+    box.hidden = false;
+    /* 정리 시각 — «가장 늦게 끝나는 것»보다 뒤여야 한다. 짧으면 연출이 도중에 잘린다.
+         곶감 마지막: 지연 480ms + 2180ms = 2660ms
+         입자 마지막: 지연 640ms + 2000ms = 2640ms
+       → 2660ms 가 끝. 여유를 두어 2900ms 에 정리한다.
+       ⛔ 사양(개수·지연·길이)을 바꾸면 이 숫자도 «함께» 다시 계산할 것. */
+    _gotgamTimer = window.setTimeout(function () {
+      box.hidden = true;
+      _gotgamTimer = 0;
+    }, 2900);
+  } catch (e) { /* 장식이므로 실패해도 아무 일 없다 */ }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -2049,6 +2394,20 @@ function saveLookupEntry(entry) {
 }
 
 // ── 완료 화면의 조회코드 상자 ──────────────────────────────────────────
+/* 📋 복사 「찰칵」 — 어느 상자가 복사됐는지 눈으로 잇게 해 주는 «보조» 신호.
+   ⚠ 정보를 움직임에만 담지 않는다(규격서 14절) — 실제 안내는 .code-copy-msg 글자가 한다.
+      이 함수가 아무 일도 못 해도 시민은 «복사했습니다» 문구로 결과를 안다.
+   ⚠ 클래스를 뗐다 붙여야 «두 번째 복사»에서도 다시 반짝인다(강제 리플로우 한 줄). */
+function flashCopied(boxEl) {
+  try {
+    if (!boxEl) return;
+    boxEl.classList.remove("copied");
+    void boxEl.offsetWidth;
+    boxEl.classList.add("copied");
+    window.setTimeout(function () { boxEl.classList.remove("copied"); }, 400);
+  } catch (e) { /* 장식이므로 실패해도 아무 일 없다 */ }
+}
+
 function setDoneCode(code) {
   const box = $("doneCodeBox"), out = $("doneCode"), msg = $("doneCodeMsg");
   if (!box || !out) return;
@@ -2136,6 +2495,15 @@ function msRenderList() {
   // 이 휴대폰에 확인 번호는 있는데 «아직 한 번도» 못 불러온 상태 → 스켈레톤으로 자리를 잡는다.
   // (이미 불러온 내용이 있으면 이 줄을 지나지 않는다 — 20초 갱신마다 회색 블록이 번쩍이지 않게)
   if (hasCodes && !msLoaded && !msErr && !msRows.length) { box.innerHTML = skeletonHtml(2); return; }
+  /* 서버에 조회 기능이 «없다»고 확인된 경우 — 홈 진입점을 항상 보이게 바꾸면서(2026-08-20)
+     여기까지 들어오실 수 있게 됐다. 빈 화면을 보이지 말고 «지금은 왜 안 되는지»를 말한다.
+     ⚠ 시민이 잘못한 것이 아니라는 점이 드러나야 한다 — 「준비 중」이라고 분명히 적는다. */
+  if (msAvail === "unavailable") {
+    box.innerHTML = `<div class="ms-empty"><p>지금은 진행 상태를 확인할 수 없습니다.</p>
+      <p>잠시 후 다시 시도해 주세요.<br>
+         신청은 정상적으로 접수되며, 처리 결과는 담당자가 연락처로 안내드립니다.</p></div>`;
+    return;
+  }
   if (msErr) {
     box.innerHTML = `<div class="ms-empty"><p>지금은 진행 상태를 불러오지 못했습니다.</p>
       <p>인터넷 연결을 확인하신 뒤 이 화면을 다시 열어 주세요.</p></div>`;
@@ -2313,14 +2681,30 @@ function msBindVisibility() {
 //    ⚠ 지우는 것은 «이 기기의 보관값»뿐 — 신청 자체는 그대로 살아 있다.
 function msClearDevice() {
   const n = loadLookupEntries().length;
-  if (!n) { msAnnounce("이 휴대폰에 보관된 확인 번호가 없습니다."); return; }
+  if (!n) {
+    // 확인 번호는 없어도 «쓰다 만 신청서»는 남아 있을 수 있다 — 그것만이라도 지운다.
+    // (그냥 돌아가 버리면 「지우기」를 눌렀는데 이름·연락처가 그대로 남는다)
+    if (loadApplyDraft()) {
+      clearApplyDraft();
+      hideApplyDraftBanner();
+      msAnnounce("이 휴대폰에 임시로 저장된 신청서 내용을 지웠습니다.");
+      return;
+    }
+    msAnnounce("이 휴대폰에 보관된 확인 번호가 없습니다.");
+    return;
+  }
   const ok = confirm(
     `이 휴대폰에 보관된 확인 번호 ${n}건을 지웁니다.\n` +
     "지운 뒤에는 적어 두신 확인 번호를 다시 입력해야 진행 상태를 보실 수 있습니다.\n" +
     "신청 자체가 취소되지는 않습니다.\n" +
+    "쓰다 만 신청서 내용이 남아 있으면 그것도 함께 지웁니다.\n" +
     "지울까요?");
   if (!ok) return;
   try { localStorage.removeItem(LOOKUP_KEY); } catch (e) { /* 무시 */ }
+  // 💾 쓰다 만 신청서(이름·연락처·문의사항)도 «함께» 지운다 — 보관 규약 ④.
+  //    공용 기기에서 「이 휴대폰에서 지우기」를 눌렀는데 이름이 남아 있으면 지운 것이 아니다.
+  clearApplyDraft();
+  hideApplyDraftBanner();
   msRows = []; msSig = ""; msErr = false; msLoaded = true; msDeferred = false;
   msRenderList();
   msPaintEntry();               // 보관 코드가 0건이 되면 홈 진입점도 다시 판단한다
@@ -2364,18 +2748,19 @@ function openMsCode() {
   showView("mscode");
 }
 
-// 홈의 «내 신청 현황» 진입점 노출.
-//   · "ok"          → 보인다
-//   · "unavailable" → 감춘다(서버에 함수가 «없다»고 확인된 경우에만)
-//   · "unknown"     → 이 기기에 보관된 조회코드가 «있으면» 보인다.
-//     ⚠ 마지막 줄이 중요하다. 아직 모른다고 무조건 감추면, 오프라인으로 앱을 연 이용자는
-//       화면에 들어갈 수 없고 → 들어가야 다시 확인하므로 → 영영 못 들어가는 막다른 길이 된다.
+/* 홈의 «내 신청 현황» 진입점 — 2026-08-20 양호창님 지시로 «항상» 보인다.
+   ⚠ 예전에는 서버 상태(msAvail)와 기기에 보관된 코드 유무에 따라 나타났다 사라졌다 했다.
+      기능적으로는 «할 수 없는 일을 보여 주지 않는» 방어였지만, 어르신께는
+      「어제 있던 메뉴가 없어졌다 = 내가 뭘 잘못 눌렀다」로 읽혔다.
+      메뉴가 늘 같은 자리에 있고, 눌렀을 때 «지금은 왜 안 되는지» 말해 주는 편이 낫다.
+      (하단 탭바의 「내 신청」은 원래도 항상 보였다 — 홈 카드만 달랐던 셈이라 오히려 어긋났다)
+   → 안내는 openMyStatus()·msRenderList() 가 맡는다.
+   ⛔ 이 함수에 다시 «감추는» 분기를 넣지 말 것. 감추려면 탭바의 「내 신청」도 함께 감춰야
+      앞뒤가 맞는데, 그러면 시민이 들어갈 문이 하나도 남지 않는다. */
 function msPaintEntry() {
   const el = $("myStatusEntry");
   if (!el) return;
-  if (msAvail === "ok") { el.hidden = false; return; }
-  if (msAvail === "unavailable") { el.hidden = true; return; }
-  el.hidden = loadLookupEntries().length === 0;
+  el.hidden = false;
 }
 
 // 서버에 조회 함수가 있는지 «조용히» 확인한다. (위 ⭐ 3값 프로브)
@@ -2580,6 +2965,7 @@ async function msRecCopyCodes() {
       ok = true;
     } catch (e2) { ok = false; }
   }
+  if (ok) flashCopied($("msRecResult"));   // 📋 찰칵 — 되찾기 상자도 «같은» 신호를 쓴다
   if (msg) {
     msg.textContent = ok
       ? "확인 번호를 복사했습니다. 메모장이나 문자에 붙여넣어 보관해 주세요."
@@ -2867,9 +3253,27 @@ function bindEvents() {
   $("applyConsent").addEventListener("change", () => {
     if ($("applyConsent").checked) setFieldError("applyConsent", "applyConsentErr", "");
   });
+  // (선택) 동의 — 체크하면 안내를 지우고, 칸을 비워도 안내를 지운다(둘 다 «해결»이므로).
+  const applyOptEl = $("applyConsentOptional");
+  if (applyOptEl) applyOptEl.addEventListener("change", () => {
+    if (applyOptEl.checked) setFieldError("applyConsentOptional", "applyConsentOptErr", "");
+  });
+  $("applyMemo").addEventListener("input", () => {
+    if (!$("applyMemo").value.trim()) setFieldError("applyConsentOptional", "applyConsentOptErr", "");
+  });
   // 신청 폼 안에서 처리방침 열기 — 돌아오면 작성 중이던 내용이 남아 있어야 하므로
   // 화면 전환(showView)만 하고 폼은 초기화하지 않는다.
   $("applyPrivacyLink").addEventListener("click", openPrivacy);
+  // 불편신고·정책제안 폼 안의 처리방침 링크도 «같은 화면»(#view-privacy)을 연다.
+  // ⚠ 눌러도 아무 일이 없는 버튼은 없느니만 못하다 — 요소가 있을 때만 잇는다.
+  const inqPrivacyEl = $("inquiryPrivacyLink");
+  if (inqPrivacyEl) inqPrivacyEl.addEventListener("click", openPrivacy);
+  const pwPrivacyEl = $("pwPrivacyLink");
+  if (pwPrivacyEl) pwPrivacyEl.addEventListener("click", openPrivacy);
+  const inqConsentEl = $("inquiryConsent");
+  if (inqConsentEl) inqConsentEl.addEventListener("change", () => {
+    if (inqConsentEl.checked) setFieldError("inquiryConsent", "inquiryConsentErr", "");
+  });
   // 푸터의 「오류 문의」 링크는 헤더 「안내」 안으로 옮겨 갔다 — 남아 있으면 그대로 쓴다(옛 캐시 대비).
   const inqLink = $("inquiryLink");
   if (inqLink) inqLink.addEventListener("click", (e) => { e.preventDefault(); openInquiry(); });
@@ -2893,6 +3297,26 @@ function bindEvents() {
   $("privacyLink").addEventListener("click", openPrivacy);
   // 버전 라벨 + 버전별 개선사항(체인지로그) 모달
   initVersion();
+  initFontSize();          // 🔠 글자 크게 보기 — 지난번 선택을 되살리고 버튼을 잇는다
+  // 💾 임시 저장 — 「이어서 쓰기」·「지우기」
+  const draftRestoreBtn = $("applyDraftRestore");
+  if (draftRestoreBtn) draftRestoreBtn.addEventListener("click", restoreApplyDraft);
+  const draftDiscardBtn = $("applyDraftDiscard");
+  if (draftDiscardBtn) draftDiscardBtn.addEventListener("click", discardApplyDraft);
+  // 쓰는 동안 «모아서» 보관한다(글자마다 저장하면 저사양 폰에서 버벅인다).
+  // ⚠ 저장 대상은 이 세 칸뿐이다 — 동의 체크·첨부는 «듣지도 않는다»(saveApplyDraft 규약).
+  const draftSaveDebounced = debounce(saveApplyDraft, 500);
+  ["applyName", "applyPhone", "applyMemo"].forEach(function (id) {
+    const el = $(id);
+    if (el) el.addEventListener("input", draftSaveDebounced);
+  });
+  // 🏘 읍·면·동 — 고르면 오류 표시를 즉시 지우고, 선택도 임시 저장에 담는다.
+  //    (select 는 input 이 아니라 change 로 듣는다)
+  const regionEl = $("applyRegion");
+  if (regionEl) regionEl.addEventListener("change", function () {
+    if (regionEl.value) setFieldError("applyRegion", "applyRegionErr", "");
+    saveApplyDraft();
+  });
   $("privacyHome").addEventListener("click", () => {
     state.selectedCats = new Set();
     state.navStack = [{ v: "home", t: HOME_TITLE }];
@@ -3096,3 +3520,202 @@ if ("serviceWorker" in navigator) {
       });
   });
 }
+
+/* ══ 🔠 글자 크게 보기 (2단계: 100% ↔ 125%) ═══════════════════════════
+   왜 넣는가: 저시력·노안 이용자가 앱을 쓸 수 있는지를 가르는 가장 큰 한 가지다.
+     브라우저 확대(핀치)로도 되지만, 어르신은 그 조작을 모르시거나 한 번 확대하면
+     좌우로 밀려 원래대로 돌리지 못한다. 앱 안에 «버튼 하나»가 있어야 한다.
+   어떻게: html 에 클래스 하나(fontsize-lg)를 붙여 :root 글자 크기를 125% 로 올린다.
+     rem 으로 잡아 둔 글자·여백이 «한꺼번에» 따라 커진다.
+     px 로 못 박은 골격(입력칸 48px·탭바 62px·아이콘 24px)은 일부러 그대로 둔다 —
+     터치 대상까지 커지면 좁은 폰에서 화면 밖으로 밀린다(실측으로 확인).
+   ⚠ 헤더가 높아지는 것은 syncTopbarH() 의 ResizeObserver 가 잡아
+     .topline·.search-box.sticky 가 저절로 따라온다(2026-08-20 style.css ⓒ절).
+   ⚠ 선택은 이 기기에 기억한다. 개인정보가 아니라 «보기 설정»이다(이름·연락처 아님).
+   ⚠ localStorage 를 못 쓰는 환경(사파리 비공개 모드 등)에서도 «그 자리에서는» 동작한다 —
+     기억만 안 될 뿐이다. 그래서 저장 실패로 기능을 막지 않는다.
+   ⛔ 3단계 이상으로 늘리지 말 것 — 누를 때마다 «지금 몇 단계인지» 알기 어려워진다.
+   ⛔ maximum-scale·user-scalable=no 를 넣어 브라우저 확대를 막는 식으로 대체하지 말 것
+      (KWCAG 2.2 확대 허용 — index.html viewport 주석 참조). */
+const FONTSIZE_KEY = "sangju_fontsize";
+function applyFontSize(big) {
+  try {
+    document.documentElement.classList.toggle("fontsize-lg", !!big);
+    const btn = $("fontSizeBtn");
+    if (btn) {
+      btn.setAttribute("aria-pressed", big ? "true" : "false");
+      // 낭독기에는 «지금 무엇을 하는 버튼인지»를 알린다(색·굵기만으로 알리지 않는다)
+      btn.setAttribute("aria-label", big ? "글자 크기 원래대로" : "글자 크게 보기");
+    }
+    // 글자가 커지면 헤더도 높아진다 → sticky 기준을 곧바로 다시 잰다.
+    // (ResizeObserver 도 잡지만, 그리기 순서에 따라 한 프레임 늦을 수 있어 직접 부른다)
+    try { syncTopbarH(); } catch (e) { /* 무시 */ }
+    if (window.requestAnimationFrame) requestAnimationFrame(function () {
+      try { syncTopbarH(); } catch (e) { /* 무시 */ }
+    });
+  } catch (e) { /* 무시 */ }
+}
+function initFontSize() {
+  let big = false;
+  try { big = localStorage.getItem(FONTSIZE_KEY) === "1"; } catch (e) { /* 저장소를 못 쓰는 환경 */ }
+  applyFontSize(big);
+  const btn = $("fontSizeBtn");
+  if (!btn) return;
+  btn.addEventListener("click", function () {
+    const next = !document.documentElement.classList.contains("fontsize-lg");
+    applyFontSize(next);
+    try { localStorage.setItem(FONTSIZE_KEY, next ? "1" : "0"); } catch (e) { /* 기억만 못 할 뿐 */ }
+    // 결과를 «글자로도» 알린다 — 화면이 커진 것을 못 보는 이용자도 알아야 한다(규격서 14절)
+    try { _toast(next ? "글자를 크게 했습니다" : "글자를 원래대로 되돌렸습니다"); } catch (e) { /* 무시 */ }
+  });
+}
+
+/* ══ 💾 신청서 임시 저장 ═══════════════════════════════════════════════
+   왜 넣는가: 어르신은 입력이 느려 신청서를 쓰다 전화를 받거나 화면을 잘못 눌러
+     빠져나가는 일이 잦다. 그때 쓰던 내용이 통째로 사라지면 «다시 처음부터»가 되고,
+     대부분 그 자리에서 포기하신다.
+
+   ⚠⚠ 이것은 «개인정보를 이 기기에 남기는» 기능이다. 아래 규약을 반드시 지킬 것.
+   ┌── 무엇을 저장하는가 ────────────────────────────────────────────────
+   │  · 신청자 이름 · 연락처(입력한 그대로, 하이픈 포함) · 문의사항
+   │  · 읍·면·동 (2026-08-20 추가)
+   │  · 어느 사업의 신청서였는지(사업명) · 저장 시각
+   │
+   │  ▸ 읍·면·동을 «넣기로» 한 이유 (2026-08-20 판단):
+   │      ① 이미 이름·연락처를 저장하고 있다. 읍·면·동은 25개 구역 중 하나일 뿐이라
+   │         그 둘보다 «덜» 특정적이다 — 더 민감한 것을 저장하면서 덜한 것만 빼면 앞뒤가 안 맞는다.
+   │      ② 읍·면·동은 이제 «필수»다. 빼 두면 「이어서 쓰기」로 되살린 신청서가
+   │         그 칸만 비어 있게 되고, 시민은 다 됐다고 여겨 보내다가 «마지막에» 막힌다.
+   │         복구가 오히려 걸림돌이 된다.
+   │      ③ 보관 조건은 이름·연락처와 «똑같다» — 24시간·제출 성공 시 즉시 삭제·
+   │         「지우기」·「이 휴대폰에서 지우기」. 새로 늘어나는 위험이 없다.
+   ├── 무엇을 «저장하지 않는가» ─────────────────────────────────────────
+   │  ⛔ 첨부파일 — 용량도 문제지만 증빙서류는 민감도가 가장 높다. 절대 담지 않는다.
+   │  ⛔ 개인정보 수집·이용 «동의» 체크 — 동의는 신청할 때마다 새로 받아야 한다.
+   │     («지난번에 동의했으니까»로 넘기면 그건 동의가 아니다. openApply 가 매번 끈다)
+   │  ⛔ 확인 번호(조회코드) — 그건 별도 보관소(saveLookupEntry)의 몫이다.
+   ├── 언제 지우는가 ────────────────────────────────────────────────────
+   │  ① 제출에 «성공하면» 즉시 (showDone 직전 — 아래 sendApply 참조)
+   │  ② 시민이 「지우기」를 누르면 즉시
+   │  ③ 저장한 지 24시간이 지나면 자동으로 (읽을 때 검사해 버린다)
+   │     — 24시간으로 정한 이유: 신청서를 쓰다 만 뒤 «다음 날»까지 이어 쓰는 일은
+   │       거의 없고, 공용 기기(주민센터·도서관)에 하루를 넘겨 남기면 안 되기 때문이다.
+   │  ④ 「내 신청 현황」의 「이 휴대폰에서 지우기」를 누르면 함께 (msClearDevice)
+   └─────────────────────────────────────────────────────────────────────
+   ⚠ 다른 사업의 신청서를 열면 복구를 «권하지 않는다» — 사업명이 다르면 조용히 무시한다.
+     (A 사업에 쓴 문의사항이 B 사업 신청서에 들어가면 잘못된 신청이 접수된다) */
+const APPLY_DRAFT_KEY = "sangju_apply_draft";
+const APPLY_DRAFT_TTL = 24 * 60 * 60 * 1000;   // 24시간
+
+function saveApplyDraft() {
+  try {
+    // ⛔ 여기에 동의 체크·첨부파일을 «절대» 넣지 말 것(위 규약 참조).
+    const name = $("applyName").value;
+    const phone = $("applyPhone").value;
+    const memo = $("applyMemo").value;
+    const region = $("applyRegion") ? $("applyRegion").value : "";
+    // 아무것도 안 썼으면 남기지 않는다(빈 껍데기를 기기에 남길 이유가 없다)
+    if (!name.trim() && !phone.trim() && !memo.trim() && !region.trim()) { clearApplyDraft(); return; }
+    const p = DATA.programs[currentIdx];
+    localStorage.setItem(APPLY_DRAFT_KEY, JSON.stringify({
+      benefit_name: (p && p.사업명) || "",
+      name: name, phone: phone, memo: memo, region: region,
+      at: Date.now(),
+    }));
+  } catch (e) { /* 저장소를 못 쓰는 환경 — 임시 저장만 안 될 뿐 신청은 그대로 된다 */ }
+}
+
+function loadApplyDraft() {
+  try {
+    const raw = localStorage.getItem(APPLY_DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || typeof d !== "object") { clearApplyDraft(); return null; }
+    // ③ 24시간이 지난 것은 «읽는 김에» 버린다
+    if (!d.at || (Date.now() - d.at) > APPLY_DRAFT_TTL) { clearApplyDraft(); return null; }
+    return d;
+  } catch (e) { clearApplyDraft(); return null; }
+}
+
+function clearApplyDraft() {
+  try { localStorage.removeItem(APPLY_DRAFT_KEY); } catch (e) { /* 무시 */ }
+}
+
+function hideApplyDraftBanner() {
+  const b = $("applyDraftBanner");
+  if (b) b.hidden = true;
+}
+
+/* 신청 화면에 들어올 때 — 같은 사업의 «쓰다 만 내용»이 있으면 띠로 «알리기만» 한다.
+   ⚠ 저절로 채우지 않는다. 공용 기기에서 앞사람 이름이 갑자기 칸에 들어차 있으면
+     그것대로 놀라운 일이고, 못 보고 그대로 제출하면 남의 이름으로 신청된다. */
+function paintApplyDraftBanner() {
+  const b = $("applyDraftBanner"), t = $("applyDraftText");
+  if (!b || !t) return;
+  const d = loadApplyDraft();
+  const p = DATA.programs[currentIdx];
+  const same = d && p && d.benefit_name === p.사업명;
+  if (!same) { b.hidden = true; return; }
+  t.textContent = "이 사업에 쓰시던 내용이 남아 있습니다.";
+  b.hidden = false;
+}
+
+function restoreApplyDraft() {
+  const d = loadApplyDraft();
+  const p = DATA.programs[currentIdx];
+  if (!d || !p || d.benefit_name !== p.사업명) { hideApplyDraftBanner(); return; }
+  $("applyName").value = d.name || "";
+  $("applyPhone").value = d.phone || "";
+  $("applyMemo").value = d.memo || "";
+  // 🏘 읍·면·동 — 목록에 없는 값(옛 자료)이면 fillRegionSelect 가 임시 항목으로 살려 둔다
+  fillRegionSelect($("applyRegion"), d.region || "");
+  // ⛔ 동의 체크는 복구하지 않는다 — 동의는 매번 새로 받는다(위 규약 ②).
+  hideApplyDraftBanner();
+  clearApplyErrors();
+  const el = $("applyName");
+  if (el && el.focus) { try { el.focus(); } catch (e) { /* 무시 */ } }
+  try { _toast("쓰시던 내용을 불러왔습니다"); } catch (e) { /* 무시 */ }
+}
+
+function discardApplyDraft() {
+  clearApplyDraft();
+  hideApplyDraftBanner();
+  try { _toast("임시 저장한 내용을 지웠습니다"); } catch (e) { /* 무시 */ }
+}
+
+/* ── 헤더 높이를 재어 sticky 기준(--topbar-h)에 알려 준다 ────────────────
+   왜 필요한가(2026-08-20 시연 전 전수 점검에서 실측):
+     style.css 는 오랫동안 «헤더는 58px» 이라고 가정하고 .topline(top:58)·
+     .search-box.sticky(top:61) 를 붙여 두었다. 그런데 .topbar-titles 는
+     flex-wrap 이라 「시민 참여형」이 제목과 한 줄에 안 들어가면 윗줄로 접힌다.
+     320~412px 폰에서는 «늘» 접혀 헤더가 71.4px 가 된다.
+     → 목록을 내리면 「결과 안에서 찾기」 검색창의 위 10.4px 이 헤더 밑에 깔리고,
+       브랜드 라인(.topline)은 통째로 헤더 뒤에 묻혔다.
+   고치는 방법: 숫자를 고정하지 말고 «실제로 그려진 높이»를 재서 CSS 에 넘긴다.
+     ⚠ getBoundingClientRect().height 에는 padding-top: env(safe-area-inset-top)
+       이 이미 포함돼 있다 → CSS 에서 안전영역을 다시 더하지 말 것.
+     ⚠ 인라인 <style> 이 아니라 CSSOM(setProperty)이라 CSP(style-src 'self')에 걸리지 않는다.
+     ⚠ 실패해도 CSS 기본값(58px)이 남아 예전 동작 그대로다 — 새로 깨지지 않는다.
+   언제 다시 재는가: 첫 그리기 · 창 크기/회전 변경 · 헤더 자체의 크기 변화
+     (제목이 길어져 줄이 늘거나, 글자 크기를 키우거나, 안전영역이 바뀔 때). */
+function syncTopbarH() {
+  try {
+    const bar = document.querySelector(".topbar");
+    if (!bar) return;
+    const h = Math.round(bar.getBoundingClientRect().height);
+    if (h > 0) document.documentElement.style.setProperty("--topbar-h", h + "px");
+  } catch (e) { /* 못 재면 CSS 기본값(58px)으로 둔다 */ }
+}
+(function initTopbarH() {
+  const run = () => syncTopbarH();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
+  window.addEventListener("load", run);
+  window.addEventListener("resize", run);
+  window.addEventListener("orientationchange", run);
+  // 헤더 안 글자가 바뀌어 줄 수가 달라질 때도 따라간다(showView 가 제목을 갈아 끼운다).
+  try {
+    const bar = document.querySelector(".topbar");
+    if (bar && window.ResizeObserver) new ResizeObserver(run).observe(bar);
+  } catch (e) { /* 지원하지 않는 브라우저 — 위 이벤트들만으로 충분하다 */ }
+})();

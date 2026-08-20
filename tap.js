@@ -1,13 +1,23 @@
 /* ═══════════════════════════════════════════════════════════════
-   tap.js — 눌림 반응(파동) + 햅틱 진동
+   tap.js — 눌림 반응(햅틱 진동 + 살짝 어둡게)
    ─────────────────────────────────────────────────────────────
    시안 A「감빛 온기」의 «.tap» 규약을 실제 앱에 옮긴 것.
-     · 누를 수 있는 것을 누르면  ① 짧은 진동 12ms  ② 손가락 자리에 파동  ③ 살짝 어둡게
-     · 파동은 body 위에 뜨는 «고정 레이어»라 누른 요소의 구조·레이아웃을 건드리지 않는다.
-     · CSP 준수: 인라인 <script>·style= 을 쓰지 않는다. el.style.left(CSSOM)만 사용한다.
-     · prefers-reduced-motion: reduce 이면 파동도 진동도 만들지 않는다(KWCAG 2.2).
+     · 누를 수 있는 것을 누르면  ① 짧은 진동 12ms  ② 살짝 어둡게(.is-pressed)
+     · CSP 준수: 인라인 <script>·style= 을 쓰지 않는다.
+     · prefers-reduced-motion: reduce 이면 진동도 만들지 않는다(KWCAG 2.2).
      · app.js·apply_client.js·forms.js·proposals.js 의 동작에 전혀 관여하지 않는다.
        (이벤트를 가로채지 않도록 passive · capture 로 «듣기만» 한다)
+
+   ⛔ 2026-08-20 양호창님 지시 — «손가락 자리에 물방울처럼 퍼지는 파동»(ripple)은
+      3개 앱에서 모두 제거했다. 되살리지 말 것.
+      함께 걷어낸 것: ripple() 함수 · 그 두 호출 자리 ·
+        style.css 의 .tap-ripple / @keyframes tapRipple ·
+        prefers-reduced-motion 블록의 .tap-ripple 줄.
+      ⚠ 남긴 것(①진동 ②.is-pressed)은 «누를 수 있는 것을 눌렀다»는 되먹임이라
+        없애면 «반응이 없는 앱»이 된다. 파동만 지우고 이 둘은 반드시 남긴다.
+      ⚠ 파동은 body 위에 얹는 position:fixed 레이어였다 —
+        어떤 컨테이너에도 overflow:hidden 을 걸지 않았으므로
+        지우면서 되돌릴 여백·잘림 설정이 «없다»(초점 링에 영향 없음).
    ═══════════════════════════════════════════════════════════════ */
 (function () {
   "use strict";
@@ -37,19 +47,6 @@
     return el;
   }
 
-  function ripple(x, y) {
-    if (reduceMotion) return;
-    var s = document.createElement("span");
-    s.className = "tap-ripple";
-    // CSSOM(el.style)은 CSP 의 style-src 대상이 아니다 — 인라인 style= 속성이 아님
-    s.style.left = x + "px";
-    s.style.top = y + "px";
-    document.body.appendChild(s);
-    window.setTimeout(function () {
-      if (s.parentNode) s.parentNode.removeChild(s);
-    }, 520);
-  }
-
   function buzz() {
     if (reduceMotion) return;
     try {
@@ -72,7 +69,6 @@
     release();
     pressed = el;
     el.classList.add("is-pressed");
-    ripple(e.clientX, e.clientY);
     buzz();
   }
 
@@ -84,14 +80,12 @@
   document.addEventListener("pointerleave", release, opt);
   window.addEventListener("blur", release);
 
-  // 키보드로 누를 때(Enter·Space)도 같은 반응을 준다 — 파동은 요소 가운데에서
+  // 키보드로 누를 때(Enter·Space)도 같은 되먹임을 준다
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
     if (e.repeat) return;
     var el = findTarget(document.activeElement);
     if (!el) return;
-    var r = el.getBoundingClientRect();
-    ripple(r.left + r.width / 2, r.top + r.height / 2);
     buzz();
   });
 })();

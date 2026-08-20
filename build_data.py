@@ -191,11 +191,54 @@ def main():
         "categories": categories,
         "always_show": list(getattr(config, "ALWAYS_SHOW_CATEGORIES", [])),
         "situation_map": situation_map,
+        # 🏙 읍·면·동(행정구역) — 시민앱·공무원앱의 «선택칸» 이 이 값을 그대로 쓴다.
+        #    ★ JS 쪽에 목록을 «복사해 두지 않는다». config.SANGJU_REGIONS 가 유일한 출처이고,
+        #      브라우저는 이 data.json 을 통해서만 그 목록을 받는다.
+        #      (행정구역이 바뀌면 config 만 고치고 재빌드하면 세 앱이 함께 바뀐다)
+        #    regions        : 표준 순서(읍 → 면 → 동 → 기타·타지역)로 늘어놓은 평면 목록
+        #    region_groups  : 화면에서 묶음(optgroup)으로 보여 줄 때 쓰는 [묶음이름, [지역…]]
+        #    region_etc     : 「기타·타지역」 값 자체(타지역 신청자를 막지 않기 위해 필수)
+        #    ⭐ 아래 세 표는 «화면의 정규화가 파이썬과 똑같이 동작하게» 하려고 싣는다
+        #      (2026-08-20, 공무원앱 담당 요청). 이것이 없으면 화면이 파이썬보다 좁게
+        #      알아본다 — 실제로 「사벌면」·「낙양동」이 화면에서만 «미기재» 로 떨어졌다.
+        #      옛 자유입력 값이 남아 있는 정책제안에서 특히 차이가 크다.
+        #    region_aliases    : 옛 이름·오타 → 정식 이름   (사벌면 → 사벌국면)
+        #    region_legal_dong : 법정동 36개 → 행정동 6개   (낙양동 → 남원동)
+        #    region_etc_words  : 「기타·타지역」으로 모을 낱말 (관외·타지역 …)
+        #    ⚠ JS 는 이 표들을 «그대로» 쓰기만 한다. 값을 베껴 적지 말 것.
+        "regions": list(getattr(config, "SANGJU_REGIONS", [])),
+        "region_groups": [[g, list(v)] for g, v in
+                          getattr(config, "SANGJU_REGION_GROUPS", [])],
+        "region_etc": getattr(config, "SANGJU_REGION_ETC", ""),
+        "region_aliases": dict(getattr(config, "SANGJU_REGION_ALIASES", {})),
+        "region_legal_dong": dict(getattr(config, "SANGJU_LEGAL_DONG", {})),
+        "region_etc_words": list(getattr(config, "SANGJU_REGION_ETC_WORDS", [])),
         "programs": programs,
     }
 
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
+
+    # ── 공무원앱(cloudui)에도 «같은 파일»을 둔다 (2026-08-20) ──────────────────────
+    #   왜: 공무원앱의 「읍·면·동별 신청 현황」 차트도 regions / region_groups / region_etc
+    #       를 읽어야 한다. 위 196행 규약 그대로 «브라우저는 data.json 을 통해서만» 받는다
+    #       — 25개 이름을 JS 에 베껴 적으면 셋(엑셀·시민앱·공무원앱)이 언젠가 어긋난다.
+    #   ⚠ 공무원앱은 사업 목록을 Supabase 에서 받으므로 programs 부분은 «쓰지 않는다».
+    #      그래도 파일을 쪼개지 않고 통째로 두는 이유는 «출처가 하나»여야 하기 때문이다
+    #      (쪼개는 순간 두 파일의 갱신 시점이 달라진다).
+    #   ⚠ 배포.py 의 공무원앱 항목은 "데이터빌드": None 이라 스스로 만들지 못한다.
+    #      그래서 시민앱을 빌드하는 «이 자리»에서 함께 써 둔다. 지우지 마세요.
+    admin_out = os.path.join(os.path.dirname(HERE), "cloudui", "data.json")
+    try:
+        if os.path.isdir(os.path.dirname(admin_out)):
+            with open(admin_out, "w", encoding="utf-8") as f:
+                json.dump(out, f, ensure_ascii=False, indent=1)
+            print(f"[완료] 공무원앱에도 같은 data.json 복사 → {admin_out}")
+        else:
+            print("[건너뜀] cloudui 폴더가 없어 공무원앱 data.json 은 만들지 않았습니다.")
+    except OSError as e:
+        # 데이터 빌드 자체를 멈추지는 않는다 — 시민앱 배포가 이것 때문에 막히면 안 된다.
+        print(f"[경고] 공무원앱 data.json 을 쓰지 못했습니다: {e}")
 
     n_note = sum(1 for p in programs if p.get("비고"))
     n_end = sum(1 for p in programs if p.get("종료일"))

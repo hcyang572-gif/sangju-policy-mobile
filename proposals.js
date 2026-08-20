@@ -111,6 +111,19 @@
   const COLS_DETAIL = "id,title,body,category,author_nick,region,status,admin_reply,like_count,created_at";
 
   const $ = (id) => document.getElementById(id);
+  /* 수집·이용 동의 오류 표시 — app.js setFieldError 와 같은 규약
+     (빈 문자열이면 감추고, aria-invalid 도 함께 넣고 지운다). */
+  /* 🏘 읍·면·동 오류 표시 — app.js setFieldError 와 같은 규약 */
+  function setPwRegionErr(msg) {
+    const err = $("pwRegionErr"), box = $("pwRegion");
+    if (err) { err.textContent = msg || ""; err.hidden = !msg; }
+    if (box) { if (msg) box.setAttribute("aria-invalid", "true"); else box.removeAttribute("aria-invalid"); }
+  }
+  function setPwConsentErr(msg) {
+    const err = $("pwConsentErr"), box = $("pwConsent");
+    if (err) { err.textContent = msg || ""; err.hidden = !msg; }
+    if (box) { if (msg) box.setAttribute("aria-invalid", "true"); else box.removeAttribute("aria-invalid"); }
+  }
   // app.js의 전역 esc(클래식 스크립트 전역 렉시컬) 우선, 없으면 동일 규칙으로 이스케이프
   const esc = (typeof window.esc === "function")
     ? window.esc
@@ -441,9 +454,16 @@
     $("pwTitle").value = "";
     $("pwBody").value = "";
     $("pwNick").value = "";
-    $("pwRegion").value = "";
+    // 🏘 읍·면·동 — 목록은 app.js fillRegionSelect(=data.json 단일 출처)가 채운다.
+    //    ⛔ 여기에 행정구역을 적어 넣지 말 것(두 곳이 어긋난다).
+    if (window.fillRegionSelect) window.fillRegionSelect($("pwRegion"), "");
+    else $("pwRegion").value = "";
+    setPwRegionErr("");
     $("pwPin").value = "";
     $("pwHoney").value = "";
+    // ⛖ 개인정보 수집·이용 동의는 «올릴 때마다» 새로 받는다.
+    if ($("pwConsent")) $("pwConsent").checked = false;
+    setPwConsentErr("");
     $("pwAgree").checked = false;
     showView("pwrite");
   }
@@ -464,7 +484,25 @@
     if (!body) { alert("내용을 입력해 주세요."); return; }
     if (body.length > 2000) { alert("내용은 2000자 이내로 적어주세요."); return; }
     if (!nick) { alert("닉네임을 입력해 주세요. (실명 금지)"); return; }
+    /* 🏘 읍·면·동(필수) — 2026-08-20 양호창님 지시. 지역별 정책 수요를 세기 위한 값이다.
+       ⚠ 「기타·타지역」이 목록에 있으므로 상주시민이 아니어도 막히지 않는다.
+       ⚠ 목록이 아예 없는 환경(옛 data.json)에서는 검사하지 않는다 —
+          고를 수가 없는데 막으면 제안 자체가 불가능해진다(기존 방어 원칙).
+       ⚠ 안내는 alert() 가 아니라 «그 칸 옆»에 붙인다(수집동의와 같은 방식). */
+    if (window.regionList && window.regionList().length && !region) {
+      setPwRegionErr("사시는 읍·면·동을 골라 주세요.");
+      try { $("pwRegion").focus(); } catch (e) { /* 무시 */ }
+      return;
+    }
     if (!/^\d{4}$/.test(pin)) { alert("수정용 PIN은 숫자 4자리로 입력해 주세요."); return; }
+    /* ⚖ 개인정보 수집·이용 동의(필수) — 개인정보 보호법 §15.
+       ⛔ 아래 pwAgree(콘텐츠 서약)와 «합치지 말 것» — 목적이 다르면 둘 다 무효가 된다.
+       안내는 alert() 가 아니라 «그 칸 옆»에 붙인다(role="alert" 로 낙독기가 그 자리에서 읽는다). */
+    if ($("pwConsent") && !$("pwConsent").checked) {
+      setPwConsentErr("개인정보 수집·이용에 동의하셔야 제안을 올리실 수 있습니다.");
+      try { $("pwConsent").focus(); } catch (e) { /* 무시 */ }
+      return;
+    }
     if (!$("pwAgree").checked) { alert("동의 항목에 체크해 주세요."); return; }
 
     const combined = title + " " + body + " " + nick;
@@ -551,9 +589,17 @@
     $("pwTitle").value = pinTarget.title || "";
     $("pwBody").value = pinTarget.body || "";
     $("pwNick").value = pinTarget.author_nick || "";
-    $("pwRegion").value = pinTarget.region || "";
+    /* 🏘 읍·면·동 — 예전에는 자유 입력이라 「무양」·「상주 무양동」 같은 값이 있다.
+       그대로 넣으면 목록에 없어 select 가 «조용히» 값을 버린다 → 시민이 적어 둔 동네가 사라진다.
+       fillRegionSelect 의 keep 인자가 그런 값을 «(예전 입력)» 항목으로 맨 앞에 넣어 살려 둔다. */
+    if (window.fillRegionSelect) window.fillRegionSelect($("pwRegion"), pinTarget.region || "");
+    else $("pwRegion").value = pinTarget.region || "";
+    setPwRegionErr("");
     $("pwPin").value = pin;
     $("pwHoney").value = "";
+    // 이미 동의하고 올린 자신의 글을 고치는 중이므로 pwAgree 와 같이 켜 둔다.
+    if ($("pwConsent")) $("pwConsent").checked = true;
+    setPwConsentErr("");
     $("pwAgree").checked = true;
     if ($("pwCategory") && pinTarget.category) $("pwCategory").value = pinTarget.category;
     // 닉네임/PIN 은 수정 화면에서 변경해도 서버 edit_proposal 은 제목·내용·분야만 갱신
@@ -766,6 +812,14 @@
 
     if ($("pwSubmit")) $("pwSubmit").addEventListener("click", () => {
       if (editing) submitEdit(); else submitWrite();
+    });
+    // 체크하면 그 자리의 안내를 곧바로 지운다(고쳤는데 빨간 글씨가 남지 않게 — 신청 폼과 같은 규약)
+    if ($("pwConsent")) $("pwConsent").addEventListener("change", () => {
+      if ($("pwConsent").checked) setPwConsentErr("");
+    });
+    // 🏘 읍·면·동을 고르면 그 자리의 안내를 곧바로 지운다(신청 폼과 같은 규약)
+    if ($("pwRegion")) $("pwRegion").addEventListener("change", () => {
+      if ($("pwRegion").value) setPwRegionErr("");
     });
     // PIN은 숫자만
     if ($("pwPin")) $("pwPin").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ""); });
