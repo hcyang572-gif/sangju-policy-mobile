@@ -44,13 +44,13 @@
     try { localStorage.setItem(LIKED_LS, JSON.stringify([...set])); } catch (e) {}
   }
 
-  /* ── 내가 낸 제안 (2026-08-19) ─────────────────────────────────────────
+  /* ── 내가 제안한 정책 (2026-08-19) ─────────────────────────────────────────
      「내 신청」 화면에서 «신청한 사업»과 나란히 보여 주기 위해, 제안을 등록한
      기기에 «제안 번호»만 남긴다.
      ⚠ 여기에 개인정보를 넣지 않는다 — 닉네임·PIN·내용은 저장하지 않는다.
         제목·작성일은 «서버가 아직 안 될 때 최소한이라도 보여 주려는» 보조값이고,
         본문은 늘 서버에서 다시 읽는다(상태가 바뀌므로).
-     ⚠ 「이 휴대폰에서 지우기」는 조회코드만 지운다 — 제안은 공개 게시물이고
+     ⚠ 「이 기기에서 지우기」는 조회코드만 지운다 — 제안은 공개 게시물이고
         번호를 지운다고 글이 사라지지 않으므로 함께 지우지 않는다.  */
   const MINE_LS = "sangju_my_proposals";
   const MINE_MAX = 50;
@@ -104,7 +104,7 @@
         목록에 그 칸이 들어 있는지 확인한다.
      허용된 칸: id, title, body, category, author_nick, region,
                 status, admin_reply, like_count, is_hidden, created_at, updated_at  */
-  // 목록(제안 목록·「내 신청 › 낸 제안」) — 카드에 보이는 값만.
+  // 목록(제안 목록·「내 신청 › 제안한 정책」) — 카드에 보이는 값만.
   //   is_hidden 은 «거르기 조건»으로만 쓰므로 받아 올 필요가 없다.
   const COLS_LIST = "id,title,category,status,like_count,created_at";
   // 상세 — 본문·닉네임·지역·담당부서 답변까지. 수정 화면(PIN)도 이 값을 그대로 채운다.
@@ -521,7 +521,7 @@
         p_nick: nick, p_region: region || null, p_pin: pin,
       });
       if (error) throw error;
-      // 이 기기에 «제안 번호»를 남긴다 → 「내 신청 › 낸 제안」에서 상태를 볼 수 있다.
+      // 이 기기에 «제안 번호»를 남긴다 → 「내 신청 › 제안한 정책」에서 상태를 볼 수 있다.
       //   create_proposal 은 proposals 행을 통째로 돌려준다(supabase/phaseA_policy.sql).
       //   ⚠ 서버가 행을 안 주는 환경이라도 등록 자체는 성공이므로 «조용히» 넘어간다.
       if (data && data.id != null) {
@@ -565,7 +565,7 @@
     try {
       const { error } = await client.rpc("delete_proposal", { p_id: pinTarget.id, p_pin: pin });
       if (error) throw error;
-      forgetMine(pinTarget.id);   // 「내 신청 › 낸 제안」에서도 함께 지운다
+      forgetMine(pinTarget.id);   // 「내 신청 › 제안한 정책」에서도 함께 지운다
       alert("삭제되었습니다.");
       closePinModal();
       goBack();          // 목록으로
@@ -739,7 +739,7 @@
   }
 
   // ---------- 이벤트 바인딩 ----------
-  /* ── 「내 신청 › 낸 제안」 목록 그리기 (app.js 가 부른다) ────────────────
+  /* ── 「내 신청 › 제안한 정책」 목록 그리기 (app.js 가 부른다) ────────────────
      기기에 남긴 제안 번호로 서버에서 «지금 상태»를 다시 읽어 온다.
      ⚠ 방어 원칙: 서버 미준비·조회 실패·번호 없음 → 모두 «없음»으로 조용히 끝낸다.
         이 목록 때문에 「내 신청」 화면이 깨지는 일은 없어야 한다.
@@ -848,6 +848,6 @@
   // syncNotice: 화면이 바뀔 때 app.js 의 showView 가 불러 준다.
   // 상세·작성 화면에 있는 동안 도착한 알림은 띠가 숨겨진 채 카운트만 쌓이므로,
   // 목록으로 돌아왔을 때 다시 계산해 주지 않으면 알림이 영영 안 뜬다.
-  // renderMine: 「내 신청 › 낸 제안」 목록을 그린다(app.js msLoadMyProposals 가 부른다).
+  // renderMine: 「내 신청 › 제안한 정책」 목록을 그린다(app.js msLoadMyProposals 가 부른다).
   window.Proposals = { open, openWrite, resetWriteForm, syncNotice: syncRtBanner, renderMine };
 })();

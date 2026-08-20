@@ -1736,7 +1736,7 @@ h1, h2, h3,
 .list-toolbar { display: flex; justify-content: flex-end; margin: var(--sp-3) 0 var(--sp-1); }
 .list-toolbar .pp-select { min-height: 40px; }
 
-/* ── ④ 내 신청: 「신청한 사업 / 낸 제안」 갈래 ────────────────────────── */
+/* ── ④ 내 신청: 「신청한 사업 / 제안한 정책」 갈래 ────────────────────────── */
 .ms-tabs {
   display: flex; gap: var(--sp-2);
   margin: var(--sp-2) 0 var(--sp-4);
