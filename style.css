@@ -810,6 +810,23 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .install-emoji { font-size: 34px; }
 .install-title { font-size: 1.25rem; font-weight: 800; color: var(--accent-text); } /* 6.03:1 */
 .install-sub { font-size: 0.8125rem; color: var(--muted); font-weight: 600; }
+
+/* 공용 알림·확인 모달(#askModal) — 네이티브 alert()/confirm() 대체 (2026-08-20)
+   ⚠ 새 모양이 아니다: 바깥 뼈대는 .modal-backdrop + .install-card 를 그대로 쓰고,
+      여기서는 «본문 글»과 «버튼 두 개가 나란히 서는 줄»만 더한다.
+   ⚠ white-space:pre-line — 옛 alert 문구에 있던 줄바꿈(\n)을 그대로 살린다.
+      (안 살리면 두 문장이 한 줄로 붙어 읽기 어려워진다)
+   ⚠ min-height 48px — 손가락으로 누를 수 있는 최소 크기(KWCAG 2.2 «충분한 크기»). */
+.ask-msg {
+  margin: 0;
+  font-size: 1rem; line-height: 1.6; color: var(--text);
+  white-space: pre-line;
+  word-break: keep-all;              /* 한글이 낱말 가운데서 잘리지 않게 */
+}
+.ask-actions { display: flex; gap: 10px; margin-top: 20px; }
+/* .big-btn.full 은 원래 width:100% + margin-top:20px 이다. 나란히 놓을 때만 그 둘을 푼다. */
+.ask-actions .big-btn.full { width: auto; flex: 1 1 0; margin-top: 0; min-height: 48px; }
+
 .install-guide { display: grid; gap: 14px; }
 .install-os {
   border: 1.5px solid var(--border);
@@ -1972,6 +1989,20 @@ select.text-input,
    ⚠ pointer-events:none — 곶감·입자가 「처음으로」 버튼을 가로채면 안 된다(자식도 함께 꺼진다).
    ⚠ position:absolute + .done-box{position:relative} 라 문서 높이를 바꾸지 않는다. */
 .done-box { position: relative; }
+
+/* 🎂 곶감 톡을 «완료 화면이 없는 자리»에서도 쓰기 위한 무대 (2026-08-20)
+   신청 완료에서는 .done-box 가 위치 기준이 되지만, 정책제안 등록처럼 완료 화면이
+   없는 흐름에서는 기준으로 삼을 상자가 없다 → 화면(뷰포트) 바닥에 붙인 이 무대를 쓴다.
+   안쪽의 .gotgam-rise 는 «신청 완료와 똑같은» 규칙(개수·자리·거리·시간)을 그대로 탄다.
+   ⚠ pointer-events:none — 연출이 버튼을 가로채면 안 된다(자식까지 함께 꺼진다).
+   ⚠ z-index 120 — 모달 배경(100)보다 위. 알림창 위로 곶감이 떠오르되,
+      pointer-events 가 없으므로 「확인」 버튼을 누르는 데는 아무 지장이 없다.
+   ⚠ 저감모션에서는 파일 끝 블록이 .gotgam-rise 를 display:none 으로 끄므로
+      이 무대는 남되 아무것도 그리지 않는다(신청 완료와 같은 동작). */
+.gotgam-stage {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 440px;
+  pointer-events: none; z-index: 120;
+}
 .gotgam-rise {
   position: absolute; left: 0; right: 0; top: 0; height: 440px;
   pointer-events: none; overflow: hidden; z-index: 2;

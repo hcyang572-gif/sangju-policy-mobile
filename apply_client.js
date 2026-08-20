@@ -74,15 +74,52 @@ window.SangjuApply = (function () {
     return String(nm).replace(/\s+/g, "");
   }
 
-  // ── 접수번호 — PC(applications_io) 포맷 'YYYYMMDD-HHMMSS-NN' (KST 가정) ──
-  //   단일 사업 신청이면 -01, 한 제출에서 N개면 -01,-02… 비우면 서버 트리거가 폴백.
-  function genReceiptNo(idx) {
-    idx = idx || 1;
+  // ── 접수번호 — 'YYYYMMDD-HHMMSS-NN' (KST 가정), NN = «난수 10~99» ────────
+  //  ⚠⚠ 2026-08-20 결함 수정 — 예전에는 NN 이 «한 제출 안의 순번»이었다.
+  //     시민앱은 한 번에 한 사업만 신청하므로 늘 genReceiptNo(1) → «항상 -01».
+  //     즉 같은 «초»에 신청한 사람은 모두 똑같은 접수번호를 만들었고,
+  //     uq_applications_receipt(unique) 가 그중 한 건만 받고 나머지는 23505 로 거부했다.
+  //     → 저장 실패 → 공무원앱에 안 뜸 → 조회코드 없음 → 첨부 못 올림.
+  //     (실측 2026-08-20: 5명 동시 제출 × 3회 = 15번 시도 중 12번 거부, 80% 실패)
+  //  ⭐ 형식은 서버 폴백 트리거와 «글자 그대로 같다»
+  //     (supabase/applications.sql · applications_fill_receipt_no):
+  //       to_char(…,'YYYYMMDD-HH24MISS') || '-' ||
+  //       lpad(((floor(random()*90))::int + 10)::text, 2, '0')      → NN 은 10~99
+  //     자릿수(18자)가 예전과 같으므로 화면·엑셀·검색·PC 대장이 그대로 동작한다.
+  //  ⚠ 그래도 «같은 초 + 같은 NN» 이 90분의 1 확률로 나올 수 있다 →
+  //     submitApplication 이 23505 를 만나면 번호만 새로 뽑아 «딱 한 번» 다시 보낸다.
+  //  ⚠ idx 인자는 부르는 곳을 안 고쳐도 되게 «남겨 둘 뿐» 쓰지 않는다.
+  //     한 제출에서 여러 건을 넣어도 난수라 서로 겹치지 않는다.
+  function genReceiptNo(idx) {                       // eslint-disable-line no-unused-vars
     var d = new Date();                              // 사용자 브라우저 로컬(KST 가정)
     function p(n, w) { w = w || 2; return String(n).padStart(w, "0"); }
     var base = "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate())
              + "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
-    return base + "-" + p(idx);
+    return base + "-" + _receiptSuffix();
+  }
+
+  // 접수번호 뒤 두 자리(10~99).
+  //  ⚠ 이 난수는 «비밀이 아니다» — 바로 위 genLookupCode 와 성격이 정반대다.
+  //    접수번호는 완료 화면·메일·엑셀 대장에 그대로 적히는 «공개된 번호»이고,
+  //    이 두 자리는 같은 초의 충돌을 피하려는 표식일 뿐이다(서버 트리거도
+  //    비암호학적 random() 을 쓴다). 맞혀도 얻을 것이 없다.
+  //    → 그래서 여기서는 Math.random 폴백이 «있어야» 한다. crypto 가 없다고
+  //      신청을 막으면, 아무 이득 없이 시민이 접수를 못 하게 될 뿐이다.
+  //    ⛔ 반대로 genLookupCode 에는 이 폴백을 «절대» 옮겨 붙이지 말 것.
+  //  ⚠ 180 = 90 × 2 — 180 이상이 나오면 다시 뽑아 편향 없이 0~89 를 얻는다.
+  function _receiptSuffix() {
+    var v = -1;
+    try {
+      if (window.crypto && window.crypto.getRandomValues) {
+        var b = new Uint8Array(1);
+        for (var t = 0; t < 8; t++) {
+          window.crypto.getRandomValues(b);
+          if (b[0] < 180) { v = b[0] % 90; break; }
+        }
+      }
+    } catch (e) { v = -1; }
+    if (v < 0) v = Math.floor(Math.random() * 90);
+    return String(v + 10);        // 10~99 — 언제나 두 자리(padStart 불필요)
   }
 
   // ── 조회코드(lookup_code) 생성 — 시민이 «내 신청 현황»을 여는 열쇠 ──────
@@ -160,13 +197,39 @@ window.SangjuApply = (function () {
   //     receipt_no·lookup_code 는 클라가 만들어 보내는 값이라 서버 왕복 없이도 확정이다.
   //     (receipt_no 를 비워 보내면 서버 트리거가 채우지만, 이 앱은 항상 채워 보낸다.)
   //  성공 판정: «반환된 행이 있는가»가 아니라 «throw 없이 끝났는가»로 본다.
+  //  ⭐ 접수번호가 겹치면(23505) «번호만» 새로 뽑아 딱 한 번 다시 보낸다 (2026-08-20)
+  //     23505 는 «그 행이 저장되지 않았다»는 뜻이므로 재시도해도 중복 접수가 되지 않는다.
+  //     ⛔ 상한은 «1회». 그 이상 돌리면 「저장은 됐는데 응답만 오류로 보이는」 상황에서
+  //        같은 신청이 두 건 쌓인다 — 되돌릴 수 없는 사고다.
   async function submitApplication(payload) {
     var sb = client();
     if (!sb) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
     var row = _clean(payload || {});
     var res = await sb.from(TABLE).insert(row);   // ⛔ .select()/.single() 금지 — 위 주석 참조
-    if (res.error) throw res.error;
-    return row;
+    if (res.error) {
+      if (!_isDupReceipt(res.error)) throw res.error;
+      // 같은 초에 다른 시민이 같은 번호를 먼저 넣었다 → 번호만 갈아 끼워 한 번 더.
+      row.receipt_no = genReceiptNo();
+      res = await sb.from(TABLE).insert(row);
+      if (res.error) throw res.error;
+    }
+    return row;                                   // ★ 재시도했으면 «새 접수번호»가 들어 있다
+  }
+
+  // ── «접수번호가 겹쳤다» 인가? — 다시 보내면 풀리는 유일한 오류 ──────────
+  //  ⚠ applications 에는 unique 제약이 둘이다(supabase/신청첨부.sql):
+  //      · uq_applications_receipt        ← 접수번호. 번호를 새로 뽑으면 풀린다.
+  //      · uq_applications_attach_ticket  ← 첨부 통행증. 번호를 바꿔도 안 풀린다.
+  //    그래서 23505 라는 것만 보고 재시도하면 안 되고, «어느 제약인지»를 가려야 한다.
+  //    가리지 못하면(제약 이름이 안 실려 오면) 재시도하지 않는다 — 모르면 안 하는 쪽이 안전하다.
+  function _isDupReceipt(e) {
+    if (!e) return false;
+    var code = String((e && (e.code || e.status || e.statusCode)) || "");
+    var blob = [e.message, e.details, e.hint, e.constraint].map(function (x) {
+      return String(x == null ? "" : x);
+    }).join(" ");
+    if (code !== "23505" && code !== "409" && !/23505/.test(blob)) return false;
+    return /uq_applications_receipt|receipt_no/i.test(blob);
   }
 
   // ── 내 신청 «상태» 조회 (익명) — 테이블이 아니라 «서버 함수»를 부른다 ──

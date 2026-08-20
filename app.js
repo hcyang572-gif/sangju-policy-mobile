@@ -212,11 +212,37 @@ function _closeTopModal() {
   return true;
 }
 
+/* 작성 중 경고를 «이번 한 번만» 건너뛰는 표시.
+   자체 확인창(appConfirm)은 네이티브 confirm 과 달리 «기다리지 않는다» —
+   popstate 는 이미 지나가 버렸으므로, 「나가기」를 고른 뒤에 다시 뒤로가기를 걸어야 한다.
+   그때 또 물으면 영영 못 나가므로 이 표시로 «두 번째 물음»을 건너뛴다.
+   ⚠ 반드시 한 번 쓰고 곧바로 내린다(계속 켜 두면 경고가 통째로 죽는다). */
+let _skipDirtyOnce = false;
+let _skipDirtyTimer = 0;
+
 function _onPopState() {
   // ① 모달이 열려 있으면 «모달만» 닫는다(화면은 그대로, 앱도 안 꺼짐)
   if (_closeTopModal()) { _armBackTrap(); return; }
   // ② 작성 중이면 한 번 묻는다 — 취소하면 있던 자리 그대로
-  if (_isDirtyView() && !window.confirm(DIRTY_MSG)) { _armBackTrap(); return; }
+  //    ⛔ window.confirm 으로 되돌리지 말 것 (2026-08-20) — 「…github.io 내용:」 이
+  //       군더더기로 붙고, 자바스크립트가 멈춰 화면 상태가 굳는다. appConfirm 을 쓴다.
+  if (_isDirtyView() && !_skipDirtyOnce) {
+    _armBackTrap();                       // 먼저 제자리를 지켜 둔다(대답을 기다리는 동안)
+    // 제목이 이미 「나가시겠습니까?」이므로 본문에서는 그 물음을 뺀다(같은 말을 두 번 하지 않게)
+    appConfirm(DIRTY_MSG.replace(/\s*나가시겠습니까\?$/, ""),
+      { title: "나가시겠습니까?", okText: "나가기", cancelText: "계속 쓰기" })
+      .then((ok) => {
+        if (!ok) return;                  // 계속 쓰기 — 있던 자리 그대로
+        _skipDirtyOnce = true;
+        if (_skipDirtyTimer) clearTimeout(_skipDirtyTimer);
+        // 안전장치: 어떤 이유로든 popstate 가 안 오면 표시를 스스로 내린다
+        _skipDirtyTimer = window.setTimeout(() => { _skipDirtyOnce = false; _skipDirtyTimer = 0; }, 2000);
+        try { history.back(); } catch (e) { _skipDirtyOnce = false; }
+      });
+    return;
+  }
+  _skipDirtyOnce = false;
+  if (_skipDirtyTimer) { clearTimeout(_skipDirtyTimer); _skipDirtyTimer = 0; }
   // ③ 앱 안에서 한 단계 뒤로
   if (state.navStack.length > 1) { _navBackOne(); _armBackTrap(); return; }
   // ④ 홈(뿌리) — 실수로 앱이 꺼지지 않게 «한 번 더»를 알린 뒤 닫는다
@@ -330,6 +356,14 @@ function cloudClient() {
     return null;
   }
 }
+/* ⭐ proposals.js 도 «이 하나»를 쓴다 (2026-08-20) — 예전에는 정책참여가 자기 클라이언트를
+   따로 만들어, 시민 1명이 Supabase 연결을 «2개» 열었다. 무료 요금제 실시간 한도(200)에서
+   동시 접속 시민이 100명에 막혔다. 하나로 모으면 그대로 200명이 된다.
+   ⚠ 채널은 이름이 다르므로(benefits-rt-citizen / proposals-citizen) 한 소켓 위에서
+     서로 간섭 없이 돌아간다. removeChannel 도 «자기 채널만» 떼므로 안전하다.
+   ⛔ removeAllChannels()·client.realtime.disconnect() 를 «절대» 쓰지 말 것 —
+     이제는 남의 구독까지 함께 끊긴다. */
+window.cloudClient = cloudClient;
 
 // ── 텍스트 정돈 — config.py tidy_text 와 «같은 규칙»(단일 출처는 config.py) ──
 // 공백/빈 줄 정돈만 하고 «URL 은 살린다». 시민앱은 웹이라 본문 속 주소가 곧
@@ -1913,7 +1947,13 @@ async function sendApply() {
   btn.disabled = true;
   btn.textContent = "제출 중...";
 
-  // 접수번호(클라 생성) — Supabase 저장·완료화면 공용. PC 포맷 YYYYMMDD-HHMMSS-01.
+  /* 접수번호(클라 생성) — Supabase 저장·완료화면 공용. 형식 YYYYMMDD-HHMMSS-NN.
+     ⚠ NN 은 «순번»이 아니라 «난수 10~99» 다 (2026-08-20 수정, apply_client.js 주석 참조).
+       예전처럼 늘 -01 이면 같은 초에 신청한 시민들이 똑같은 번호를 만들어
+       한 명만 저장되고 나머지는 23505 로 거부됐다.
+     ⚠ 겹치더라도 submitApplication 이 번호를 새로 뽑아 한 번 다시 보낸다. 그때는
+       아래 savedReceipt 가 «서버에 실제로 들어간 번호»로 갱신된다 — 첨부 업로드도
+       그 번호를 쓰므로, 여기 receiptNo 를 직접 화면에 쓰지 말 것. */
   const receiptNo = (window.SangjuApply && SangjuApply.genReceiptNo)
     ? SangjuApply.genReceiptNo(1) : "";
   // 🔑 조회코드(클라 생성) — 나중에 «내 신청 현황»을 여는 열쇠.
@@ -1952,6 +1992,7 @@ async function sendApply() {
   //     기존 메일 경로(PC 자동접수)가 접수를 이어받게 한다 — 앱이 깨지지 않게 방어.
   let supaOK = false, mailOK = false, supaErr = null, mailErr = null;
   let savedReceipt = receiptNo;
+  let supaWhy = "";          // 클라우드 저장이 실패했을 때 완료 화면에 덧붙일 «다음 할 일»
 
   // (1) Supabase 직접 저장 — 개인정보(이름·연락처)가 클라우드로 전송됨(프로토타입·승인됨).
   if (window.SangjuApply && SangjuApply.submitApplication) {
@@ -2029,6 +2070,14 @@ async function sendApply() {
       let kind = "";
       try { kind = (window.SangjuApply && SangjuApply.errKind) ? SangjuApply.errKind(e) : ""; } catch (e2) {}
       console.warn("[신청] Supabase 저장 실패(메일 경로로 접수 진행) kind=" + kind + ":", e);
+      /* ⭐ 시민에게 «무엇을 해야 하는지»를 남긴다 (2026-08-20)
+         예전에는 완료 화면에 「온라인 조회 등록에 실패했습니다」 한 줄만 떴다.
+         맞는 말이지만 시민은 그다음에 무엇을 할지 알 수 없었다.
+         ⛔ 여기서 «다시 신청해 보세요» 라고 하면 안 된다 — 메일 경로로 이미 접수됐으므로
+            다시 누르면 같은 신청이 두 건이 된다(되돌릴 수 없다).
+            두 경로가 «모두» 실패한 경우의 재시도 안내는 아래 else 가지에 따로 있다. */
+      supaWhy = "접수번호와 확인 번호는 발급되지 않아 「내 신청 현황」에서는 조회되지 않습니다."
+        + " 진행 상태가 궁금하시면 담당 부서(" + SUPPORT_EMAIL + ")로 문의해 주세요.";
     }
   }
 
@@ -2083,7 +2132,7 @@ async function sendApply() {
     // 접수번호·조회코드는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
     //   ⚠ supaOK 를 «함께» 넘긴다 — 저장이 실패했으면 showDone 이 그 사실을 한 줄로 알린다.
     //     (예전에는 값만 감추고 이유를 말하지 않아, 시민도 담당자도 무슨 일이 있었는지 몰랐다)
-    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "", attachMsg, supaOK);
+    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "", attachMsg, supaOK, supaWhy);
     attachFiles = [];             // 완료됐으니 비운다(뒤로 갔다 와도 딸려 가지 않게)
     renderAttachList();
   } else {
@@ -2204,7 +2253,7 @@ async function sendInquiry() {
      ⚠ 부르는 곳이 늘어나면 그곳에서도 반드시 넘길 것(안 넘기면 undefined → 경고가 뜬다).
         불편신고 완료 화면은 showDone 을 «지나가지 않는다» — sendInquiry 가 직접 그리므로
         거기서도 이 줄을 감춰 둔다(직전 신청의 안내가 남지 않게). */
-function showDone(p, receiptNo, lookupCode, attachMsg, supaOK) {
+function showDone(p, receiptNo, lookupCode, attachMsg, supaOK, cloudWhy) {
   $("topTitle").textContent = "접수 완료";
   // 문의 완료로 바뀌었던 문구를 신청 완료용으로 복원
   document.querySelector("#view-done h2").textContent = "신청이 접수되었습니다";
@@ -2233,7 +2282,10 @@ function showDone(p, receiptNo, lookupCode, attachMsg, supaOK) {
   if (cw) {
     if (supaOK) { cw.textContent = ""; cw.hidden = true; }
     else {
-      cw.textContent = "온라인 조회 등록에 실패했습니다. 접수는 담당 부서로 정상 전달되었습니다.";
+      /* 첫 문장은 합의된 «그대로» 두고, 뒤에 «시민이 다음에 할 일»만 덧붙인다
+         (2026-08-20 — 안내가 사실만 알리고 끝나서 시민이 무엇을 할지 몰랐다). */
+      cw.textContent = "온라인 조회 등록에 실패했습니다. 접수는 담당 부서로 정상 전달되었습니다."
+        + ((cloudWhy || "").trim() ? " " + String(cloudWhy).trim() : "");
       cw.hidden = false;
     }
   }
@@ -2263,11 +2315,22 @@ function showDone(p, receiptNo, lookupCode, attachMsg, supaOK) {
       (그래도 hidden 을 오가는 것은 무해하다 — 그리지 않을 뿐이다)
    ⛔ setInterval 로 계속 뿌리지 말 것. 광과민성 발작 위험 + 규격 위반. */
 let _gotgamTimer = 0;
-function playGotgam() {
+let _gotgamBox = null;     // 지금 돌고 있는 자리(정리할 때 이 자리를 감춘다)
+/* boxId 를 주면 그 자리에서 돈다(2026-08-20 — 정책제안 등록 완료에서도 같은 연출).
+   기본값은 신청 완료 화면의 #doneGotgam — 기존 호출부(playGotgam())는 한 글자도 안 바뀐다.
+   ⚠ 두 자리는 «같은» CSS(.gotgam-rise)를 타므로 연출이 서로 달라질 수 없다.
+   ⚠ 타이머는 하나뿐이다 — 두 곳이 겹쳐 돌 일이 없다(신청 완료와 제안 완료는 다른 흐름). */
+function playGotgam(boxId) {
   try {
-    const box = $("doneGotgam");
+    const box = $(boxId || "doneGotgam");
     if (!box) return;
-    if (_gotgamTimer) { clearTimeout(_gotgamTimer); _gotgamTimer = 0; }
+    // 앞선 연출이 아직 돌고 있으면 «그 자리»부터 정리한다.
+    // (타이머만 끄고 넘어가면, 다른 자리의 곶감이 투명한 채 화면에 남는다)
+    if (_gotgamTimer) {
+      clearTimeout(_gotgamTimer); _gotgamTimer = 0;
+      if (_gotgamBox && _gotgamBox !== box) _gotgamBox.hidden = true;
+    }
+    _gotgamBox = box;
     box.hidden = true;
     // 강제 리플로우 — 이 한 줄이 있어야 «두 번째 신청»에서도 애니메이션이 다시 돈다
     void box.offsetWidth;
@@ -2280,6 +2343,7 @@ function playGotgam() {
     _gotgamTimer = window.setTimeout(function () {
       box.hidden = true;
       _gotgamTimer = 0;
+      if (_gotgamBox === box) _gotgamBox = null;
     }, 2900);
   } catch (e) { /* 장식이므로 실패해도 아무 일 없다 */ }
 }
@@ -2679,7 +2743,7 @@ function msBindVisibility() {
 // 🧹 이 기기에서 지우기 — 공용 기기(주민센터·도서관 PC, 가족 태블릿)에서
 //    앞사람의 조회코드가 남아 다음 사람에게 신청 내역이 보이는 일이 없어야 한다.
 //    ⚠ 지우는 것은 «이 기기의 보관값»뿐 — 신청 자체는 그대로 살아 있다.
-function msClearDevice() {
+async function msClearDevice() {
   const n = loadLookupEntries().length;
   if (!n) {
     // 확인 번호는 없어도 «쓰다 만 신청서»는 남아 있을 수 있다 — 그것만이라도 지운다.
@@ -2693,12 +2757,12 @@ function msClearDevice() {
     msAnnounce("이 휴대폰에 보관된 확인 번호가 없습니다.");
     return;
   }
-  const ok = confirm(
+  const ok = await appConfirm(
     `이 휴대폰에 보관된 확인 번호 ${n}건을 지웁니다.\n` +
     "지운 뒤에는 적어 두신 확인 번호를 다시 입력해야 진행 상태를 보실 수 있습니다.\n" +
     "신청 자체가 취소되지는 않습니다.\n" +
-    "쓰다 만 신청서 내용이 남아 있으면 그것도 함께 지웁니다.\n" +
-    "지울까요?");
+    "쓰다 만 신청서 내용이 남아 있으면 그것도 함께 지웁니다.",
+    { title: "이 기기에서 지울까요?", okText: "지우기" });
   if (!ok) return;
   try { localStorage.removeItem(LOOKUP_KEY); } catch (e) { /* 무시 */ }
   // 💾 쓰다 만 신청서(이름·연락처·문의사항)도 «함께» 지운다 — 보관 규약 ④.
@@ -3059,6 +3123,68 @@ async function msRecoverSubmit() {
   msAnnounce(`확인 번호 ${codes.length}건을 찾았습니다. 목록에 추가했습니다. 번호는 아래 상자에 있으니 적어 두세요.`);
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   🚧 BgInert — 모달이 열려 있는 동안 «뒤 본문»을 통째로 비활성으로 만든다 (2026-08-20)
+   ────────────────────────────────────────────────────────────────────
+   왜 필요한가 — Tab 가둠만으로는 부족하다. 화면낭독기의 «스와이프 탐색»(가상 커서)은
+     Tab 순서를 따르지 않아서, 모달이 떠 있어도 뒤쪽 목록·버튼을 계속 읽어 준다.
+     브라우저 기본 alert() 은 이것을 자동으로 막아 줬지만, 자체 모달은 직접 해야
+     같은 수준이 된다(KWCAG 2.2 «초점 이동» 취지 — 지금 조작할 수 있는 것만 읽히게).
+   무엇을 하나 — <body> 의 «형제 덩어리» 중 지금 «맨 위» 모달을 뺀 나머지에
+     inert 와 aria-hidden="true" 를 «함께» 건다.
+       · inert       = 초점·클릭·낭독을 모두 막는다(요즘 브라우저)
+       · aria-hidden = inert 를 모르는 옛 브라우저에서도 «낭독»만은 막는다(병행 이유)
+   ⚠ 낭독 전용 알림칸(role="status"/"alert"/"log"·aria-live)은 건드리지 않는다 —
+     가려 버리면 「저장했습니다」 같은 안내가 영영 안 읽힌다.
+   ⚠ 되돌릴 때는 반드시 «원래 값»으로 되돌린다. 원래 aria-hidden="true" 였던
+     장식 요소(곶감 무대 등)의 값을 지워 버리면 그 뒤로 낭독기에 노출된다.
+   ⚠ 모달이 겹치면 «맨 위» 것만 살아 있어야 한다 → 새 모달을 열 때·닫을 때마다
+     apply(맨위요소) 를 다시 부르면 아래 모달도 배경으로 취급돼 자동으로 잠긴다.
+   ⚠ 닫을 때는 «먼저 풀고 나서» 호출 버튼으로 초점을 돌려준다. 순서를 바꾸면
+     아직 inert 안에 있는 버튼이라 focus() 가 먹지 않아 초점이 body 로 떨어진다.
+   ══════════════════════════════════════════════════════════════════════ */
+const BgInert = (function () {
+  const marked = new Map();     // 요소 → 원래 aria-hidden 값(원래 없었으면 null)
+  const SKIP_TAG = { SCRIPT: 1, LINK: 1, STYLE: 1, TEMPLATE: 1, META: 1, NOSCRIPT: 1 };
+
+  // 낭독 전용 알림칸인가(= 가리면 안 되는 것)
+  function isLive(el) {
+    if (el.hasAttribute("aria-live")) return true;
+    const r = (el.getAttribute("role") || "").toLowerCase();
+    return r === "status" || r === "alert" || r === "log";
+  }
+  function mark(el) {
+    if (marked.has(el)) return;                    // 이미 잠갔으면 원래 값을 덮어쓰지 않는다
+    marked.set(el, el.hasAttribute("aria-hidden") ? el.getAttribute("aria-hidden") : null);
+    el.setAttribute("aria-hidden", "true");
+    el.setAttribute("inert", "");
+  }
+  function unmark(el) {
+    if (!marked.has(el)) return;
+    const prev = marked.get(el);
+    marked.delete(el);
+    if (prev === null) el.removeAttribute("aria-hidden");
+    else el.setAttribute("aria-hidden", prev);
+    el.removeAttribute("inert");
+  }
+  function clear() {                               // 잠갔던 것을 «전부» 원래대로
+    Array.from(marked.keys()).forEach(unmark);     // ⚠ 순회 중 지우므로 키 목록을 먼저 복사한다
+  }
+  // top = 살아 있어야 할 «맨 위» 모달 요소.
+  // ⚠ top 이 없으면(= 모달이 다 닫힘) «전부 푼다». 이 갈래를 빠뜨리면 아래 반복문이
+  //   모든 형제를 배경으로 보고 도리어 화면 전체를 잠가 버린다(브라우저 확인에서 잡힌 결함).
+  function apply(top) {
+    const body = document.body;
+    if (!body) return;
+    if (!top) { clear(); return; }
+    Array.prototype.forEach.call(body.children, function (el) {
+      if (el === top || el.contains(top) || SKIP_TAG[el.tagName] || isLive(el)) { unmark(el); return; }
+      mark(el);
+    });
+  }
+  return { apply: apply, clear: clear };
+})();
+
 // ---------- 모달 접근성: 포커스 트랩 + Esc 닫기 + 호출 버튼으로 복귀 (KWCAG 2.2) ----------
 // app.js·proposals.js 두 곳에서 공용으로 쓰도록 전역 노출(window.ModalA11y).
 const ModalA11y = (function () {
@@ -3066,6 +3192,13 @@ const ModalA11y = (function () {
     ' input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
   // 모달 id → {keyHandler, opener} 보관(중복 리스너 누적 방지·복귀 대상 기억)
   const active = {};
+
+  // 지금 «맨 위» 모달을 기준으로 배경 비활성(inert)을 다시 건다.
+  // 열기·닫기 두 곳에서만 부른다 — 스택(_modalStack)이 곧 «겹친 순서»다.
+  function _syncBgInert() {
+    const t = _modalStack.length ? _modalStack[_modalStack.length - 1] : null;
+    BgInert.apply(t ? document.getElementById(t.id) : null);
+  }
 
   function focusables(modal) {
     return Array.prototype.filter.call(
@@ -3083,6 +3216,11 @@ const ModalA11y = (function () {
     const opener = document.activeElement;     // 닫을 때 포커스 돌려줄 호출 버튼
 
     const keyHandler = (e) => {
+      // 모달이 겹쳐 열릴 수 있다(예: PIN 모달 위의 «확인» 알림창).
+      // 그때 Esc 를 누르면 아래 모달까지 함께 닫히면 안 된다 → «맨 위» 것만 반응한다.
+      // (Tab 가둠도 마찬가지 — 지금 보고 있는 모달 안에서만 돌아야 한다)
+      const top = _modalStack.length ? _modalStack[_modalStack.length - 1] : null;
+      if (top && top.id !== modalId) return;
       if (e.key === "Escape") { e.preventDefault(); close(); return; }
       if (e.key !== "Tab") return;
       const items = focusables(modal);
@@ -3098,6 +3236,10 @@ const ModalA11y = (function () {
     _modalStack = _modalStack.filter((m) => m.id !== modalId);
     _modalStack.push({ id: modalId, close: close });
     _armBackTrap();
+    // 🚧 배경 비활성 — 낭독기 스와이프 탐색이 뒤 본문으로 새지 않게(모달이 겹치면 맨 위만 살린다).
+    //    첫 포커스 «전»에 건다: 호출 버튼이 배경에 있으므로 여기서 초점이 body 로 떨어지고,
+    //    바로 아래에서 모달 안 첫 요소로 옮긴다.
+    _syncBgInert();
 
     // 첫 포커스 이동(렌더 직후)
     const items = focusables(modal);
@@ -3120,6 +3262,9 @@ const ModalA11y = (function () {
   function close(modalId) {
     _modalStack = _modalStack.filter((m) => m.id !== modalId);
     const opener = teardown(modalId);
+    // 🚧 배경 비활성 다시 계산 — 아래에 모달이 남아 있으면 그것만 살리고, 다 닫혔으면 전부 푼다.
+    //    ⚠ 반드시 초점 복귀 «전». 뒤에 두면 아직 inert 안인 버튼이라 focus() 가 먹지 않는다.
+    _syncBgInert();
     if (opener && typeof opener.focus === "function") {
       try { opener.focus(); } catch (e) {}
     }
@@ -3129,6 +3274,78 @@ const ModalA11y = (function () {
   return { open, close };
 })();
 window.ModalA11y = ModalA11y;
+
+/* ════════════════════════════════════════════════════════════════════════
+   💬 공용 알림·확인 창 — appAlert() / appConfirm()   (2026-08-20 양호창님 지시)
+   ------------------------------------------------------------------------
+   왜 만드는가
+     ① 브라우저의 alert()/confirm() 은 창 맨 윗줄에 「hcyang572-gif.github.io 내용:」
+        이라는 «출처 표기»를 강제로 붙인다. 시민에게는 군더더기이고, JS 로 지울 수 없다.
+        지우는 길은 «앱 자체 알림창»으로 바꾸는 것 하나뿐이다.
+     ② 네이티브 창은 자바스크립트를 통째로 멈춘다. 그래서 알림이 떠 있는 동안
+        「등록 중…」 같은 버튼 상태가 풀리지 않아 «멈춘 앱»으로 보였다(실제 제보).
+   쓰는 법
+     appAlert("한 줄 알림")                  → Promise<true> (닫히면 풀린다)
+     await appConfirm("지울까요?")           → Promise<boolean>
+     옵션: {title, okText, cancelText}
+   ⛔ 앞으로 alert()/confirm() 을 새로 쓰지 말 것 — 한 곳만 남아도 거기서 출처 표기가 뜬다.
+   ⚠ 접근성: 기존 모달과 «같은» ModalA11y 를 지난다 → 초점 이동·Tab 가둠·Esc·
+      뒤로가기 한 번에 닫힘·호출 버튼으로 초점 복귀가 모두 그대로 붙는다.
+      role 은 확인이 필요하면 alertdialog, 단순 알림이면 dialog 로 바꿔 준다.
+   ⚠ 확인창에서는 «취소»가 먼저 초점을 받는다(ModalA11y 가 첫 요소로 옮긴다) —
+      실수로 Enter 를 눌러도 지워지지 않게 하려는 것이다.
+   ════════════════════════════════════════════════════════════════════════ */
+let _askResolve = null;          // 열려 있는 창의 약속(닫힐 때 값을 돌려준다)
+
+function _askFinish(result) {
+  const m = $("askModal");
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  ModalA11y.close("askModal");
+  const done = _askResolve;
+  _askResolve = null;
+  if (done) done(result);
+}
+
+function _askOpen(msg, opts) {
+  opts = opts || {};
+  const isConfirm = !!opts.confirm;
+  return new Promise((resolve) => {
+    const m = $("askModal");
+    // 모달 마크업이 없는 환경(옛 캐시 등)에서는 조용히 예전 방식으로 돌아간다.
+    // ⚠ 여기서 막아 버리면 «아무 안내도 없이» 실패하는 화면이 된다.
+    if (!m) {
+      if (isConfirm) { resolve(window.confirm(msg)); return; }
+      window.alert(msg); resolve(true); return;
+    }
+    // 이미 떠 있으면 앞의 것을 «취소»로 끝낸다(약속이 영영 안 풀리는 일이 없게)
+    if (_askResolve) { const prev = _askResolve; _askResolve = null; prev(false); }
+    const card = $("askCard");
+    if (card) card.setAttribute("role", isConfirm ? "alertdialog" : "dialog");
+    $("askTitle").textContent = opts.title || (isConfirm ? "확인" : "알림");
+    $("askMsg").textContent = String(msg == null ? "" : msg);
+    const cancel = $("askCancel");
+    cancel.hidden = !isConfirm;
+    cancel.textContent = opts.cancelText || "취소";
+    $("askOk").textContent = opts.okText || "확인";
+    _askResolve = resolve;
+    m.hidden = false;
+    ModalA11y.open("askModal", () => _askFinish(false));
+  });
+}
+
+function appAlert(msg, opts) { return _askOpen(msg, Object.assign({}, opts || {}, { confirm: false })); }
+function appConfirm(msg, opts) { return _askOpen(msg, Object.assign({}, opts || {}, { confirm: true })); }
+window.appAlert = appAlert;
+window.appConfirm = appConfirm;
+
+// 버튼 연결은 «한 번만» 한다(열 때마다 붙이면 리스너가 쌓여 여러 번 풀린다)
+function bindAskModal() {
+  const ok = $("askOk");
+  const cancel = $("askCancel");
+  if (ok) ok.addEventListener("click", () => _askFinish(true));
+  if (cancel) cancel.addEventListener("click", () => _askFinish(false));
+}
 
 // ---------- 버전 정보 + 버전별 개선사항(체인지로그) ----------
 // 데이터 단일 소스: version.js의 window.APP_VERSION / window.APP_CHANGELOG.
@@ -3191,6 +3408,7 @@ function initVersion() {
 
 // ---------- 이벤트 ----------
 function bindEvents() {
+  bindAskModal();      // 💬 공용 알림·확인 창(appAlert/appConfirm)의 두 버튼
   $("backBtn").addEventListener("click", goBack);
   $("fabBack").addEventListener("click", goBack);
   _bindSwipe();
@@ -3337,7 +3555,8 @@ function bindEvents() {
   const doneCodeCopy = $("doneCodeCopy");
   if (doneCodeCopy) doneCodeCopy.addEventListener("click", copyLookupCode);
   const msClearBtn = $("msClear");
-  if (msClearBtn) msClearBtn.addEventListener("click", msClearDevice);
+  // async 함수라 «조용한 rejection» 이 되지 않도록 반드시 받아 준다
+  if (msClearBtn) msClearBtn.addEventListener("click", () => { msClearDevice().catch(() => {}); });
   // ⛔ #msRefresh(지금 새로고침)·#msAutoBtn(자동 새로고침 멈추기) 바인딩은
   //    2026-08-19 폴링 폐지와 함께 삭제됐다(위 «폴링 구조» 주석 참조).
   // 「신청한 사업 / 제안한 정책」 갈래

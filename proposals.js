@@ -6,12 +6,44 @@
 "use strict";
 
 (function () {
-  // ---------- Supabase 클라이언트 (지연 초기화) ----------
+  /* ---------- 알림·확인 창 (2026-08-20 양호창님 지시) ----------
+     ⛔ alert()/confirm() 을 «쓰지 말 것».
+        브라우저가 창 맨 윗줄에 「hcyang572-gif.github.io 내용:」 이라는 출처 표기를
+        강제로 붙이고(JS 로 못 지운다), 자바스크립트를 멈춰 버튼 상태까지 굳힌다.
+     정본은 app.js 의 window.appAlert / window.appConfirm 이다. 아래는 그리로 잇는 다리 —
+     app.js 가 아직 안 실려 있거나 옛 캐시가 남은 기기에서만 예전 방식으로 돌아간다. */
+  function appAlert(msg, opts) {
+    if (window.appAlert) return window.appAlert(msg, opts);
+    window.alert(msg); return Promise.resolve(true);
+  }
+  function appConfirm(msg, opts) {
+    if (window.appConfirm) return window.appConfirm(msg, opts);
+    return Promise.resolve(window.confirm(msg));
+  }
+
+  /* ---------- Supabase 클라이언트 — «앱 전체가 하나»를 쓴다 ----------
+     ⭐ 2026-08-20 수정. 예전에는 여기서 createClient 를 «따로» 불러, 시민 1명이
+        Supabase 연결을 두 개(사업정보용 + 정책참여용) 열었다. 무료 요금제의
+        실시간 동시 연결 한도가 200 이라, 동시 접속 시민이 100명에서 막혔다.
+        app.js 의 공용 클라이언트(cloudClient)를 함께 쓰면 그대로 200명이 된다.
+     ⚠ 채널 이름이 서로 다르므로(app.js 「benefits-rt-citizen」 /
+       여기 「proposals-citizen」) 한 소켓 위에서 간섭 없이 돌아간다.
+       app.js 의 재연결도 removeChannel(자기 채널) 만 부르므로 이 구독은 안 끊긴다.
+     ⛔ 이 파일에서 removeAllChannels()·realtime.disconnect() 를 «절대» 쓰지 말 것 —
+       이제는 사업정보 구독까지 함께 끊긴다.
+     ⚠ index.html 은 app.js 를 «먼저» 싣는다(둘 다 defer 아님) → 여기서 부를 때는
+       window.cloudClient 가 이미 있다. 그래도 없을 때를 대비해 예전 방식을 남겨 둔다
+       (옛 캐시가 남은 기기 대비 — 그때도 앱이 깨지지는 않아야 한다). */
   let sb = null;
   function getClient() {
     if (sb) return sb;
     try {
+      if (typeof window.cloudClient === "function") {
+        const shared = window.cloudClient();
+        if (shared) { sb = shared; return sb; }
+      }
       if (!window.supabase || !window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) return null;
+      console.warn("[정책참여] 공용 클라이언트를 찾지 못해 따로 연결합니다(연결 2개).");
       sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
       return sb;
     } catch (e) {
@@ -348,7 +380,7 @@
         if (!error && data) p = data;
       } catch (e) {}
     }
-    if (!p) { alert("제안을 찾을 수 없습니다."); return; }
+    if (!p) { appAlert("제안을 찾을 수 없습니다."); return; }
     currentP = p;
     $("topTitle").textContent = "제안 상세";
     renderDetail(p);
@@ -405,7 +437,7 @@
   // ---------- 공감(토글) ----------
   async function toggleLike(p) {
     const client = getClient();
-    if (!client) { alert("공감 기능을 사용할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
+    if (!client) { appAlert("공감 기능을 사용할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
     const btn = $("pdLikeBtn");
     btn.disabled = true;
     try {
@@ -436,7 +468,7 @@
       btn.classList.toggle("primary", !nowLiked);
     } catch (e) {
       console.warn("[정책참여] 공감 실패:", e);
-      alert(actionErrMsg(e, "공감 처리"));
+      appAlert(actionErrMsg(e, "공감 처리"));
     } finally {
       btn.disabled = false;
     }
@@ -479,11 +511,11 @@
     const pin = $("pwPin").value.trim();
     const cat = $("pwCategory").value;
 
-    if (!title) { alert("제목을 입력해 주세요."); return; }
-    if (title.length > 80) { alert("제목은 80자 이내로 적어주세요."); return; }
-    if (!body) { alert("내용을 입력해 주세요."); return; }
-    if (body.length > 2000) { alert("내용은 2000자 이내로 적어주세요."); return; }
-    if (!nick) { alert("닉네임을 입력해 주세요. (실명 금지)"); return; }
+    if (!title) { appAlert("제목을 입력해 주세요."); return; }
+    if (title.length > 80) { appAlert("제목은 80자 이내로 적어주세요."); return; }
+    if (!body) { appAlert("내용을 입력해 주세요."); return; }
+    if (body.length > 2000) { appAlert("내용은 2000자 이내로 적어주세요."); return; }
+    if (!nick) { appAlert("닉네임을 입력해 주세요. (실명 금지)"); return; }
     /* 🏘 읍·면·동(필수) — 2026-08-20 양호창님 지시. 지역별 정책 수요를 세기 위한 값이다.
        ⚠ 「기타·타지역」이 목록에 있으므로 상주시민이 아니어도 막히지 않는다.
        ⚠ 목록이 아예 없는 환경(옛 data.json)에서는 검사하지 않는다 —
@@ -494,7 +526,7 @@
       try { $("pwRegion").focus(); } catch (e) { /* 무시 */ }
       return;
     }
-    if (!/^\d{4}$/.test(pin)) { alert("수정용 PIN은 숫자 4자리로 입력해 주세요."); return; }
+    if (!/^\d{4}$/.test(pin)) { appAlert("수정용 PIN은 숫자 4자리로 입력해 주세요."); return; }
     /* ⚖ 개인정보 수집·이용 동의(필수) — 개인정보 보호법 §15.
        ⛔ 아래 pwAgree(콘텐츠 서약)와 «합치지 말 것» — 목적이 다르면 둘 다 무효가 된다.
        안내는 alert() 가 아니라 «그 칸 옆»에 붙인다(role="alert" 로 낙독기가 그 자리에서 읽는다). */
@@ -503,14 +535,14 @@
       try { $("pwConsent").focus(); } catch (e) { /* 무시 */ }
       return;
     }
-    if (!$("pwAgree").checked) { alert("동의 항목에 체크해 주세요."); return; }
+    if (!$("pwAgree").checked) { appAlert("동의 항목에 체크해 주세요."); return; }
 
     const combined = title + " " + body + " " + nick;
-    if (RE_JUMIN.test(combined)) { alert("주민등록번호로 보이는 숫자가 있습니다.\n개인정보는 입력할 수 없습니다."); return; }
-    if (RE_PHONE.test(combined)) { alert("전화번호로 보이는 숫자가 있습니다.\n개인정보는 입력하지 말아주세요."); return; }
+    if (RE_JUMIN.test(combined)) { appAlert("주민등록번호로 보이는 숫자가 있습니다.\n개인정보는 입력할 수 없습니다."); return; }
+    if (RE_PHONE.test(combined)) { appAlert("전화번호로 보이는 숫자가 있습니다.\n개인정보는 입력하지 말아주세요."); return; }
 
     const client = getClient();
-    if (!client) { alert("제안 등록 기능을 사용할 수 없습니다.\n(DB 설정(SQL) 적용 후 가능합니다.)"); return; }
+    if (!client) { appAlert("제안 등록 기능을 사용할 수 없습니다.\n(DB 설정(SQL) 적용 후 가능합니다.)"); return; }
 
     const btn = $("pwSubmit");
     const orig = btn.textContent;
@@ -527,17 +559,34 @@
       if (data && data.id != null) {
         saveMine({ id: data.id, title: data.title || title, at: data.created_at || new Date().toISOString() });
       }
-      alert("제안이 등록되었습니다. 감사합니다!");
-      // 목록으로 복귀 + 새로고침
-      goBack();
+      /* ✅ «정상으로 마쳤을 때» 해야 할 뒷정리 — 순서가 곧 사용자 경험이다(2026-08-20).
+         ① 버튼을 되살린다   — 알림보다 «먼저». 안 그러면 「등록 중…」에 멈춘 것으로 보인다.
+         ② 작성 칸을 비운다  — 안 비우면 뒤로 갈 때 「작성 중인 내용이 사라집니다」가 뜬다.
+                               («제대로 올렸는데 왜 묻나» — 양호창님이 실제로 겪으신 결함)
+         ③ 곶감 톡          — 신청 완료와 «같은» 연출(app.js playGotgam)
+         ④ 알림창을 닫을 때까지 기다린다
+         ⑤ 그 «다음»에 목록으로 돌아가 새로고침
+       ⛔ ④와 ⑤의 차례를 바꾸지 말 것.
+          goBack() 은 history.back() 이라 popstate 가 «한 박자 뒤»에 온다.
+          알림창을 먼저 띄우면 그 popstate 가 «맨 위 모달»인 알림창을 닫아 버려,
+          알림이 번쩍이고 사라지면서 목록으로도 못 돌아간다(실제로 그렇게 된다). */
+      btn.disabled = false; btn.textContent = orig;      // ①
+      clearWriteFields();                                // ②
+      resetWriteForm();
+      if (window.playGotgam) window.playGotgam("floatGotgam");   // ③
+      await appAlert("제안이 등록되었습니다. 감사합니다!", { title: "등록 완료" });  // ④
+      goBack();                                          // ⑤
       pstate.sort = "new";
       if ($("ppSort")) $("ppSort").value = "new";
       reload();
     } catch (e) {
       console.warn("[정책참여] 제안 등록 실패:", e);
-      alert(actionErrMsg(e, "제안 등록"));
+      appAlert(actionErrMsg(e, "제안 등록"));
     } finally {
-      btn.disabled = false; btn.textContent = orig;
+      /* 실패·중단했을 때 버튼이 「등록 중…」에 갇히지 않게 하는 마지막 안전장치.
+         성공 경로는 위 ①에서 이미 되살리고 라벨도 새로 정했으므로,
+         «아직 바쁜 상태로 남아 있을 때»만 되돌린다(라벨이 되돌아가 어긋나지 않게). */
+      if (btn.disabled) { btn.disabled = false; btn.textContent = orig; }
     }
   }
 
@@ -558,28 +607,31 @@
 
   async function doPinDelete() {
     const pin = $("pinInput").value.trim();
-    if (!/^\d{4}$/.test(pin)) { alert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
-    if (!confirm("정말 이 제안을 삭제할까요? 되돌릴 수 없습니다.")) return;
+    if (!/^\d{4}$/.test(pin)) { appAlert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
+    if (!(await appConfirm("정말 이 제안을 삭제할까요?\n되돌릴 수 없습니다.",
+      { title: "제안을 지울까요?", okText: "삭제" }))) return;
     const client = getClient();
-    if (!client || !pinTarget) { alert("삭제할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
+    if (!client || !pinTarget) { appAlert("삭제할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
     try {
       const { error } = await client.rpc("delete_proposal", { p_id: pinTarget.id, p_pin: pin });
       if (error) throw error;
       forgetMine(pinTarget.id);   // 「내 신청 › 제안한 정책」에서도 함께 지운다
-      alert("삭제되었습니다.");
+      // ⛔ 차례를 바꾸지 말 것 — PIN 모달을 먼저 닫고, 알림을 닫은 «뒤»에 화면을 옮긴다.
+      //    goBack() 의 popstate 가 «맨 위 모달»(알림창)을 대신 닫아 버리기 때문이다.
       closePinModal();
+      await appAlert("삭제되었습니다.", { title: "삭제 완료" });
       goBack();          // 목록으로
       reload();
     } catch (e) {
       console.warn("[정책참여] 삭제 실패:", e);
-      alert(errKind(e) === "conn" ? actionErrMsg(e, "삭제")
+      appAlert(errKind(e) === "conn" ? actionErrMsg(e, "삭제")
         : "삭제에 실패했습니다. PIN이 맞는지 확인해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.");
     }
   }
 
   function doPinEdit() {
     const pin = $("pinInput").value.trim();
-    if (!/^\d{4}$/.test(pin)) { alert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
+    if (!/^\d{4}$/.test(pin)) { appAlert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
     if (!pinTarget) return;
     // 수정 화면 재사용: 작성 폼에 기존 내용 채우고 '수정 모드'로 전환
     fillCategorySelects();
@@ -614,13 +666,13 @@
     const title = $("pwTitle").value.trim();
     const body = $("pwBody").value.trim();
     const cat = $("pwCategory").value;
-    if (!title) { alert("제목을 입력해 주세요."); return; }
-    if (!body) { alert("내용을 입력해 주세요."); return; }
+    if (!title) { appAlert("제목을 입력해 주세요."); return; }
+    if (!body) { appAlert("내용을 입력해 주세요."); return; }
     const combined = title + " " + body;
-    if (RE_JUMIN.test(combined)) { alert("주민등록번호로 보이는 숫자가 있습니다."); return; }
-    if (RE_PHONE.test(combined)) { alert("전화번호로 보이는 숫자가 있습니다."); return; }
+    if (RE_JUMIN.test(combined)) { appAlert("주민등록번호로 보이는 숫자가 있습니다."); return; }
+    if (RE_PHONE.test(combined)) { appAlert("전화번호로 보이는 숫자가 있습니다."); return; }
     const client = getClient();
-    if (!client) { alert("수정할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
+    if (!client) { appAlert("수정할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
 
     const btn = $("pwSubmit");
     const orig = btn.textContent;
@@ -631,17 +683,24 @@
         p_title: title, p_body: body, p_category: cat,
       });
       if (error) throw error;
-      alert("수정되었습니다.");
+      // 등록과 «같은 차례»로 마무리한다 — 버튼 원복 → 칸 비우기 → 곶감 톡 → 알림 → 이동.
+      // (칸을 안 비우면 뒤로 갈 때 「작성 중인 내용이 사라집니다」가 떠 버린다)
+      // ⛔ 알림과 goBack() 의 차례를 바꾸지 말 것 — submitWrite 의 주석 참조.
+      btn.disabled = false; btn.textContent = orig;
       editing = null;
+      clearWriteFields();
       resetWriteForm();
+      if (window.playGotgam) window.playGotgam("floatGotgam");
+      await appAlert("수정되었습니다.", { title: "수정 완료" });
       goBack();      // 상세→목록 또는 목록으로
       reload();
     } catch (e) {
       console.warn("[정책참여] 수정 실패:", e);
-      alert(errKind(e) === "conn" ? actionErrMsg(e, "수정")
+      appAlert(errKind(e) === "conn" ? actionErrMsg(e, "수정")
         : "수정에 실패했습니다. PIN이 맞는지 확인해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.");
     } finally {
-      btn.disabled = false; btn.textContent = orig;
+      // 등록과 «같은 규칙» — 성공 경로는 이미 되살렸으므로 바쁜 상태일 때만 되돌린다
+      if (btn.disabled) { btn.disabled = false; btn.textContent = orig; }
     }
   }
 
@@ -650,6 +709,30 @@
     editing = null;
     $("pwriteTitle").textContent = "정책 제안하기";
     $("pwSubmit").textContent = "제안 등록";
+  }
+
+  /* 작성 칸을 «비운다» — 등록·수정을 정상으로 마쳤을 때만 부른다 (2026-08-20).
+     ⚠ 왜 필요한가: app.js 의 _isDirtyView() 는 pwrite 화면의
+        pwTitle·pwBody·pwNick·pwRegion·pwPin 에 «한 글자라도» 남아 있으면 «작성 중»으로 본다.
+        올리기를 마쳤는데 칸이 그대로면, 목록으로 돌아가는 그 순간
+        「작성 중인 내용이 사라집니다. 나가시겠습니까?」가 떠 버린다.
+     ⛔ 이 함수를 «취소·실패» 자리에서 부르지 말 것 — 그때는 쓰던 내용이 남아야 하고,
+        경고도 그대로 떠야 한다(경고 자체를 없애는 것이 아니다).
+     ⚠ 읍·면·동은 app.js fillRegionSelect 가 목록의 단일 출처다(openWrite 와 같은 방식). */
+  function clearWriteFields() {
+    ["pwTitle", "pwBody", "pwNick", "pwPin", "pwHoney"].forEach((id) => {
+      const el = $(id);
+      if (el) el.value = "";
+    });
+    const rg = $("pwRegion");
+    if (rg) {
+      if (window.fillRegionSelect) window.fillRegionSelect(rg, "");
+      else rg.value = "";
+    }
+    setPwRegionErr("");
+    setPwConsentErr("");
+    if ($("pwConsent")) $("pwConsent").checked = false;
+    if ($("pwAgree")) $("pwAgree").checked = false;
   }
 
   // ---------- 신고 ----------
@@ -671,17 +754,18 @@
   async function doReport() {
     const reason = $("reportReason").value + ($("reportMemo").value.trim() ? (" - " + $("reportMemo").value.trim()) : "");
     const client = getClient();
-    if (!client || !reportTarget) { alert("신고할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
+    if (!client || !reportTarget) { appAlert("신고할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
     try {
       const { error } = await client.rpc("report_proposal", {
         p_id: reportTarget.id, p_reason: reason, p_reporter: voterKey(),
       });
       if (error) throw error;
-      alert("신고가 접수되었습니다. 검토 후 조치하겠습니다.");
+      // 신고 모달을 «먼저» 닫고 알림을 띄운다(모달 두 겹이 겹쳐 보이지 않게)
       closeReportModal();
+      appAlert("신고가 접수되었습니다. 검토 후 조치하겠습니다.", { title: "신고 접수" });
     } catch (e) {
       console.warn("[정책참여] 신고 실패:", e);
-      alert(actionErrMsg(e, "신고"));
+      appAlert(actionErrMsg(e, "신고"));
     }
   }
 

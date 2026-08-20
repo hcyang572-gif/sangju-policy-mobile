@@ -45,7 +45,7 @@
   <meta property="og:image" content="https://hcyang572-gif.github.io/sangju-policy-mobile/share.png" />
   <meta property="og:url" content="https://hcyang572-gif.github.io/sangju-policy-mobile/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="style.css?v=0.4.7" />
+  <link rel="stylesheet" href="style.css?v=0.5.0" />
 </head>
 <body>
   <!-- 반복 영역 건너뛰기(KWCAG 2.2): 키보드 첫 Tab에서만 노출, 본문(main#app)으로 즉시 이동 -->
@@ -954,16 +954,62 @@
     </div>
   </div>
 
+  <!-- 공용 알림·확인 모달 (2026-08-20 양호창님 지시) ─────────────────────────
+       왜 만드는가: 브라우저의 alert()/confirm() 은 창 맨 윗줄에
+       「hcyang572-gif.github.io 내용:」 이라는 «출처 표기»를 강제로 붙인다.
+       이것은 JS 로 지울 수 없다 — 없애는 길은 앱 자체 알림창으로 바꾸는 것뿐이다.
+       게다가 네이티브 창은 화면을 통째로 막아, 「등록 중…」 같은 버튼 상태가
+       확인을 누를 때까지 풀리지 않는 것처럼 보인다.
+       ⚠ 새 디자인이 아니다 — 위 #helpModal·#installModal 과 «같은» .modal-backdrop +
+         .install-card 뼈대·CSS 를 그대로 쓴다.
+       ⚠ role 은 열 때 app.js 가 정한다: 확인이 필요하면 alertdialog, 알림이면 dialog.
+       ⛔ 새 alert()/confirm() 을 만들지 말 것 — appAlert()/appConfirm() 을 쓴다. -->
+  <div id="askModal" class="modal-backdrop" hidden>
+    <div id="askCard" class="install-card" role="alertdialog" aria-modal="true"
+         aria-labelledby="askTitle" aria-describedby="askMsg">
+      <div class="install-head">
+        <svg id="askIcon" class="ic install-emoji" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.6v5.2"/><path d="M12 16.4h.01"/></svg>
+        <div>
+          <div class="install-title" id="askTitle">알림</div>
+        </div>
+      </div>
+      <p id="askMsg" class="ask-msg"></p>
+      <div class="ask-actions">
+        <button id="askCancel" class="big-btn full" type="button" hidden>취소</button>
+        <button id="askOk" class="big-btn primary full" type="button">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🎂 곶감 톡을 «화면 어디서나» 쓰기 위한 자리 (2026-08-20)
+       신청 완료 화면의 #doneGotgam 과 «같은» 연출(.gotgam-rise)을 그대로 재사용한다.
+       정책제안 등록을 마쳤을 때처럼 «완료 화면이 없는» 자리에서 부른다.
+       ⛔ 안쪽 내용(곶감 4알 · 입자 11개)은 #doneGotgam 과 개수·차례가 같아야 한다 —
+          style.css 의 nth-child 규칙이 개수를 기준으로 자리·거리를 정하기 때문이다.
+       ⚠ 신청 완료 쪽(#doneGotgam)은 손대지 않았다. 두 곳이 서로 영향을 주지 않는다. -->
+  <div class="gotgam-stage" aria-hidden="true">
+    <div id="floatGotgam" class="gotgam-rise" hidden>
+      <img class="gotgam" src="assets/gotgam.png" width="30" height="30" alt="" />
+      <img class="gotgam" src="assets/gotgam.png" width="30" height="30" alt="" />
+      <img class="gotgam" src="assets/gotgam.png" width="30" height="30" alt="" />
+      <img class="gotgam" src="assets/gotgam.png" width="30" height="30" alt="" />
+      <span class="spark"></span><span class="spark"></span><span class="spark"></span>
+      <span class="spark"></span><span class="spark"></span><span class="spark"></span>
+      <span class="spark"></span><span class="spark"></span><span class="spark"></span>
+      <span class="spark"></span><span class="spark"></span>
+    </div>
+  </div>
+
   <!-- 공통 버전·개선사항 단일 소스(앱 스크립트보다 먼저 로드) -->
   <!-- 눌림 반응(햅틱 진동 12ms + .is-pressed 살짝 어둡게). 앱 로직과 무관하게 «듣기만» 한다(passive·capture)
        ⛔ 2026-08-20 양호창님 지시로 «물방울 파동»(ripple)만 제거했다.
           파일은 그대로 둔다 — 진동·눌림 되먹임이라는 «할 일이 남아 있기» 때문이다.
           이 두 가지가 없으면 누를 수 있는 것을 눌러도 아무 반응이 없는 앱이 된다. -->
-  <script src="tap.js?v=0.4.7" defer></script>
+  <script src="tap.js?v=0.5.0" defer></script>
   <!-- 시각 레이어: 분야 칩 아이콘·접기 · 하단 탭바 · 동적 이모지 → SVG. 앱 로직에 관여하지 않는다 -->
-  <script src="ui.js?v=0.4.7" defer></script>
-  <script src="version.js?v=0.4.7"></script>
-  <script src="config.js?v=0.4.7"></script>
+  <script src="ui.js?v=0.5.0" defer></script>
+  <script src="version.js?v=0.5.0"></script>
+  <script src="config.js?v=0.5.0"></script>
   <!-- Supabase 클라이언트 (사업목록 하이브리드 조회·정책참여·서식·신청접수)
        ※ 세 앱(모바일웹·cloudui·webui) 모두 «같은 버전·같은 해시»를 쓴다. 하나만 바꾸지 말 것.
        · 버전 고정: @2 (뜬 범위)는 CDN이 언제든 다른 코드를 내려줄 수 있어 2.112.0 으로 못박음.
@@ -977,14 +1023,14 @@
           integrity="sha384-De+l/Df7qym5QBDVocD3+gW1S7IjR3epf+6KbRDjB3FCCzM/LqVTwqckT6FhFar8"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- 서식 스토리지 공용 헬퍼(세 앱 공통). app.js 보다 먼저 로드 -->
-  <script src="forms.js?v=0.4.7"></script>
+  <script src="forms.js?v=0.5.0"></script>
   <!-- 신청 접수 공용 헬퍼(세 앱 공통·byte-identical). app.js 보다 먼저 로드 -->
-  <script src="apply_client.js?v=0.4.7"></script>
-  <script src="app.js?v=0.4.7"></script>
-  <script src="proposals.js?v=0.4.7"></script>
+  <script src="apply_client.js?v=0.5.0"></script>
+  <script src="app.js?v=0.5.0"></script>
+  <script src="proposals.js?v=0.5.0"></script>
   <!-- 「홈 화면에 추가」 — 설치가 «실제로 가능할 때»만 원터치 버튼을 켠다.
        app.js 의 안내 띠(#a2hsTip)·인앱 배너(#inappBanner)와 겹치지 않게 스스로 판단한다.
        app.js 보다 «뒤»에 두어, app.js initA2HS() 가 띠를 정한 뒤 그 위에 얹는다. -->
-  <script src="a2hs.js?v=0.4.7" defer></script>
+  <script src="a2hs.js?v=0.5.0" defer></script>
 </body>
 </html>
