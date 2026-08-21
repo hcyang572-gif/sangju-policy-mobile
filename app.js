@@ -3641,6 +3641,22 @@ function bindEvents() {
     if (vm && !vm.hidden) { vm.hidden = true; ModalA11y.close("versionModal"); }
     openInstallGuide();
   });
+  /* 📲 푸터 「앱 아이콘 설치」 — 공무원앱과 같은 PWA 설치 경로.
+     띠(#a2hsTip)는 «한 번 닫으면 다시 안 뜨는» 안내라, 나중에 설치하려면 들어갈 문이 없었다.
+     이 버튼은 항상 자리를 지키다가, 이미 설치해 실행 중(standalone)이면 스스로 사라진다.
+     ⚠ 설치 실행 자체는 a2hs.js(#installNow) 가 맡는다 — 여기서 prompt() 를 또 부르지 말 것. */
+  const installAppBtn = $("installAppBtn");
+  if (installAppBtn) {
+    const runningStandalone =
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+      window.navigator.standalone === true;
+    if (runningStandalone) installAppBtn.hidden = true;
+    else {
+      installAppBtn.addEventListener("click", openInstallGuide);
+      // 설치가 끝나면 곧바로 감춘다(새로고침 전에도 «설치됨»이 반영되게)
+      window.addEventListener("appinstalled", () => { installAppBtn.hidden = true; });
+    }
+  }
   $("installClose").addEventListener("click", closeInstallGuide);
   $("installModal").addEventListener("click", (e) => {
     if (e.target.id === "installModal") closeInstallGuide();  // 배경 클릭 닫기

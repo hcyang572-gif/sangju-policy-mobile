@@ -797,6 +797,21 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   color: var(--accent-text); font-weight: 700; text-decoration: underline;
 }
 
+/* 📲 푸터 「앱 아이콘 설치」 — 공무원앱과 같은 PWA 설치 경로로 들어가는 «항상 있는 문».
+   ⚠ 설치 후(standalone)에는 app.js 가 hidden 을 걸어 통째로 감춘다.
+   대비 — 글자 #A8431A on #FDF0E4 = 5.9:1 / 테두리 #B84A1C 는 비텍스트 3:1 통과. */
+.foot-install { margin-top: 10px; }
+.foot-install-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 44px; padding: 0 16px;  /* KWCAG 2.2 터치 영역 44px 이상 */
+  border: 1.5px solid var(--primary); border-radius: var(--r-pill, 999px);
+  background: var(--primary-tint, #FDF0E4); color: var(--accent-text);
+  font: inherit; font-size: 0.8125rem; font-weight: 800; cursor: pointer;
+}
+.foot-install-btn .ic { width: 17px; height: 17px; flex: none; }
+.foot-install-btn:hover { background: var(--primary); color: #fff; }
+.foot-install-btn[hidden] { display: none; }
+
 /* 설치 안내 모달 */
 .install-card {
   width: 100%; max-width: 380px;

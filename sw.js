@@ -24,7 +24,11 @@
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
 const ASSET_V = "0.5.0";
 
-const CACHE = "sangju-v46";   // v46: 접수번호 충돌 수정 + 알림창 출처 표기 제거(2026-08-20).
+const CACHE = "sangju-v47";   // v47: 푸터 「앱 아이콘 설치」 단추 추가(2026-08-21, 🔴검수).
+//                #installAppBtn 은 기존 #installModal/a2hs.js 를 그대로 연다 — 새 자료 없음.
+//                옛 index.html(버튼 없음)+새 app.js 조합이면 getElementById 가 null 이라 조용히 무시된다
+//                (에러는 안 나지만 설치 진입로가 안 보인다) → 캐시를 반드시 올린다.
+// v46: 접수번호 충돌 수정 + 알림창 출처 표기 제거(2026-08-20).
 //                같은 초 동시 신청 시 접수번호가 겹쳐 거부되던 결함을 고치고, 브라우저 기본
 //                alert()/confirm() 대신 자체 알림창(appAlert/appConfirm)으로 바꿔 출처 표기를 없앴다.
 //                ASSET_V 도 0.4.7→0.5.0 으로 함께 올랐으므로(자원버전_동기화.py) 파일 URL 도 바뀌어
