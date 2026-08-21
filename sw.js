@@ -24,7 +24,8 @@
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
 const ASSET_V = "0.5.0";
 
-const CACHE = "sangju-v48";   // v48: data.js 폴백 라우팅(행정망 .json 차단 대비, 2026-08-21, 📱모바일).
+const CACHE = "sangju-v49";   // v49: 내 신청 «취소(삭제)» 추가(2026-08-21, 📱모바일).
+// (v48: data.js 폴백 라우팅 — 행정망 .json 차단 대비, 2026-08-21, 📱모바일)
 //                              v47: 푸터 「앱 아이콘 설치」 단추 추가(2026-08-21, 🔴검수).
 //                #installAppBtn 은 기존 #installModal/a2hs.js 를 그대로 연다 — 새 자료 없음.
 //                옛 index.html(버튼 없음)+새 app.js 조합이면 getElementById 가 null 이라 조용히 무시된다

@@ -2433,6 +2433,12 @@ let msVisBound = false;    // visibilitychange 리스너를 한 번만 걸기 �
 let msRows = [], msSig = "", msErr = false, msLoaded = false;
 let msDeferred = false;    // 목록 안에 초점이 있어 «미뤄 둔» 갱신이 있는가
 let msFocusBound = false;
+/* 🗑 신청 취소 — 서버에 cancel_application 이 «없다»고 확인됐을 때만 버튼을 숨긴다.
+   ⚠ 미리 프로브하지 않는다(헛된 왕복을 만들지 않는다). 시민이 실제로 눌렀을 때
+      PGRST202 로 «없다»는 답을 받으면 그때 이 값을 세우고 다시 그린다.
+      네트워크 오류로는 숨기지 않는다 — 3값 프로브와 같은 원칙. */
+let msCancelUnavail = false;
+let msCanceling = false;   // 두 번 눌러 두 번 취소되는 일이 없게
 
 // 조회코드 상자·«내 신청 현황» 버튼을 보여 줄까?
 //   «없다»고 서버가 확인해 준 경우에만 감춘다 — 모를 때는 보여 준다(코드를 못 받는 사고 방지).
@@ -2482,6 +2488,13 @@ function touchLookupEntries(codes) {
   if (changed) {
     try { localStorage.setItem(LOOKUP_KEY, JSON.stringify(list)); } catch (e) { /* 무시 */ }
   }
+}
+// 취소(삭제)한 신청의 조회코드를 기기에서 지운다 — 더 조회할 것이 없는 열쇠를 남기지 않는다.
+function removeLookupEntry(code) {
+  const c = String(code || "").trim();
+  if (!c) return;
+  const list = loadLookupEntries().filter((e) => e.code !== c);
+  try { localStorage.setItem(LOOKUP_KEY, JSON.stringify(list)); } catch (e) { /* 무시 */ }
 }
 function saveLookupEntry(entry) {
   if (!entry || !entry.code) return;
@@ -2638,9 +2651,17 @@ function msRenderList() {
           ? ` · 갱신 ${esc(msFmtDateTime(r.updated_at))}` : ""}</div>
       ${reply ? `<div class="ms-reply"><p class="ms-reply-k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg> 담당 부서 안내</p>
                    <p class="ms-reply-v">${linkifyHtml(reply)}</p></div>` : ""}
+      ${msCanCancel(r) ? `<div class="ms-card-act">
+        <button class="ms-cancel" type="button" data-rc="${esc(r.receipt_no)}" data-nm="${titleTxt}">
+          <svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12"/><path d="M10 11v6M14 11v6"/></svg>
+          신청 취소</button>
+      </div>` : ""}
       <div class="ms-note" hidden></div>
     </div>`;
   }).join("");
+  box.querySelectorAll(".ms-cancel").forEach((btn) => {
+    btn.addEventListener("click", () => msCancelApply(btn));
+  });
   box.querySelectorAll(".ms-open").forEach((btn) => {
     btn.addEventListener("click", () => {
       const r = msRows[parseInt(btn.dataset.i, 10)];
@@ -2659,6 +2680,82 @@ function msRenderList() {
       }
     });
   });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   🗑 신청 취소(삭제) — 시민이 «자기 신청»을 스스로 거둔다 (2026-08-21)
+   ------------------------------------------------------------------------
+   어떻게 «본인 것만» 지우는가
+     서버 함수 cancel_application(조회코드들, 접수번호) 이 «둘 다 맞는 한 건»만
+     취소 표시한다(supabase/신청취소_260821.sql). 조회코드는 신청할 때 이 기기가
+     만든 50비트 난수라 남의 것을 추측할 수 없다 — 즉 남의 신청은 지울 수 없다.
+   무엇이 지워지는가
+     applications.canceled_at 에 시각이 찍힌다(soft delete, 정책제안 삭제와 같은 방식).
+     시민앱·공무원앱·PC앱 어디에서도 사라지지만 행은 남아 감사기록이 보존된다.
+   ⚠ alert/confirm 을 쓰지 않는다 — 앱 안 확인창(appConfirm)과 짧은 알림(_toast).
+   ⚠ 「승인/반려」 로 처리가 끝난 건은 버튼을 아예 내보내지 않는다(서버도 거절한다).
+   ════════════════════════════════════════════════════════════════════════ */
+function msCanCancel(r) {
+  if (msCancelUnavail) return false;
+  const A = window.SangjuApply;
+  if (!A || !A.cancelApplication) return false;
+  if (!String((r && r.receipt_no) || "").trim()) return false;
+  const st = String((r && r.status) || "접수").trim();
+  return st === "접수" || st === "심사중";
+}
+
+async function msCancelApply(btn) {
+  if (!btn || msCanceling) return;
+  const rc = String(btn.dataset.rc || "").trim();
+  const nm = String(btn.dataset.nm || "").trim();
+  if (!rc) return;
+  const ok = await appConfirm(
+    `${nm ? nm + "\n" : ""}접수번호 ${rc}\n\n` +
+    "이 신청을 취소합니다. 취소하면 담당 부서에서도 내역이 사라지며, 되돌릴 수 없습니다.\n" +
+    "다시 신청하시려면 처음부터 새로 신청하셔야 합니다.",
+    { title: "신청을 취소할까요?", okText: "신청 취소", cancelText: "그대로 두기" });
+  if (!ok) return;
+
+  const A = window.SangjuApply;
+  const codes = loadLookupEntries().map((e) => String(e.code || "").trim())
+    .filter((c) => c.length >= 8);
+  if (!A || !A.cancelApplication || !codes.length) {
+    await appAlert("이 휴대폰에서는 취소할 수 없습니다.\n확인 번호를 입력해 조회한 뒤 다시 시도해 주세요.",
+      { title: "취소하지 못했습니다" });
+    return;
+  }
+
+  msCanceling = true;
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "취소하는 중…";
+  try {
+    const used = await A.cancelApplication(codes, rc);
+    if (used) removeLookupEntry(used);
+    msAnnounce("신청을 취소했습니다. 목록에서 내역이 사라집니다.");
+    try { _toast("신청을 취소했습니다"); } catch (e) { /* 무시 */ }
+    await msLoad(true);                 // 서버 기준으로 다시 그린다(취소된 건은 안 온다)
+  } catch (e) {
+    console.warn("[내신청현황] 취소 실패:", e);
+    btn.disabled = false;
+    btn.textContent = label;
+    if (A.isMissingFunction && A.isMissingFunction(e)) {
+      // 서버에 아직 함수가 없다 → 버튼을 조용히 거둔다(막다른 길을 남기지 않는다).
+      msCancelUnavail = true;
+      msRenderList();
+      await appAlert("지금은 앱에서 취소할 수 없습니다.\n담당 부서로 연락 주시면 처리해 드립니다.",
+        { title: "취소하지 못했습니다" });
+    } else if (A.errKind && A.errKind(e) === "conn") {
+      await appAlert("인터넷 연결이 불안정해 취소하지 못했습니다.\n잠시 후 다시 시도해 주세요.",
+        { title: "취소하지 못했습니다" });
+    } else {
+      await appAlert(String((e && e.message) || "취소하지 못했습니다.")
+        + "\n\n계속 안 되면 화면 아래 «오류 문의»로 연락 주세요.",
+        { title: "취소하지 못했습니다" });
+    }
+  } finally {
+    msCanceling = false;
+  }
 }
 
 // 사업명으로 DATA.programs 에서 찾기 — 공백 차이는 무시한다(엑셀↔클라우드 표기 흔들림 대비).

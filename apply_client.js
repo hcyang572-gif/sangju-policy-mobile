@@ -310,6 +310,33 @@ window.SangjuApply = (function () {
     return out;
   }
 
+  // ── 🗑 내 신청 «취소(삭제)» (익명) — 서버 함수 cancel_application ────────
+  //   supabase/신청취소_260821.sql
+  //   왜 여기 있어도 되는가: 위 ⛔ 금지목록의 deleteApplication 과 «성격이 다르다».
+  //     · deleteApplication 은 테이블을 직접 지우는 관리자 함수였다(아무 행이나 지운다).
+  //     · 이 함수는 «조회코드(50비트 난수) + 접수번호» 가 둘 다 맞는 «한 건»만
+  //       서버가 취소 표시(canceled_at)한다. 남의 접수번호를 알아도 그 사람의
+  //       조회코드를 모르면 아무것도 지울 수 없다. checkStatus 와 같은 결의 통로다.
+  //   · 지우는 것이 아니라 «표시»다(soft delete) — 정책제안 delete_proposal 과 같은 방식.
+  //   · 반환: 취소된 행의 조회코드(호출자가 방금 보낸 값 중 하나) → 기기 보관값 정리용.
+  //   · 함수가 아직 서버에 없으면(PGRST202) throw → 호출부가 버튼을 조용히 숨긴다.
+  //   ⛔ 반환값에 이름·연락처·사업명을 «절대» 더하지 말 것.
+  async function cancelApplication(codes, receiptNo) {
+    var list = [], i, c;
+    var src = codes || [];
+    for (i = 0; i < src.length; i++) {
+      c = String(src[i] == null ? "" : src[i]).trim();
+      if (c.length >= 8 && list.indexOf(c) < 0) list.push(c);
+    }
+    var rc = String(receiptNo == null ? "" : receiptNo).trim();
+    if (!list.length || rc.length < 8) throw new Error("취소할 신청을 찾지 못했습니다.");
+    var sb = client();
+    if (!sb || !sb.rpc) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    var res = await sb.rpc("cancel_application", { p_codes: list, p_receipt_no: rc });
+    if (res.error) throw res.error;
+    return String(res.data == null ? "" : res.data);
+  }
+
   // ── «시도 횟수 제한에 걸렸다» 인가? ────────────────────────────────────
   //   recover_lookup_codes 가 10분에 10회를 넘기면 P0001 + hint 'RATE_LIMIT' 으로 막는다.
   //   이때는 «틀렸다»가 아니라 «잠시 뒤에»라고 안내해야 한다(입력을 고치라고 하면 안 된다).
@@ -385,6 +412,8 @@ window.SangjuApply = (function () {
     // 🔑 조회코드를 «잊었을 때» 되찾는 보조 창구(이름+연락처 뒷4자리 → 조회코드만).
     //    위 ⛔ 금지목록과 성격이 다르다 — 개인정보를 «주지 않고» 열쇠만 돌려준다.
     recoverLookupCodes: recoverLookupCodes,
+    // 🗑 «내 신청 취소» — 조회코드+접수번호가 둘 다 맞는 한 건만 취소 표시(위 주석 참조).
+    cancelApplication: cancelApplication,
     isRateLimited: isRateLimited,
     isMissingFunction: isMissingFunction,
     // ⛔ listApplications·updateApplication·deleteApplication·subscribeApplications 는

@@ -1797,6 +1797,22 @@ h1, h2, h3,
 }
 .ms-open:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 .ms-open-go { font-size: 0.8125rem; font-weight: 700; color: var(--accent-text); margin-left: 6px; white-space: nowrap; }
+/* 🗑 신청 취소(삭제) 버튼 — 되돌릴 수 없는 동작이라 «주의색»으로, 그러나
+   카드의 주인공(상태·안내문)을 가리지 않게 오른쪽 아래 작은 버튼으로 둔다.
+   ⚠ 터치 표적 44px 을 지킨다(규격서 14절). ⚠ 반려색(.ast-반려)과 같은 계열이라
+      색만으로 뜻을 전하지 않도록 글자(「신청 취소」)와 아이콘을 함께 둔다. */
+.ms-card-act { display: flex; justify-content: flex-end; margin-top: 12px; }
+.ms-cancel {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 10px 16px;
+  border: 1.5px solid #E4B4AE; border-radius: 12px;
+  background: var(--card); color: #B03024;
+  font: inherit; font-size: 0.90625rem; font-weight: 800;
+  cursor: pointer; white-space: nowrap;
+}
+.ms-cancel:active { background: #FDE7E7; }
+.ms-cancel:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.ms-cancel[disabled] { opacity: .6; cursor: default; }
 .ms-note {
   margin-top: var(--sp-2); padding: 10px 12px;
   background: var(--header); border-radius: 12px;
