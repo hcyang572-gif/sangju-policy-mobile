@@ -579,6 +579,30 @@ function dataSignature(programs) {
 
 // ── 조회 ────────────────────────────────────────────────────────────────
 // 내장 데이터(data.json). 실패해도 throw 하지 않고 null 을 준다.
+//
+// ⚠ 행정망(업무망) 대비 폴백 (2026-08-21)
+//    공무원 업무망 프록시가 «.json 요청»만 걸러 내는 사례가 있다(화면·글꼴·JS 는 다 뜨는데
+//    data.json 만 막혀 「사업 정보를 준비 중입니다」 화면이 뜬다). 그래서 fetch 가 실패하면
+//    build_data.py 가 «같은 순간·같은 내용»으로 함께 써 둔 data.js 를 <script> 로 끼워 넣어
+//    window.__SANGJU_DATA__ 에서 읽는다. 단일 출처는 여전히 data.json 이고 data.js 는 사본이다.
+//    둘 다 실패하면 예전처럼 조용히 null.
+function _loadDataScript() {
+  return new Promise((resolve) => {
+    try {
+      if (window.__SANGJU_DATA__) return resolve(window.__SANGJU_DATA__);
+      const s = document.createElement("script");
+      // 캐시 무효화 — fetch 쪽 cache:"no-store" 와 «같은 뜻»이 되도록 1회용 쿼리를 붙인다.
+      s.src = "data.js?nc=" + Date.now();
+      s.async = true;
+      s.onload = () => resolve(window.__SANGJU_DATA__ || null);
+      s.onerror = () => resolve(null);
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
 async function loadLocalData() {
   try {
     const res = await fetch("data.json", { cache: "no-store" });
@@ -588,6 +612,16 @@ async function loadLocalData() {
     return j;
   } catch (e) {
     console.warn("[사업정보] data.json 을 읽지 못했습니다:", e);
+    // 폴백 — data.js (행정망에서 .json 이 막힌 경우)
+    try {
+      const j2 = await _loadDataScript();
+      if (j2 && Array.isArray(j2.programs) && j2.programs.length) {
+        console.warn("[사업정보] data.js 사본으로 대신 읽었습니다.");
+        return j2;
+      }
+    } catch (e2) {
+      console.warn("[사업정보] data.js 사본도 읽지 못했습니다:", e2);
+    }
     return null;
   }
 }

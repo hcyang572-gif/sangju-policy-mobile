@@ -24,7 +24,8 @@
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
 const ASSET_V = "0.5.0";
 
-const CACHE = "sangju-v47";   // v47: 푸터 「앱 아이콘 설치」 단추 추가(2026-08-21, 🔴검수).
+const CACHE = "sangju-v48";   // v48: data.js 폴백 라우팅(행정망 .json 차단 대비, 2026-08-21, 📱모바일).
+//                              v47: 푸터 「앱 아이콘 설치」 단추 추가(2026-08-21, 🔴검수).
 //                #installAppBtn 은 기존 #installModal/a2hs.js 를 그대로 연다 — 새 자료 없음.
 //                옛 index.html(버튼 없음)+새 app.js 조합이면 getElementById 가 null 이라 조용히 무시된다
 //                (에러는 안 나지만 설치 진입로가 안 보인다) → 캐시를 반드시 올린다.
@@ -130,7 +131,9 @@ const ESSENTIAL = [
   "manifest.json",
 ];
 // 없어도 화면 골격은 뜨는 자원(그림). 실패해도 설치를 막지 않는다.
-// data.json 은 일부러 제외 — 항상 최신 우선(network-first).
+// data.json / data.js 는 일부러 제외 — 항상 최신 우선(network-first).
+//   ⚠ data.js 는 «.js» 로 끝나지만 자원이 아니라 데이터다(data.json 의 사본).
+//      프리캐시에 넣거나 cache-first 로 흘리면 «옛 사업 목록»이 굳어 버린다.
 const OPTIONAL = [
   // ⚠ 아이콘 파일명의 «-v2» 는 «옛 아이콘 재사용»을 끊기 위한 것이다(make_icons.py 머리말).
   //    도안을 새로 만들 때는 이름을 또 바꾸고, manifest.json·index.html 과 «함께» 고칠 것.
@@ -218,7 +221,8 @@ self.addEventListener("message", (event) => {
 // 전략
 //  - GET 이외 / 타 출처(Web3Forms 등) 요청은 가로채지 않고 통과(네트워크 그대로).
 //  - 문서(navigate) = index.html: network-first (최신 HTML 우선) + 실패 시 캐시 폴백.
-//  - data.json: network-first (최신 우선) + 실패 시 캐시 폴백.
+//  - data.json / data.js: network-first (최신 우선) + 실패 시 캐시 폴백.
+//    (data.js 는 행정망 프록시가 .json 을 막을 때 app.js 가 대신 읽는 «같은 내용»의 사본)
 //  - 그 외 동일 출처 정적 자원: cache-first + 받아오면 캐시에 보관.
 //    (자원은 ?v= 버전 쿼리를 달고 있어, 배포가 바뀌면 URL 자체가 달라져 새로 받는다)
 self.addEventListener("fetch", (event) => {
@@ -247,7 +251,8 @@ self.addEventListener("fetch", (event) => {
   }
 
   // 데이터는 항상 최신을 우선 — network-first
-  if (url.pathname.endsWith("data.json")) {
+  // ⚠ data.js 도 여기서 «반드시» 걸러야 한다 — 아래 cache-first 로 떨어지면 데이터가 굳는다.
+  if (url.pathname.endsWith("data.json") || url.pathname.endsWith("data.js")) {
     event.respondWith(networkFirst(req));
     return;
   }

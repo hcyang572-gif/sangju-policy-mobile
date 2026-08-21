@@ -8,7 +8,15 @@
   (클라이언트는 키워드 매칭 없이 카테고리 키로만 필터링 → 단순/빠름)
 
 실행:  py -3 build_data.py
-결과:  ./data.json  (웹앱이 fetch 해서 사용)
+결과:  ./data.json  (웹앱이 fetch 해서 사용 — «단일 출처»)
+       ./data.js    (같은 원본에서 나온 «사본». window.__SANGJU_DATA__ 로 실어 둔다)
+
+⚠ data.js 를 두는 이유 (2026-08-21):
+  공무원 행정망(업무망) 프록시가 «.json 요청»을 막는 사례가 있다. 그러면 HTML·CSS·JS 는
+  다 내려오는데 data.json 만 실패해 「사업 정보를 준비 중입니다」 화면만 뜬다.
+  그래서 app.js 는 fetch("data.json") 이 실패하면 <script src="data.js"> 를 끼워 넣어
+  같은 내용을 읽는다. data.js 는 «따로 관리하는 데이터가 아니다» — 아래에서 data.json 과
+  «같은 순간·같은 out 객체»로 함께 쓰므로 절대 갈라지지 않는다. 손으로 고치지 마세요.
 """
 import os
 import re
@@ -25,6 +33,24 @@ import config  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP_ROOT = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "data.json")
+
+
+def _write_json_pair(json_path, data):
+    """data.json 과 «짝» data.js 를 같은 내용으로 함께 쓴다.
+
+    돌려주는 값은 (json_path, js_path). js_path 는 json_path 의 확장자만 .js 로 바꾼 것.
+    ⚠ 두 파일은 반드시 «한 자리»에서 함께 써야 한다 — 따로 쓰면 갱신 시점이 갈린다.
+    """
+    js_path = os.path.splitext(json_path)[0] + ".js"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    with open(js_path, "w", encoding="utf-8") as f:
+        # 자동 생성물 — 손으로 고치지 말라는 표시를 파일 안에도 남긴다.
+        f.write("/* 자동 생성 — build_data.py. data.json 과 «같은 내용»입니다. 손으로 고치지 마세요. */\n")
+        f.write("window.__SANGJU_DATA__ = ")
+        json.dump(data, f, ensure_ascii=False, indent=1)
+        f.write(";\n")
+    return json_path, js_path
 
 
 def _excel_path():
@@ -216,8 +242,8 @@ def main():
         "programs": programs,
     }
 
-    with open(OUT, "w", encoding="utf-8") as f:
-        json.dump(out, f, ensure_ascii=False, indent=1)
+    _, out_js = _write_json_pair(OUT, out)
+    print(f"[완료] 행정망 대비 사본 → {out_js}")
 
     # ── 공무원앱(cloudui)에도 «같은 파일»을 둔다 (2026-08-20) ──────────────────────
     #   왜: 공무원앱의 「읍·면·동별 신청 현황」 차트도 regions / region_groups / region_etc
@@ -231,9 +257,8 @@ def main():
     admin_out = os.path.join(os.path.dirname(HERE), "cloudui", "data.json")
     try:
         if os.path.isdir(os.path.dirname(admin_out)):
-            with open(admin_out, "w", encoding="utf-8") as f:
-                json.dump(out, f, ensure_ascii=False, indent=1)
-            print(f"[완료] 공무원앱에도 같은 data.json 복사 → {admin_out}")
+            _write_json_pair(admin_out, out)
+            print(f"[완료] 공무원앱에도 같은 data.json/data.js 복사 → {admin_out}")
         else:
             print("[건너뜀] cloudui 폴더가 없어 공무원앱 data.json 은 만들지 않았습니다.")
     except OSError as e:
