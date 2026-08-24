@@ -169,7 +169,12 @@ body {
   /* 제목 «앞»에 붙인다(BRIEF: 윗줄 또는 앞). 윗줄로 올리면 헤더가 20px 높아져
      .topline(top:58px)·.search-box.sticky(top:61px)의 sticky 기준이 어긋난다. */
   flex: 0 0 auto;
-  font-size: 0.6875rem; font-weight: 800; letter-spacing: .02em;
+  /* ★ 2026-08-24 — 0.6875rem(11px) → 0.75rem(12px) «값을 옮겨 적었을 뿐» 화면은 그대로다.
+     왜: 예전에는 여기서 11px 로 잡고 파일 아래(§«헤더: 제목이 가장 크다» 절)에서 다시 12px 로
+        덮어썼다. 한 값이 두 곳에 있으니 공무원앱·PC앱과 «맞춰야 할 기준»이 어느 쪽인지
+        읽는 사람마다 달라졌다(3앱 제목 크기가 제각각이 된 원인).
+     → 기준값(규격서 §2: 제목의 0.6배 = 12px)을 «여기 한 곳»에만 둔다. 아래 중복 선언은 지웠다. */
+  font-size: 0.75rem; font-weight: 800; letter-spacing: .02em;
   /* 규격서 2절 — 「시민 참여형」은 «주조 #B84A1C», 「상주시 정책플랫폼」은 «글자색 #33241C».
      크기만이 아니라 «색»으로도 한눈에 구분되게 한다(세 앱 공통). 크림 위 4.79:1 (AA). */
   color: var(--primary);
@@ -185,7 +190,14 @@ body {
   padding: 6px 10px; border-radius: 999px; white-space: nowrap;
 }
 /* 제목: 곶감 주황 굵게(대형·굵은글씨 3:1 충족) / 부제: muted 진회색(크림 배경 대비 5.98:1, AA 충족) */
-.topbar h1 { font-size: 1.1875rem; margin: 0; font-weight: 800; color: var(--text); } /* 크림 13.71:1 — 아이브로(주조)와 색 대비 */
+/* ★ 2026-08-24 — 1.1875rem(19px) → 1.25rem(20px). 화면에 «보이는 크기는 그대로»다.
+   왜: 파일 아래쪽에서 이미 1.25rem 으로 덮어쓰고 있었다(= 실제 화면은 늘 20px 였다).
+      한 값이 두 곳에 있으니 3개 앱 제목 크기를 맞출 때 «시민앱 기준값»이 19인지 20인지
+      매번 헷갈렸다(양호창님 「3앱 제목 크기가 다르다」 지적의 뿌리).
+   → 규격서 §2 «앱 제목 = 모바일 20px / weight 800» 을 여기 한 곳에 못 박고,
+     아래 중복 선언은 지웠다. 공무원앱(cloudui .brand-title)·PC앱(webui)도 이 값에 맞춘다.
+   ⛔ 다시 두 곳에 나눠 적지 말 것. */
+.topbar h1 { font-size: 1.25rem; line-height: 1.25; margin: 0; font-weight: 800; color: var(--text); } /* 20px · 크림 13.71:1 — 아이브로(주조)와 색 대비 */
 .topsub { font-size: 0.78125rem; font-weight: 700; color: var(--muted); }
 .back-btn {
   background: transparent;
@@ -226,18 +238,12 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* 2026 시정구호 이미지 — 홈 첫 화면 상단.
-   · 배경(--bg, 크림색) 위에 얹는다. 구호 원본이 빨강·청록이라 밝은 배경이어야 또렷하다.
-     ⚠ 어두운 배경 위에 올리지 말 것(검은 글자 획이 묻힌다).
-   · max-width:100% + height:auto 로 어떤 폭에서도 넘치지 않는다.
-   · width/height 속성을 HTML에 함께 둬서 로드 전에도 자리를 잡는다(레이아웃 밀림 방지).
-   · 2줄형은 가로:세로 ≈ 4.9:1 이라 360px 폭에서 약 73px — 글자가 읽히는 크기.
-   · 상상주 로고(헤더)와 싸우지 않도록 위아래 여백만 주고 크기는 폭에 맡긴다. */
-.slogan { display: block; margin: 2px 0 18px; }
-/* 헤더 제목 바로 아래에서 «폭의 92%»로 크게 — 크림 바탕 위라 구호의 빨강·청록이 선명하다.
-   (main 좌우 padding 16px 를 빼면 390px 폰에서 358px ≈ 화면 폭의 92%) */
-.slogan img { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; }
-/* 큰 화면에서는 1줄형이 오므로 조금 더 넓게 허용(가로:세로 ≈ 9.8:1) */
-@media (min-width: 600px) { .slogan img { max-width: 820px; } }
+   ★ 2026-08-24 — 여기 있던 .slogan/.slogan img/@media(min-width:600px) 세 줄(폭 100%·max-width
+      640/820px, «92%» 기준)을 «지웠다». 실제 값은 파일 아래쪽 §2026-08-24 절(.slogan{margin:...}·
+      .slogan img{width:62%...}·@media(min-width:600px){width:46%...})이 소스 순서상 뒤라 이미
+      이겨 왔다(이 블록은 화면에 영향 없는 죽은 값이었다). .brand-title·.topbar h1 과 같은 사고
+      패턴이라 함께 정리한다. 값은 이제 그 절 «한 곳»에만 있다.
+   ⛔ 여기에 .slogan/.slogan img 크기를 다시 적지 말 것. */
 
 .lead { font-size: 1.0625rem; color: var(--muted); margin: 4px 0 16px; }
 
@@ -376,6 +382,13 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .situation input { width: 20px; height: 20px; accent-color: var(--primary); }
 
 /* 상세 */
+/* ⚠⚠ 아래 .detail-block 3형제(.detail-block / .k / .v)는 «지금 쓰이지 않는다».
+   2026-08-24 C-04 에서 상세 화면을 «항목별 타일»(.d-tile / .d-tile-k / .d-tile-v,
+   파일 끝 §Ⓗ)로 바꾸면서 이 이름을 쓰는 마크업이 사라졌다(app.js·proposals.js 전수 확인).
+   여기 값을 고쳐도 화면은 «아무것도 바뀌지 않는다» — 상세를 손보려면 §Ⓗ 를 고칠 것.
+   ⛔ 지우지 않고 남겨 둔 이유: 아래 pre-wrap 주석이 왜 그 규칙이 필요한지 설명하는
+      유일한 기록이고, §Ⓗ 가 그 설명을 그대로 이어받았기 때문이다.
+      다음 정리 때 이 절과 #formsDownload .v 규칙을 함께 지우면 된다. */
 #detailContent h2 { font-size: 1.3125rem; margin: 4px 0 14px; }
 .detail-block { margin-bottom: 16px; }
 .detail-block .k { font-weight: 700; font-size: 0.875rem; color: var(--accent-text); margin-bottom: 4px; }
@@ -405,7 +418,7 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   word-break: break-all;
 }
 .link-btn:hover { border-color: var(--primary); }
-/* 📎 필요서류 서식 다운로드 — 공무원이 올린 서식을 시민이 내려받는 목록.
+/* 📎 필요 서류 서식 다운로드 — 공무원이 올린 서식을 시민이 내려받는 목록.
    파일형식·용량을 텍스트로 병기(스크린리더/저시력), 색만으로 정보 전달하지 않는다.
    링크 글자 #A8431A on #FFFFFF = 6.03:1 (AA 충족). */
 .forms-dl-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -1195,8 +1208,12 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .ic-wrap .ic { width: 18px; height: 18px; }
 
 /* ── 헤더: 제목이 화면에서 가장 크고, 시정구호는 그 아래 «보조» ── */
-.topbar h1 { font-size: 1.25rem; font-weight: 800; line-height: 1.25; }   /* 20px */
-.brand-eyebrow { font-size: 0.75rem; }                                     /* 제목의 0.6배 = 12px */
+/* ★ 2026-08-24 — 여기 있던 .topbar h1{1.25rem} · .brand-eyebrow{0.75rem} 두 줄을 «지웠다».
+   왜: 같은 값이 위(§상단바 절)에도 있어 «두 번 선언»이었다. 3개 앱 제목 크기를 통일하는데
+      기준이 어느 줄인지 헷갈려 공무원앱만 1.375rem 으로 남는 사고가 났다.
+   → 값은 위 §상단바 절의 .topbar h1 / .brand-eyebrow 한 곳에만 있다(20px / 12px).
+     계산된 결과는 완전히 같다(전에도 이 줄이 이겨 20px 였다).
+   ⛔ 여기에 제목·아이브로 크기를 다시 적지 말 것. */
 .topsub:empty { display: none; }   /* 「수요자 기반 정책 플랫폼」 삭제 후 빈 자리 없애기 */
 /* 시정구호 — 화면 폭의 55~65%(규격서). 이전 92% 에서 축소했다. */
 .slogan { margin: var(--sp-3) 0 var(--sp-5); }
@@ -1744,15 +1761,18 @@ h1, h2, h3,
    맨 앞 «전체» 칩만 한 줄을 다 쓴다(분야가 아니라 «전체 보기» 길이므로). */
 .chips {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-2);
   align-items: stretch;
+  /* ⛔ 열 수(grid-template-columns)와 간격(gap)은 «여기서 정하지 않는다».
+     파일 끝 §Ⓒ 한 블록이 정본이다 — 2026-08-24 C-06 에서 여기 있던
+     `repeat(2,…)` 와 아래 @420·@680 두 줄을 «지웠다».
+     같은 값이 두 곳에 있으면 어느 줄이 이기는지 순서에 기대게 되고,
+     그 순간부터 «고쳤는데 안 바뀐다»가 시작된다(오늘만 세 번 겪었다). */
 }
 .chips .chip {
   min-height: 44px;               /* 터치 영역 44px 를 «실제 높이»로 확보 */
   justify-content: center;
   text-align: center;
-  padding: 6px 10px;
+  /* ⛔ padding·font-size 도 §Ⓒ 가 정본이다(폭에 따라 달라진다). 여기서 정하지 않는다. */
   /* 한글은 낱자로 자르지 않는다(keep-all). 다만 「🎨 문화·체육·관광」처럼 띄어쓰기가
      없는 긴 이름이 320px 폰의 좁은 칸을 넘칠 수 있으므로, «다른 방법이 없을 때만»
      끊기도록 overflow-wrap:anywhere 를 안전망으로 둔다.
@@ -1761,8 +1781,6 @@ h1, h2, h3,
   overflow-wrap: anywhere;
 }
 .chips .chip-all { grid-column: 1 / -1; }
-@media (min-width: 420px) { .chips { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 680px) { .chips { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 /* ── ③ 목록 정렬 줄(최신순) — 정책참여 목록과 같은 모양 ──────────────── */
 .list-toolbar { display: flex; justify-content: flex-end; margin: var(--sp-3) 0 var(--sp-1); }
@@ -1854,15 +1872,9 @@ h1, h2, h3,
 }
 .file-del:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .done-attach { margin: 6px 0 0; font-size: 0.875rem; font-weight: 700; color: var(--accent-text); }
-/* ☁ 클라우드 저장 실패 안내 — 접수는 됐으므로 «빨간 오류»가 아니라 «짚고 넘어가는 알림».
-   ⚠ --err-text(#A52714)는 크림 위 6.66:1 로 AA 를 넘긴다(본문 4.5:1 기준 충족).
-   ⚠ 색만으로 알리지 않는다 — 글 자체가 무슨 일이 있었는지 말한다(규격서 14절). */
-.done-cloudwarn {
-  margin: 10px 0 0; padding: 10px 12px;
-  font-size: 0.875rem; font-weight: 700; line-height: 1.6;
-  color: var(--err-text); background: var(--header);
-  border-radius: var(--r-btn); text-align: left;
-}
+/* ☁ .done-cloudwarn 은 2026-08-24 에 걷어냈다 — 그 줄이 알리던 상태(«메일로는 접수됐지만
+   클라우드 저장은 실패») 자체가 없어졌다(신청 메일 발송 폐지, 접수 경로가 하나뿐).
+   ⛔ 되살리지 말 것. 접수 실패는 완료 화면이 아니라 신청 화면의 #applyFormErr 이 말한다. */
 
 /* ── ⑦ 설치 안내 ───────────────────────────────────────────────────────── */
 .a2hs-install {
@@ -2188,3 +2200,479 @@ html.fontsize-lg { font-size: 125%; }
   /* 복사 반짝임도 끈다 — 복사 결과는 .code-copy-msg 글자가 이미 말하고 있다 */
   .code-box.copied { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ⌨ Tab 초점이 고정 헤더에 가리지 않게 (★ 2026-08-24, 🟡잣대 지적 → 공무원앱과 패리티)
+   ───────────────────────────────────────────────────────────────────────
+   .topbar 는 sticky(top:0)라 «항상 화면 위»에 얹혀 있다. 키보드 Tab 으로 화면 «중간»의
+   버튼·입력칸·링크에 초점이 갈 때 브라우저가 그 요소를 보이게 스크롤하는데,
+   그 요소에 scroll-margin-top 이 없으면 헤더(58px) 뒤에 세워진다.
+   :focus-visible 외곽선이 잘 갖춰져 있어도 «표시가 있는가»와 «그 표시가 보이는가»는 다른 문제다.
+   ⚠ 「본문 바로가기」(#app)도 같은 이유로 함께 띄운다 — 건너뛴 곳이 «보여야» 건너뛴 것이다.
+   왜 :focus-visible 이 아니라 요소 선택자인가 — :focus-visible 은 «초점 상태에서만» 값이
+   생기는 셈이라 초점 이동과 스크롤의 순서에 기대게 된다. 상태와 무관하게 걸어 두면
+   scrollIntoView 로 스크롤될 때도 똑같이 지켜진다.
+   ⚠ --topbar-h 는 app.js 의 ResizeObserver 가 실제 렌더 높이로 갱신한다(회전·글자확대 대응).
+     JS 가 막히면 기본값 58px 로 남는다 — 지금까지와 같은 안전값이다.
+   ⚠ 목록 화면의 .search-box.sticky(헤더 아래 한 겹 더)는 이 값으로 완전히 비켜서지 않는다.
+     그 칸은 목록 위쪽에만 붙어 있어 실제로 가려지는 초점이 드물어 여기서는 다루지 않았다 —
+     문제가 확인되면 그때 그 구역만 따로 값을 키운다.
+   ═══════════════════════════════════════════════════════════════════════ */
+#app,
+#app a, #app button, #app input, #app select, #app textarea,
+#app summary, #app [tabindex], #app [contenteditable] {
+  scroll-margin-top: calc(var(--topbar-h, 58px) + 8px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ★★ C안 «세움» 적용 블록  (2026-08-24 · 규격서 19절 · 3단계 시민앱 C-01~C-11)
+   ───────────────────────────────────────────────────────────────────────────
+   ⛔⛔ 이 블록은 style.css 의 «맨 끝»이다. 여기 적힌 값이 이 파일의 최종값이다.
+        같은 성질의 값을 위쪽 어딘가에 다시 적지 말 것 —
+        오늘(2026-08-24) 이 프로젝트에서만 «죽은 선언» 사고가 세 번 났다
+        (.brand-title 4곳 중 3곳 · .topbar .slogan-img 4곳 중 3곳 · 공무원앱 제목).
+   ⛔ 이 블록보다 «뒤»에 .cards / .chips / .situations / .card / .d-tile 을 다시 쓰지 말 것.
+   ⚠ 새 움직임은 넣지 않았다(그림자·색만 바뀐다) — 규격서 14절 저감모션 목록에 더할 것 없음.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── §Ⓔ  그림자 3단계 (규격서 19-1) ─────────────────────────────────────────
+   그림자 색은 언제나 흙빛 갈색 rgba(80,50,30,…) 다. 검정을 쓰면 크림 바탕에
+   «회색 때»가 낀 것처럼 보인다.
+   ⚠ --e2 의 «정본»은 규격서 4절이며, 이 파일에서는 --shadow-card 가 그 정본이다.
+      그래서 값을 옮겨 적지 않고 그대로 가리킨다 — 4절이 바뀌면 여기도 저절로 따라온다.
+   ⚠ 3단계를 넘기지 말 것. 4·5단계를 만들면 «어느 것이 위인지»가 화면에서 안 읽힌다.  */
+:root {
+  --e1: 0 1px 2px rgba(80,50,30,.07);                                       /* 칩·배지·입력칸 */
+  --e2: var(--shadow-card);                                                 /* 카드 평상시·패널 */
+  --e3: 0 2px 4px rgba(80,50,30,.08), 0 18px 34px -14px rgba(80,50,30,.28); /* C안 카드·모달 */
+}
+/* --e1 : 작은 조각들 — «떠 있다»가 아니라 «종이 한 장 두께»만 준다 */
+.chip, .note-flag, .detail-tags .t, .card .team, .ms-badge, .ms-tool-btn,
+.text-input, select.text-input, .search-box input, .pp-select, .file-input, .age-row input {
+  box-shadow: var(--e1);
+}
+/* --e3 : 모달은 «화면에서 가장 위»에 있는 것이므로 3단계를 쓴다 */
+.team-card, .install-card { box-shadow: var(--e3); }
+
+/* ── §Ⓕ  분야 6색군 (규격서 19-2) — «색값»의 유일한 출처 ────────────────────
+   ⛔⛔ 어떤 분야가 어느 색군에 드는지(=매핑)는 여기 없다. app.js 상단 FIELD_GROUP 하나뿐이다.
+        여기 있는 것은 «색군 6개가 무슨 색인가»뿐이다. 둘을 나눈 이유는 app.js 주석 참조.
+        (🟢곳간이 C-13 에서 분야를 바꿔도 이 블록은 손댈 일이 없다.)
+   ⚠ 실측 명도대비 (WCAG 2.x 상대휘도식 직접 계산)
+       머리띠 흰 글자 : life 5.21 · care 4.95 · farm 6.39 · family 6.41 · work 8.12 · learn 7.14
+       (띠는 위=밝은 쪽 → 아래=짙은 짝 그라데이션이라 «위쪽»이 대비의 바닥이다. 모두 4.5 이상)
+   ⚠⚠ 타일 머리 글자는 «원색»이 아니라 «짙은 짝»을 쓴다.
+       규격서 19-2 는 「틴트 위 원색이 4.5:1 을 넘는다」고 적었으나 실측하면
+         life  #B84A1C on #F5E6DF = 4.28  (미달)
+         care  #0E7C86 on #DDEDEE = 4.10  (미달)
+       두 색군이 AA 에 못 미친다. 짙은 짝으로 바꾸면 6.11~8.80 으로 모두 넉넉히 넘는다.
+       (2026-08-24 손길 실측 → 단장에게 19-2 표 수정 요청함)                             */
+.c-card, .detail-tiles, [data-fg] {
+  /* 기본값 = «색 없음»(무채색). 표에 없는 분야가 들어오면 여기에 떨어진다(19-2 안전장치).
+     색이 «틀리게» 나가면 아무도 못 알아채지만, 무채색이면 «아직 색이 없다»가 바로 보인다. */
+  --band-a: #EADCCE; --band-b: #EADCCE; --band-ink: #6E5A4C;   /* 4.84:1 */
+  --tile-t: #F5F0EA; --tile-ink: #5A4436;                      /* 8.01:1 */
+}
+[data-fg="life"]   { --band-a:#B84A1C; --band-b:#93380F; --band-ink:#fff; --tile-t:#F5E6DF; --tile-ink:#93380F; } /* 주거·생활 */
+[data-fg="care"]   { --band-a:#0E7C86; --band-b:#0A5F68; --band-ink:#fff; --tile-t:#DDEDEE; --tile-ink:#0A5F68; } /* 건강·복지 */
+[data-fg="farm"]   { --band-a:#2F6B3A; --band-b:#24522D; --band-ink:#fff; --tile-t:#E2EAE3; --tile-ink:#24522D; } /* 농림·환경 */
+[data-fg="family"] { --band-a:#A03A62; --band-b:#7F2C4D; --band-ink:#fff; --tile-t:#F2E3E9; --tile-ink:#7F2C4D; } /* 가족·돌봄 */
+[data-fg="work"]   { --band-a:#2A4E8F; --band-b:#1F3B6D; --band-ink:#fff; --tile-t:#E1E6EF; --tile-ink:#1F3B6D; } /* 일·경제   */
+[data-fg="learn"]  { --band-a:#6A4794; --band-b:#523573; --band-ink:#fff; --tile-t:#EAE5F0; --tile-ink:#523573; } /* 배움·문화 */
+
+/* ── §Ⓑ  C안 카드 — 머리띠 + 흰 본문 (규격서 19-3 · 요구 C-03 · C-09) ────────
+   ┌──────────────────────┐ 라운드 20 · overflow:hidden · 그림자 --e3
+   │▓▓ 🌾 농림축수산업 ▓▓│ 머리띠 36px · 색군 그라데이션 · 흰 글자
+   ├──────────────────────┤
+   │ 사업명 / 요약 / 담당팀│ 흰 바탕 · 여백 16
+   │           [신청하기] │ 늘 주조 #B84A1C 채움 + 흰 글자
+   └──────────────────────┘                                                       */
+.card.c-card, .detail-head.c-card {
+  padding: 0;                       /* 여백은 .card-body 가 가진다 */
+  overflow: hidden;                 /* 머리띠가 라운드 모서리를 뚫고 나가지 않게 */
+  border-radius: var(--r-card);
+  background: var(--card);          /* 크림이 아니라 «흰색» — 크림 바탕 위에 떠 있어야 «세워진» 것으로 읽힌다 */
+  border: 1.5px solid var(--border);
+  box-shadow: var(--e3);
+}
+/* ⚠ 36px 은 «상한»이다. 두꺼워지면 급격히 촌스러워지고, 카드 10장이면 머리띠만 360px 이라
+     「한 화면에 최대한 담기」(규격서 0절)를 크게 해친다. 양호창님 결정 없이 올리지 말 것. */
+.card-band {
+  display: flex; align-items: center;
+  height: 36px; padding: 0 var(--sp-4);
+  background: linear-gradient(180deg, var(--band-a), var(--band-b));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+  color: var(--band-ink);
+}
+/* 색만으로 분야를 알리지 않는다(규격서 8절) — 띠 «안»에 분야명 글자가 늘 함께 있다.
+   분야명의 컬러 이모지는 그대로 둔다(규격서 13절 «이모지 금지»의 유일한 예외). */
+.card-band-t {
+  font-size: 0.8125rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.c-card > .card-body { padding: var(--sp-4); }
+/* 「신청하기」는 카드색을 «따라가지 않는다» — 이것이 C-03 「버튼이 카드와 같은 색이라
+   구분이 안 됨」의 해답이다. 카드가 무슨 색이든 «누르는 자리»는 언제나 감빛 하나여야
+   시민이 화면을 배우지 않고도 쓴다. 흰 글자 대비 5.21:1. */
+.c-card .card-apply {
+  background: var(--primary-hover); color: #fff; border-color: var(--primary-hover);
+}
+.c-card .card-apply:active { background: var(--primary-press); }   /* 흰 글자 7.46:1 */
+
+/* ── §Ⓐ  맞춤 찾기 「해당하는 상황」 다중열 (요구 C-01) ──────────────────────
+   한 열로 세로로 쌓여 있어 「더 보기」를 눌러야 다 보였다 → 격자로 한 화면에 담는다.
+   접기를 없앤 근거와 되돌리는 방법은 app.js SITUATION_OPEN 주석에 있다.               */
+.situations { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+@media (min-width: 480px) { .situations { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 768px) { .situations { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.situation {
+  min-height: 52px;                 /* 터치 표적 44px 을 «실제 높이»로 넉넉히 넘긴다 */
+  align-items: center; gap: var(--sp-2);
+  padding: 10px 12px; font-size: 0.875rem; line-height: 1.35;
+  border-radius: var(--r-btn); box-shadow: var(--e1);   /* 입체감 — 19-1 1단계 */
+  word-break: keep-all; overflow-wrap: anywhere;
+}
+.situation input { flex: 0 0 auto; }
+/* 고른 것은 색만이 아니라 «그림자 한 단계 위 + 테두리»로도 구분된다(색만으로 알리지 않기) */
+.situation.on { box-shadow: var(--e2); }
+.situation:focus-within { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* ── §Ⓒ  분야 칩 — «이 파일의 정본» (요구 C-06 · 2026-08-24 확정) ────────────
+   ⛔⛔ 분야 칩의 «열 수 · 간격 · 여백 · 글자 크기 · 줄바꿈»을 정하는 곳은 여기 하나뿐이다.
+        위쪽 §② 의 `.chips` 절에서 이 값들을 «지웠다» — 거기에 다시 적지 말 것.
+        ⚠ 규칙 순서가 곧 결과다. 좁은 폭 → 넓은 폭 «오름차순»으로만 적을 것.
+          (min-width 규칙은 겹치는 구간에서 «뒤에 적힌 것»이 이긴다. 2026-08-24 실험 중
+           400px 규칙을 파일 맨 끝에 붙였다가 768·1024 의 5열·6열이 통째로 4열로
+           덮이는 것을 실측으로 잡았다.)
+
+   확정 열 수
+   | 폭        | 열 | 근거                                                        |
+   |-----------|----|-------------------------------------------------------------|
+   | 320~379   | 3  | 4열은 칸이 66~74px 이라 이름이 세 줄로 접힌다               |
+   | 380~767   | 4  | ★ 요구 C-06 「3열 → 4열」이 풀리는 구간(폰 384·390·412·430) |
+   | 768~1023  | 5  |                                                             |
+   | 1024~     | 6  | 더 늘리지 않는다                                            |
+
+   ★ 380px 을 경계로 삼은 이유 — 🟠단장이 준 표는 「480→4열(폰)」이었으나, 같은 지시의
+     본문은 「폰(390~430px)에서 4열이 되어야 요구가 풀린다」였다. 둘이 어긋난다.
+     원문 캡처(`수정요구사항_2608/캡처/시민앱_*.png`)의 기준 창은 «약 502px» 이고,
+     실제 국내 폰은 360~430px 다. 480 을 경계로 두면 «표»는 맞지만 «폰»에서는 여전히
+     3열이라 요구가 풀리지 않는다. 그래서 둘을 모두 만족하는 380 으로 내렸다.
+     (360급 폰은 3열로 남는다 — 4열로 내리면 칸이 65px 이라 이름이 세 줄이 된다.)
+
+   ⛔ 분야 «이름»을 줄여서 맞추지 말 것 — config.POLICY_CATEGORIES 단일 출처다.
+   ⚠ 12px 아래로 내리지 말 것(규격서 15절 최소치). 대신 줄바꿈으로 푼다 — 아래 참조. */
+/* ── 모양 : 세로 2단 (윗줄 이모지 · 아랫줄 이름) ──────────────────────────
+   ⚠ 규격서 5절의 「칩 높이 32px」이 여기서는 맞지 않는다 — 2단이라 더 높다.
+      🟠단장에게 «규격서 19절에 분야 칩 2단 예외»를 적어 달라고 전달했다(2026-08-24).
+   ⚠ 터치 표적 44×44px — 2단이 되면서 «보이는 높이»가 이미 넘는다(::after 덧대기 불필요).
+   ⚠ 모든 칩이 «같은 높이»여야 한다 → 격자의 align-items:stretch 가 줄 단위로 맞추고,
+      min-height 로 바닥을 받친다. 이름이 두 줄이 되는 칩이 그 줄의 키를 정한다. */
+.chips { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.chips .chip {
+  flex-direction: column; justify-content: center; gap: 2px;
+  /* 66px = «이름이 두 줄인 칩»의 실측 높이(이모지 20 + 사이 2 + 두 줄 30 + 위아래 여백 12).
+     하한으로 못 박아 «이름이 한 줄인 칩»도 같은 키가 되게 한다.
+     ⚠ 격자의 align-items:stretch 는 «같은 줄 안»에서만 키를 맞춘다. 그래서 하한이 없으면
+        두 줄짜리가 없는 줄만 62px 이 되어 줄마다 4px 씩 어긋난다(390px 에서 실제로 그랬다).
+     ⚠ 하한이라 「글자 크게 보기」(125%)에서는 저절로 더 커진다 — 막지 않는다. */
+  min-height: 66px; padding: 6px 4px;
+  font-size: 0.75rem; line-height: 1.25;
+}
+/* 이모지 — 색 이모지 그대로(규격서 13절 예외). 줄높이를 1 로 못 박아 윗줄이 들뜨지 않게 */
+.chips .chip .chip-ic { font-size: 20px; line-height: 1; }
+/* 이름 — 가운뎃점에서 줄이 바뀌는 것은 허용한다(「저소득·」/「기초수급」).
+   ⛔ 「…」으로 자르지 않는다. 분야 이름은 시민이 «고르는 기준»이다. */
+.chips .chip .chip-nm {
+  display: block; text-align: center;
+  word-break: keep-all; overflow-wrap: anywhere;
+}
+/* 맨 앞 «전체» 칩만 한 줄짜리 — 분야가 아니라 «전체 보기» 길이므로 2단으로 만들지 않는다 */
+.chips .chip-all { flex-direction: row; min-height: 44px; font-size: 0.875rem; }
+
+/* 좁은 폭(~479)에서만 «칩 라벨의 줄바꿈»을 허용한다.
+   ─ 왜 필요한가 : 위 §글줄마감 절이 칩 라벨을 nowrap 으로 묶어 두었다. 그래서 칸에
+     안 들어가면 «줄이 바뀌는» 것이 아니라 «잘린다». 실측(320px·3열, 칸 안쪽 80px) —
+     「💰 저소득·기초수급」 10px · 「🎨 문화·체육·관광」 6px 이 잘려 글자가 사라졌다.
+   ─ 왜 여백·글자로 못 푸나 : 필요한 폭 90px 인데 3열의 물리적 상한이 92px(여백 포함)이다.
+     여백을 0 으로 해도 모자란다.
+   ─ 왜 열을 줄이지 않았나 : 줄바꿈을 허용하면 «잘림 0» 이면서 열 수가 유지된다.
+     실측 — 320px 3열에서 23개 중 12개가 두 줄이 되지만 「노인·」/「어르신」처럼
+     가운뎃점에서 끊겨 읽기에 문제가 없고, 칩 높이는 44 → 46px 로 2px 만 는다.
+     412px 4열도 같다(잘림 0 · 최대 46px). 오히려 분야 줄 «전체 높이»는
+     3열 444px → 4열 356px 로 88px 짧아진다(규격서 0절 「한 화면에 최대한 담기」).
+   ⚠ 480px 이상에서는 줄바꿈이 «필요 없다»(실측 잘림 0). 그래서 여기서만 푼다 —
+      넓은 폭에서까지 풀면 버튼 라벨 높이가 들쭉날쭉해진다(§글줄마감 절이 막던 것). */
+@media (max-width: 479px) { .chips .chip { white-space: normal; } }
+
+@media (min-width: 480px)  { .chips { gap: var(--sp-2); } }
+@media (min-width: 768px) {
+  .chips { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  /* 칸이 넉넉해지는 폭부터 규격서 기본값(13px · 좌우 8)으로 되돌린다 */
+  .chips .chip { padding: 6px var(--sp-2); font-size: 0.8125rem; }
+}
+@media (min-width: 1024px) { .chips { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+/* ── §Ⓘ  사업 카드 열 수 (규격서 19-4) ──────────────────────────────────────
+   실측 — 320:1열 · 480:1열 · 768:2열 · 1024:3열 · 1440:3열(멈춤).
+   ⚠ 1440 에서 4열로 늘리지 않는다. 카드가 넓어지면 글줄이 길어져 오히려 읽기 나빠진다.
+      남는 폭은 카드가 아니라 «바깥 여백»이 가져간다(main 의 max-width 가 이미 그렇게 한다).
+      이것이 C-02 「카드가 한쪽만 차지한다」의 해답이다 — 문제는 «카드가 좁다»가 아니라
+      «격자가 왼쪽에 몰려 있다»였다.                                                    */
+@media (min-width: 1000px) { .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ── §Ⓓ  빈 상태·오류·스켈레톤은 «격자 한 줄을 다 쓴다» (요구 C-02) ──────────
+   격자 안에 들어간 «한 장짜리» 안내가 넓은 화면에서 왼쪽 한 칸만 차지하고 있었다
+   (내 신청 탭의 상상주도 카드가 바로 이것이다). 늘 전폭으로 펴고 가운데 세운다.        */
+.cards > .empty, .cards > .err-box, .cards > .sk-list,
+.ms-list > .ms-empty, .ms-list > .sk-list, .ms-list > .empty, .ms-list > .err-box {
+  grid-column: 1 / -1;
+}
+.ms-empty, .cards > .empty, .cards > .err-box {
+  /* 720px = 이 앱의 «읽는 폭»(위 @768 의 폼·읽기 화면과 같은 값).
+     전폭으로 늘리면 1264px 짜리 빈 상자가 되어 오히려 허전해 보인다 —
+     격자 한 줄을 «차지»하되 안에서는 읽는 폭으로 가운데 선다. */
+  width: 100%; max-width: 720px; margin-left: auto; margin-right: auto;
+}
+
+/* ── §Ⓖ  신고 모달 — 사유 목록과 입력칸이 맞닿아 «겹쳐 보이던» 문제 (요구 C-08) ──
+   두 칸 모두 바깥 여백이 0 이라 경계선끼리 붙어 한 덩어리로 읽혔다.
+   칸마다 «보이는 라벨»(index.html)을 두고, 여기서 칸 사이 간격을 준다.                */
+#reportModal .field-label { margin: var(--sp-4) 0 var(--sp-2); }
+#reportModal .field-label:first-of-type { margin-top: 0; }
+#reportModal .pp-select, #reportModal .text-input { display: block; width: 100%; }
+#reportModal #reportSend { margin-top: var(--sp-5); }
+
+/* ── §Ⓗ  사업 상세 — 항목별 타일 (요구 C-04) ────────────────────────────────
+   글자 나열을 끊어 «아이콘 + 색군 틴트 머리 + 흰 본문»의 타일로 세운다.
+   열 수(규격서 19-4 «상세 타일») 실측 — 320:1 · 480:1 · 768:2 · 1024:3 · 1440:3.
+   ⚠ minmax 의 첫 값에 min(…, 100%) 을 쓰는 것이 핵심이다. 그냥 minmax(300px,1fr) 이면
+      컨테이너가 300px 보다 좁은 320px 폰에서 «한 칸이 300px 로 고정»되어 가로로 넘친다.
+   ⚠ 글이 긴 항목(지원 내용·지원 대상)만 --wide 로 한 줄을 다 쓴다. 짧은 항목까지
+      넓히면 글줄이 길어져 읽기 나빠지고, 넓은 화면에서 타일이 한 줄에 하나씩만 선다.   */
+.detail-tiles {
+  display: grid; align-items: start;
+  gap: var(--sp-3); margin: var(--sp-4) 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+}
+.d-tile {
+  min-width: 0; overflow: hidden;
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: var(--r-card); box-shadow: var(--e2);
+}
+.d-tile--wide { grid-column: 1 / -1; }
+.d-tile-k {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin: 0; padding: 10px var(--sp-4);
+  background: var(--tile-t); color: var(--tile-ink);
+  font-size: 0.875rem; font-weight: 800; letter-spacing: -.01em;
+}
+.d-tile-k .ic { width: 18px; height: 18px; color: currentColor; }
+/* pre-wrap — 엑셀에서 온 줄바꿈을 그대로 살린다(위 .detail-block .v 와 같은 이유).
+   ⚠ 이 안에 «코드가 만든 HTML»(목록 등)을 넣으면 태그 사이 줄바꿈까지 그려진다.
+      서식 목록은 .forms-dl-list 가 white-space:normal 로 되돌리고 있다(위 §⑤). */
+.d-tile-v { padding: var(--sp-3) var(--sp-4) var(--sp-4); font-size: 0.9375rem; line-height: 1.65; white-space: pre-wrap; }
+.d-tile-sep { display: block; height: var(--sp-2); }
+/* 서식 다운로드 타일은 «있을 때만» 자리를 차지한다 — 비면 격자에 빈 칸이 남는다 */
+#formsDownload:empty { display: none; }
+#formsDownload.d-tile { padding: 0; }
+/* 상세 머리 카드 — 목록 카드와 «같은 모양»이라 어느 사업을 열었는지 색으로 이어진다 */
+.detail-head .card-body h2 { margin: 0; font-size: 1.25rem; line-height: 1.4; }
+.detail-head .detail-tags { margin: var(--sp-3) 0 0; }
+#detailContent > .big-btn { margin-top: var(--sp-5); }
+
+/* ── §Ⓙ  푸터는 홈에서만 (요구 C-01 단서) ───────────────────────────────────
+   푸터를 숨기면 그 안에 있던 «하단 탭바 피하기» 여백(78px)도 함께 사라진다.
+   → 본문 자체가 탭바를 피하도록 body 에 여백을 «항상» 준다. 홈에서는 지금까지와
+     같은 여유가 유지되고, 다른 화면에서는 마지막 버튼이 탭바에 물리지 않는다.        */
+body { padding-bottom: calc(var(--tabbar-h) + var(--sp-4)); }
+.foot { padding-bottom: var(--sp-5); }
+/* 상세 화면 폭 — 타일이 3열까지 서려면 컨테이너가 940px 은 되어야 한다(타일 최소 300px × 3 + 간격).
+   ⚠ 위 @768 의 `#view-detail { max-width: 720px }`(폼·읽기 화면 공통 규칙)을 여기서만 되돌린다.
+      상세는 «읽는 화면»이지만 타일 격자라 한 줄 길이가 타일 폭으로 이미 제한된다 —
+      늘어난 것은 «타일 개수»지 «글줄 길이»가 아니다.
+   ⚠ 1000px 에서 멈춘다. 전폭(1320)으로 늘리면 --wide 타일(지원 내용)의 한 줄이
+      80자를 넘어 규격서의 45~75자 범위를 벗어난다(1000px ≈ 62자).
+   ⛔ 이 값을 다시 적지 말 것 — 상세 폭을 정하는 곳은 여기 하나다. */
+@media (min-width: 1024px) { #view-detail { max-width: 1000px; } }
+
+/* ── §Ⓚ  마무리 손질 (2026-08-24, 실측 화면을 보고 잡은 세 가지) ─────────────
+   ① 여러 열일 때 「신청하기」의 «높이»가 카드마다 달라 줄이 들쭉날쭉했다.
+      격자 항목은 서로 키가 같으므로, 본문을 늘려 버튼을 «카드 바닥»에 붙이면
+      한 줄 안의 신청 버튼이 모두 같은 높이에 선다(눈으로 훑기 쉬워진다).
+      ⚠ 위치를 «움직이는» 것이 아니라 처음부터 그 자리에 놓는 것이다(규격서 14절 무관).
+   ② 정렬 고르개가 화면 폭을 다 먹고 있었다(.pp-select 의 flex:1 이 정책참여 목록의
+      «검색칸과 나란한» 배치용 값인데 여기서도 적용됐다). 여기서는 글자 길이만큼만.
+   ③ 상세 머리 카드에 분야가 하나뿐이면 칩 줄이 비어 «빈 여백»만 남는다 → 접는다. */
+.card.c-card {
+  display: flex; flex-direction: column;
+  /* ⚠⚠ align-items 를 «반드시» 여기서 못 박는다.
+     위 @768 블록에 `.cards .card { align-items: flex-start }` 가 있다. 예전에는 .card 가
+     flex 가 아니어서 아무 일도 하지 않는 «잠자던 선언»이었는데, 여기서 flex 로 바꾸는
+     순간 그 줄이 깨어나 머리띠가 «글자 폭»으로 줄어든다(768px 이상에서만 — 실측으로 잡음).
+     ⛔ 이 줄을 지우지 말 것. 지우려면 위 @768 의 그 줄을 먼저 지워야 한다. */
+  align-items: stretch;
+}
+.card.c-card > .card-body { display: flex; flex-direction: column; flex: 1 1 auto; }
+.c-card .card-meta { margin-bottom: var(--sp-3); }
+.c-card .card-apply { margin-top: auto; align-self: flex-start; }
+.list-toolbar .pp-select { flex: 0 0 auto; width: auto; min-width: 132px; }
+.detail-head .detail-tags:empty { display: none; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ★★ C-07 정책제안 «템플릿 + 의견(댓글·답글)»            2026-08-24
+   ───────────────────────────────────────────────────────────────────────────
+   사양 : 수정요구사항_2608/C-07_정책제안_템플릿_사양.md
+   DB   : supabase/제안템플릿_260824.sql · supabase/제안댓글_260824.sql
+   ⛔ 이 블록보다 «뒤»에 .pw-ex / .cmt / .pd-part 를 다시 쓰지 말 것.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── §Ⓛ  작성 폼의 «상시 예시» ──────────────────────────────────────────────
+   ⚠⚠ 예시는 placeholder 가 «아니다». placeholder 는 한 글자만 쳐도 사라져,
+      정작 쓰기 시작한 순간 길잡이가 없어진다(어르신에게 특히 그렇다).
+      그래서 칸 «아래»에 지워지지 않는 글로 둔다.
+   ⚠ 색만으로 「이건 예시다」를 알리지 않는다 — 「예시」라는 말표를 늘 함께 둔다(규격서 8절).
+   ⚠ 명도대비(실측) — 예시 글자 #5A4436 on #FBF6F1 = 8.45:1 · 말표 흰 글자 on #8A6B55 = 4.87:1 */
+.pw-ex-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3);
+  margin: var(--sp-5) 0 var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--header); border: 1.5px solid var(--border);
+  border-radius: var(--r-btn); box-shadow: var(--e1);
+}
+.pw-ex-lead { margin: 0; flex: 1 1 auto; min-width: 0; font-size: 0.875rem; color: var(--text); }
+.pw-ex-lead b { color: var(--accent-text); }          /* 크림 위 5.25:1 */
+/* 터치 표적 44px — 보이는 크기 자체를 44px 로 잡는다(::after 덧대기가 필요 없게) */
+.pw-ex-btn {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 var(--sp-4);
+  border: 1.5px solid var(--primary); border-radius: var(--r-btn);
+  background: var(--card); color: var(--accent-text);  /* 흰 위 6.03:1 */
+  font-family: inherit; font-size: 0.875rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+}
+.pw-ex-btn .ic { width: 18px; height: 18px; }
+.pw-ex-btn:active { background: var(--header); transform: scale(.97); }
+.pw-ex-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+.pw-ex {
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding: 10px 12px;
+  background: #FBF6F1; border: 1px dashed var(--border);
+  border-radius: 10px;
+  font-size: 0.875rem; line-height: 1.6; color: #5A4436;   /* 8.45:1 */
+}
+.pw-ex:empty { display: none; }
+/* 「예시」 말표 — 흐린 색만으로 구분하지 않는다(사양 3.3) */
+.pw-ex-k {
+  flex: 0 0 auto;
+  padding: 2px 8px; border-radius: var(--r-pill);
+  background: #8A6B55; color: #fff;                        /* 흰 글자 4.87:1 */
+  font-size: 0.75rem; font-weight: 800; letter-spacing: .02em;
+}
+.pw-ex-v { flex: 1 1 auto; min-width: 0; }
+
+/* 글자 수 — aria-live 를 «붙이지 않는다»(한 글자마다 낭독하면 글을 쓸 수 없다) */
+.pw-count { margin: 4px 2px 0; text-align: right; font-size: 0.8125rem; color: var(--muted); }
+.pw-count.is-over { color: var(--err-text); font-weight: 800; }   /* 흰 7.24:1 */
+.pw-ta { min-height: 96px; resize: vertical; }
+
+/* ── §Ⓜ  상세 — 세 칸을 «나눠» 보여 주기 ────────────────────────────────────
+   옛 글(세 칸이 없는 글)은 .pd-body 한 덩어리 그대로다 — 이 규칙이 적용되지 않는다. */
+.pd-parts { display: grid; gap: var(--sp-3); margin: var(--sp-3) 0 var(--sp-5); }
+.pd-part {
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: var(--r-card); box-shadow: var(--e2); overflow: hidden;
+}
+.pd-part-k {
+  margin: 0; padding: 10px var(--sp-4);
+  background: var(--header); color: var(--accent-text);    /* 5.25:1 */
+  font-size: 0.875rem; font-weight: 800;
+}
+.pd-part-v {
+  margin: 0; padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  font-size: 0.9375rem; line-height: 1.7; white-space: pre-wrap;
+}
+/* 접수번호 — «표시만» 한다. ⛔ 조회·본인확인의 열쇠로 쓰지 않는다(proposals.js 주석 참조) */
+.pd-no { margin: var(--sp-2) 0 0; font-size: 0.8125rem; color: var(--muted); }
+.pd-no-k {
+  display: inline-block; margin-right: 6px; padding: 2px 8px;
+  background: var(--header); color: var(--accent-text);
+  border-radius: var(--r-pill); font-weight: 800;
+}
+.pd-no-v { font-weight: 700; letter-spacing: .02em; }
+
+/* ── §Ⓝ  의견(댓글·답글) ────────────────────────────────────────────────────
+   ⚠ 답글은 «1단까지». 답글 안에 답글 버튼을 두지 않는다(서버 트리거도 막는다).
+   ⚠ 공무원 답글은 색 «그리고» 「담당 부서」 글자로 구분한다 — 색만으로 알리지 않는다. */
+.cmt-wrap { margin-top: var(--sp-6); }
+.cmt-n {
+  display: inline-block; min-width: 22px; margin-left: 6px; padding: 1px 8px;
+  background: var(--primary-hover); color: #fff;           /* 흰 글자 5.21:1 */
+  border-radius: var(--r-pill); font-size: 0.8125rem; font-weight: 800; text-align: center;
+}
+.cmt-list, .cmt-replies { list-style: none; margin: 0; padding: 0; }
+.cmt-list { display: grid; gap: var(--sp-3); }
+.cmt-item { min-width: 0; }
+.cmt {
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: var(--r-card); box-shadow: var(--e1);
+  padding: var(--sp-3) var(--sp-4);
+}
+/* 답글 — 왼쪽에 «들여쓰기 + 띠»로 «이 댓글에 달린 것»임을 보인다.
+   ⚠ 들여쓰기를 24px 넘기지 말 것. 좁은 폰에서 답글 본문이 반 토막 난다. */
+.cmt-replies { margin: var(--sp-2) 0 0 var(--sp-5); display: grid; gap: var(--sp-2); }
+.cmt.is-reply { border-left: 4px solid var(--border); border-radius: var(--r-btn); }
+/* 공무원 답글 — 청록 계열(정책참여 포인트색)로 «시민 의견»과 확실히 갈린다 */
+.cmt.is-official { border-color: var(--civic); background: #F2FAFA; }
+.cmt-official-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 9px; border-radius: var(--r-pill);
+  background: var(--civic); color: #fff;                   /* 흰 글자 4.95:1 */
+  font-size: 0.75rem; font-weight: 800; white-space: nowrap;
+}
+.cmt-official-badge .ic { width: 14px; height: 14px; }
+.cmt-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: 6px; }
+.cmt-nick { font-size: 0.875rem; font-weight: 800; color: var(--text); }
+.cmt-date { margin-left: auto; font-size: 0.75rem; color: var(--muted); }  /* 흰 6.50:1 */
+.cmt-body { margin: 0; font-size: 0.9375rem; line-height: 1.65; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+/* 지워진 의견 — 자리만 남긴다(서버가 내용·닉네임을 실제로 비워 보낸다) */
+.cmt-gone { background: #F7F2ED; border-style: dashed; }
+.cmt-gone .cmt-body { color: var(--disabled); font-style: normal; }        /* #F7F2ED 위 4.82:1 */
+.cmt-empty { margin: 0; padding: var(--sp-5) var(--sp-4); text-align: center; color: var(--disabled); font-size: 0.9375rem; }
+.cmt-err { margin: 0 0 var(--sp-3); padding: 12px 14px; border-radius: var(--r-btn); background: var(--header); color: var(--text); font-size: 0.875rem; }
+
+/* 의견 아래 작은 조작 — 터치 44px 은 ::after 판으로 확보한다(보이는 크기는 그대로) */
+.cmt-acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-2); }
+.cmt-act {
+  position: relative; padding: 0; border: 0; background: none;
+  font-family: inherit; font-size: 0.8125rem; font-weight: 700;
+  color: var(--accent-text); cursor: pointer;               /* 흰 6.03:1 */
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.cmt-act::after { content: ""; position: absolute; left: -6px; right: -6px; top: 50%; height: 44px; transform: translateY(-50%); }
+.cmt-act:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+
+/* 쓰기·수정 폼 */
+.cmt-write-box { margin-top: var(--sp-5); padding-top: var(--sp-4); border-top: 1.5px solid var(--border); }
+.cmt-write-k { margin: 0 0 var(--sp-3); font-size: 1rem; font-weight: 700; }
+.cmt-form { display: grid; gap: var(--sp-2); }
+.cmt-reply-slot .cmt-form { margin: var(--sp-2) 0 0 var(--sp-5); }
+/* 닉네임·PIN 한 줄 — 좁은 폰(≤419)에서는 세로로 내려 각 칸이 충분히 넓게 */
+.cmt-form-row { display: grid; grid-template-columns: 1fr 120px; gap: var(--sp-2); }
+@media (max-width: 419px) { .cmt-form-row { grid-template-columns: 1fr; } }
+.cmt-help { margin: 0; font-size: 0.8125rem; line-height: 1.6; color: var(--muted); }  /* 흰 6.50:1 */
+.cmt-help b { color: var(--accent-text); }
+.cmt-mine { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px dashed var(--border); }
+.cmt-mine-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.cmt-mine-acts .big-btn { margin-top: 0; justify-content: center; padding: 0 var(--sp-2); }
+@media (max-width: 359px) { .cmt-mine-acts { grid-template-columns: 1fr; } }
+/* 폼 안의 「의견 남기기」는 이 화면의 «주요 버튼»이 아니다 — 상세의 주요 버튼은 「공감하기」다.
+   그래서 위쪽 여백만 주고 크기는 규격 그대로 둔다(규격서 0절 주요 버튼 1개). */
+.cmt-form .cmt-send { margin-top: var(--sp-2); }
+
+/* 목록 카드의 «의견 수» 배지 — 공감(.pp-like)과 같은 모양·같은 줄 */
+.pp-cmt { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.pp-cmt .ic { width: 16px; height: 16px; }

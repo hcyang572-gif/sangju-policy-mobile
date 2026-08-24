@@ -45,6 +45,115 @@ function applyTeamColor(el, name) {
   if (c) { el.style.background = c.bg; el.style.color = c.fg; }
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   🎨 분야 → 색군 매핑  «단 하나뿐인 출처»       (규격서 19-2 · 2026-08-24 C안)
+   ------------------------------------------------------------------------
+   ⛔⛔ 분야의 색을 정하는 곳은 이 파일의 이 표 «하나»뿐이다.
+        CSS·HTML·다른 함수 어디에도 분야 이름을 다시 적지 말 것.
+        (🟢곳간이 C-13 에서 분야를 늘리거나 줄일 수 있다. 그때 고칠 곳도 여기 하나다.)
+
+   여기 있는 것 / 없는 것
+     · 여기 있는 것 : «어떤 분야가 어느 색군에 드는가» (아래 FIELD_GROUP)
+     · 여기 없는 것 : «그 색군이 무슨 색인가» → style.css 파일 끝 §Ⓕ 의 --fg-* 토큰 한 블록.
+       둘을 나눈 이유 — 분야는 자주 바뀌고(데이터), 색값은 거의 안 바뀐다(규격서 19-2).
+       한쪽을 고칠 때 다른 쪽을 건드리지 않아도 되게 떼어 두었다.
+
+   ⚠ 키는 «이모지를 뗀 분야명»이다. data.json 의 분야는 「🌾 농림축수산업」처럼
+     이모지가 앞에 붙어 오는데, 이모지는 꾸밈이라 언제든 바뀔 수 있다.
+     fgKeyOf() 가 앞머리의 이모지·기호·공백을 떼고 한글부터 읽는다.
+
+   ⚠ 안전장치(규격서 19-2) — 표에 «없는» 분야는 임의의 색을 주지 않고 무채색으로 떨어뜨린다.
+     색이 «틀리게» 나가면 아무도 못 알아채지만, 무채색이면 «아직 색이 없다»가 바로 보인다.
+   ════════════════════════════════════════════════════════════════════════ */
+const FIELD_GROUP = {
+  // 주거·생활  life
+  "주거·부동산": "life", "교통·안전": "life", "1인가구": "life",
+  "전입·정착": "life",                              // ★ C-13 신설(2026-08-24)
+  // 건강·복지  care
+  "건강·의료": "care", "노인·어르신": "care", "장애인": "care", "저소득·기초수급": "care",
+  // 농림·환경  farm
+  "농림축수산업": "farm", "귀농·귀촌": "farm", "환경·에너지": "farm",
+  // 가족·돌봄  family
+  "임신·출산": "family", "영유아·보육": "family", "다자녀·가족": "family",
+  "한부모·조손": "family", "여성": "family",
+  "결혼·신혼부부": "family",                        // ★ C-13 신설(2026-08-24)
+  // 일·경제  work
+  "일자리·구직": "work", "소상공인·기업": "work", "모집·공모": "work",
+  // 배움·문화  learn
+  "청소년·교육": "learn", "청년": "learn", "문화·체육·관광": "learn",
+  "다문화·외국인": "learn", "보훈·유공자": "learn"
+  /* ⌦ 2026-08-24 C-13 — 「행사·축제·공연」 줄을 «지웠다».
+     그 분야 자체가 없어지고 「문화·체육·관광」이 흡수했다(🟢곳간 반영, data.json 실측 확인).
+     ⛔ 되살리지 말 것. 쓰이지 않는 분야가 표에 남아 있으면, 다음 사람이
+        「화면에 안 나오는데?」를 쫓다가 data.json 까지 헛되이 뒤지게 된다. */
+};
+
+// 분야명에서 앞머리 이모지·기호·공백을 떼어 «표의 키»로 만든다.
+// (「👨‍👩‍👧‍👦 다자녀·가족」처럼 결합 이모지(ZWJ·변형선택자)가 섞여 와도 첫 한글까지 건너뛴다)
+function fgKeyOf(cat) {
+  const s = String(cat == null ? "" : cat).trim();
+  const m = s.match(/[가-힣A-Za-z0-9].*$/);   // 첫 «글자»부터 끝까지
+  return (m ? m[0] : s).trim();
+}
+
+// 분야 하나 → 색군 id. 표에 없으면 null(= 무채색).
+function fieldGroupOf(cat) {
+  return FIELD_GROUP[fgKeyOf(cat)] || null;
+}
+
+/* 분야명을 «앞머리 이모지»와 «이름» 두 조각으로 가른다.
+   ★ 2026-08-24 C-06 — 분야 칩을 «세로 2단»(윗줄 이모지 · 아랫줄 이름)으로 세우기 위해서다.
+     한 줄로 두면 「💰 저소득·기초수급」이 430px 폰에서도 2px 넘쳐 4열이 되지 않는다
+     (🟠단장 기기 실측). 2단으로 세우면 칩 폭이 절반 이하로 줄어 4열이 들어간다.
+   ⚠ 이름은 fgKeyOf 와 «같은 규칙»으로 뽑는다 — 자를 자리를 정하는 곳이 둘이면 어긋난다.
+   ⚠ 이름은 언제나 원본의 «뒤쪽»이므로 길이로 잘라 낸다(indexOf 를 쓰면 이름이 앞머리에
+     우연히 또 나올 때 엉뚱한 데서 잘린다).
+   ⛔ 이름을 줄이거나 「…」으로 자르지 말 것 — 분야 이름은 시민이 고르는 기준이다. */
+function splitFieldLabel(cat) {
+  const s = String(cat == null ? "" : cat).trim();
+  const name = fgKeyOf(s);
+  const icon = (name && s.length > name.length) ? s.slice(0, s.length - name.length).trim() : "";
+  return { icon, name: name || s };
+}
+
+/* 사업 한 건의 «대표 분야» — 카드 머리띠·상세 타일에 쓴다.
+   여러 분야에 걸친 사업이 많다(한 사업이 4개까지도 걸린다).
+
+   ★ 2026-08-24 C-13 뒤 고침 — «시민이 방금 고른 분야»를 먼저 쓴다.
+     왜: 예전에는 «색이 있는 첫 분야»만 봤다. 그런데 categories 의 차례는
+        config.POLICY_CATEGORIES 의 차례라, 「💍 결혼·신혼부부」·「🚚 전입·정착」처럼
+        늘 «다른 분야 뒤»에 오는 분야는 머리띠에 한 번도 나오지 못했다.
+        실측 — 결혼 8건 중 0건, 전입 9건 중 0건이 자기 이름을 못 달았다.
+        그래서 「💍 결혼·신혼부부」로 걸러 놓고도 카드에는 「🎓 청년」이 적혀,
+        시민이 «내가 누른 것과 다른 화면»을 보게 된다.
+     → 걸러 보고 있는 분야가 «한 개»면 그 분야를 머리띠에 적는다. 시민이 방금 누른 말이
+        그대로 카드에 적히는 것이 가장 설명이 필요 없다.
+     ⚠ 전체 보기·검색처럼 «고른 분야가 없거나 여럿»일 때는 예전 규칙(첫 분야) 그대로다.
+     ⛔ preferred 가 그 사업의 분야가 «아니면» 쓰지 않는다 — 엉뚱한 이름이 적히면 안 된다.
+
+   ⚠ 분야 이름을 이 코드에 적지 않는다 — 차례는 data.json(=config.POLICY_CATEGORIES) 이 정한다.
+   돌려주는 값: { label: 화면에 적을 분야명(이모지 포함), group: 색군 id 또는 null } */
+function primaryField(p, preferred) {
+  const cats = (p && Array.isArray(p.categories)) ? p.categories : [];
+  const want = String(preferred == null ? "" : preferred);
+  if (want && cats.indexOf(want) >= 0) {
+    return { label: want, group: fieldGroupOf(want) };
+  }
+  for (let i = 0; i < cats.length; i++) {
+    const g = fieldGroupOf(cats[i]);
+    if (g) return { label: String(cats[i]), group: g };
+  }
+  if (cats.length) return { label: String(cats[0]), group: null };  // 분야는 있는데 표에 없음 → 무채색
+  return { label: "분야 미지정", group: null };
+}
+
+/* 지금 «한 분야만» 걸러 보고 있으면 그 이름, 아니면 빈 문자열.
+   ⚠ 정본은 여기 하나다 — 목록·상세가 같은 값을 봐야 카드와 상세의 머리띠가 어긋나지 않는다. */
+function pickedCategory() {
+  return (state.selectedCats && state.selectedCats.size === 1)
+    ? [...state.selectedCats][0] : "";
+}
+
 // ⚠ 새 화면을 추가하면 «반드시» 이 배열에 이름을 넣는다 — showView 가 여기 적힌 것만
 //    보이고/숨기므로, 빠뜨리면 그 화면이 다른 화면 위에 겹쳐 남는다.
 //    mscode = 「확인 번호로 내 신청 찾기」(2026-08-19 내 신청 화면에서 분리)
@@ -79,6 +188,16 @@ function showView(name, push = true) {
   _navDir = "fwd";
   VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
   $("topSub").hidden = name !== "home";   // 부제는 홈에서만 제목 옆에 표시
+  /* ★ C-01 (2026-08-24 양호창님 지시) — 푸터(톱니바퀴 · 개인정보 처리방침 · 버전 정보 ·
+     앱 아이콘 설치)는 «홈 첫 화면에서만» 보인다.
+     왜: 목록·상세·신청처럼 «일하는 화면»에서는 화면 맨 아래가 신청 버튼이어야 한다.
+        그 아래에 톱니바퀴·버전 같은 «관리자용 꼬리»가 늘 붙어 있으면, 스크롤을 끝까지
+        내렸을 때 마지막에 보이는 것이 할 일이 아니라 군더더기가 된다.
+     ⚠ 지우는 것이 아니라 «감추는 것»이다 — 홈으로 돌아오면 그대로 있다.
+     ⚠ 푸터가 사라져도 본문이 하단 탭바에 가리지 않도록, style.css §Ⓐ 에서
+        main 에 탭바 높이만큼의 아래 여백을 «항상» 준다. */
+  const footEl = document.querySelector(".foot");
+  if (footEl) footEl.hidden = name !== "home";
   if (push) {
     const top = state.navStack[state.navStack.length - 1];
     if (!top || top.v !== name) {
@@ -175,7 +294,12 @@ let _exitArmed = false;    // 홈에서 «한 번 더 누르면 닫힘» 대기 
 const DIRTY_FIELDS = {
   apply: ["applyName", "applyPhone", "applyMemo"],
   inquiry: ["inquiryMemo", "inquiryContact"],
-  pwrite: ["pwTitle", "pwBody", "pwNick", "pwRegion", "pwPin"],
+  /* ★ C-07 (2026-08-24) — 정책제안이 «세 칸»이 되면서 새 textarea 3개를 더했다.
+     빠뜨리면 세 칸에만 글을 쓰다 뒤로 갔을 때 «경고 없이» 글이 사라진다.
+     ⚠ pwBody 는 «옛 글 수정»에서만 보이는 칸이지만 목록에 그대로 둔다 —
+        그 화면에서도 쓰던 글은 지켜져야 한다. 아래 _isDirtyView 가
+        «지금 보이는 칸»만 세므로, 숨어 있는 칸의 옛 값이 헛경고를 내지 않는다. */
+  pwrite: ["pwTitle", "pwBody", "pwProblem", "pwIdea", "pwEffect", "pwNick", "pwRegion", "pwPin"],
 };
 const DIRTY_MSG = "작성 중인 내용이 사라집니다. 나가시겠습니까?";
 
@@ -191,7 +315,15 @@ function _isDirtyView() {
   if (!ids) return false;
   for (let i = 0; i < ids.length; i++) {
     const el = $(ids[i]);
-    if (el && String(el.value || "").trim() !== "") return true;
+    if (!el) continue;
+    /* ⚠ 화면에서 «숨어 있는» 칸은 세지 않는다 (★ 2026-08-24 C-07).
+       정책제안 작성 화면은 «세 칸(새 글)»과 «한 칸(옛 글 수정)» 두 모습으로 바뀐다.
+       숨은 쪽의 값을 지우지 않고 남겨 두므로(되돌아왔을 때 쓰던 글이 살아 있게),
+       숨은 값까지 세면 «비어 있는 화면»인데도 「작성 중인 내용이 사라집니다」가 뜬다.
+       offsetParent 는 display:none 인 조상이 하나라도 있으면 null 이라 이 판정에 딱 맞다.
+       ⛔ el.hidden 만 보지 말 것 — 부모(#pwLegacyWrap)가 숨은 경우를 놓친다. */
+    if (el.offsetParent === null) continue;
+    if (String(el.value || "").trim() !== "") return true;
   }
   return false;
 }
@@ -399,6 +531,20 @@ function tidyText(s) {
   return healOrphanParens(t.replace(/\n{3,}/g, "\n\n").trim());
 }
 
+// ── 📎 「비고」 속 «내부 메모» 걸러내기 — config.strip_internal_notes 의 «사본» ──
+// 엑셀 비고 열은 시민(📌 접수 안내)과 담당자(내부 메모)를 함께 받는다.
+// «※[내부]» 로 시작하는 줄은 담당자끼리 남긴 말이라 시민앱에는 내보내지 않는다.
+// data.json 경로는 build_data.py 가 이미 걸러 주지만, Supabase 에서 «직접» 받는
+// adaptCloudRow() 경로는 여기서 걸러야 한다(두 경로가 같은 화면을 내야 한다).
+// ⚠ 규칙 원본은 config.py 다. 그쪽을 고치면 이 함수도 같이 고칠 것.
+const INTERNAL_NOTE_MARK = "※[내부]";
+function stripInternalNotes(s) {
+  if (s == null) return "";
+  return String(s).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    .split("\n").filter((ln) => !ln.trim().startsWith(INTERNAL_NOTE_MARK))
+    .join("\n").trim();
+}
+
 // ── 본문 속 주소를 «안전한 링크»로 ───────────────────────────────────────
 // 원칙(전자정부 웹품질 지침·KWCAG 2.2):
 //  · XSS 방지 — 데이터 문자열은 전부 esc() 로 이스케이프하고, 링크는 «우리가 만든»
@@ -535,7 +681,8 @@ function adaptCloudRow(r) {
     "연락처": txt(r.contact),
     "담당자이메일": txt(r.manager_email),
     "종료일": txt(r.end_date),          // 컬럼 미생성 시 "" (화면에서 생략)
-    "비고": tidyText(txt(r.note)),
+    // ⚠ «※[내부]» 줄은 담당자 메모라 시민앱에서 지운다(stripInternalNotes 주석 참조)
+    "비고": stripInternalNotes(tidyText(txt(r.note))),
     "categories": Array.isArray(r.categories) ? r.categories.filter(Boolean) : [],
     // 📅 «최신순» 정렬용 날짜. benefits 표의 created_at(등록)·updated_at(수정)에서 온다.
     //    · 내장 data.json 에는 이 값이 «없다»(엑셀에 등록일 칸이 없음) → 빈 문자열.
@@ -1110,23 +1257,130 @@ async function copyLookupCode() {
   }
 }
 
-// 지난 방문 이후 새로 추가된 사업을 감지해 홈에 알림 배너를 띄운다(localStorage 기반).
-const SEEN_KEY = "sangju_seen_programs";
+/* ═══════════════════════════════════════════════════════════════════════
+   🔔 신규 사업 알림 배너 — N-08 (★ 2026-08-24, 양호창님이 실제로 쓰시다 발견)
+   ───────────────────────────────────────────────────────────────────────
+   지시 — 「«새로 추가된 지원사업 11건이 있어요!» 를 한번 확인하거나 X 를 누르면
+           다음부터는 안 뜨도록 해줘. 지금은 주기적으로 뜨는 것 같아.」
+
+   ⛔ 무엇이 잘못이었나 (헤드리스로 재현해 확인함)
+     ① «본 것» 저장이 «사용자 확인»이 아니라 «페이지 로드»에 묶여 있었다.
+        배너를 띄우자마자 현재 목록을 저장해 버려서 —
+          · 확인하지 않고 새로고침해도 배너가 사라졌고(알림이 그냥 증발),
+          · 정작 «다시 뜨는 것»은 못 막았다.
+     ② 이 앱의 사업 목록 «출처는 둘»이다 — 내장 data.json 과 클라우드 benefits.
+        그런데 init() 은 Promise.race(cloudP, FIRST_PAINT_MS) 로 «먼저 오는 쪽»을 쓴다.
+        즉 «같은 기기·같은 자료»라도 회선 사정에 따라 로드마다 출처가 달라진다.
+        두 출처의 사업명이 한 글자라도 다르면(이름 변경·갱신 시차) 출처가 오갈 때마다
+        «없던 이름»이 생겨 새 사업으로 오인된다. → 이것이 「주기적으로 뜬다」의 정체다.
+        실측: 옛 이름판 ↔ 새 이름판을 오가게 하니 «11건» 배너가 매 방문 다시 떴다
+        (양호창님이 보신 숫자와 일치. 2026-08-24 사업명 11건이 실제로 바뀌었다).
+
+   ✅ 어떻게 고쳤나 — 세 겹
+     1) 저장을 «보기 / X 를 누른 그때»로 옮겼다(markNewSeen). 누르기 전에는 계속 뜬다 —
+        확인하지 않았으니 알림이 남아 있는 것이 맞다.
+     2) 닫은 «묶음»의 서명을 따로 기억한다(NEW_DISMISS_KEY). 출처가 오가 계산이 달라져도
+        «같은 사업 묶음»이면 다시 띄우지 않는다.
+     3) «출처별로 따로» 기억한다(seen.cloud / seen.local). 같은 출처끼리만 견주므로
+        출처가 오간 것만으로는 새 사업이 생기지 않는다. 견줄 기록이 없는 출처는
+        «첫 방문»으로 보고 조용히 기록만 한다 — 처음 온 분께 126건을 새 사업이라 알릴 수 없다.
+
+   ⚠ localStorage 를 못 쓰는 환경(사생활 보호 모드·저장소 차단)
+     읽기가 실패하면 seen 이 비어 «첫 방문»이 되어 배너를 띄우지 않는다.
+     즉 «못 쓰면 조용하다» — 매번 뜨는 일은 구조적으로 생기지 않는다.
+     한 세션 안에서는 memStore 가 기억하므로 화면 안에서의 동작은 정상이다.
+   ⛔ 알림 자체를 없애지 말 것. 새 사업을 알리는 것은 이 앱의 쓸모다. 고친 것은 «반복»뿐이다.
+   ═══════════════════════════════════════════════════════════════════════ */
+const SEEN_KEY = "sangju_seen_programs";          // 옛 키(단순 배열) — 넘겨받기용으로만 읽는다
+const SEEN_KEY_V2 = "sangju_seen_programs_v2";    // {cloud:[이름…], local:[이름…]}
+const NEW_DISMISS_KEY = "sangju_new_dismissed";   // {sig:"…"} — 마지막으로 «됐다»고 한 묶음
+const SEEN_MAX = 1000;                            // 이름이 바뀔 때마다 쌓이므로 상한을 둔다
 let newProgramNames = [];
-function checkNewPrograms() {
-  const names = DATA.programs.map((p) => p.사업명);
-  let seen = [];
-  try { seen = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]"); } catch (e) { seen = []; }
-  if (Array.isArray(seen) && seen.length) {
-    const seenSet = new Set(seen);
-    newProgramNames = names.filter((n) => !seenSet.has(n));
-    if (newProgramNames.length) {
-      $("newBannerText").textContent = `새로 추가된 지원사업 ${newProgramNames.length}건이 있어요!`;
-      $("newBanner").hidden = false;
+let newBatchSig = "";
+// 저장소를 못 쓸 때 한 세션만 버티는 대체 기억. localStorage 가 되면 쓰이지 않는다.
+let memStore = null, memDismiss = null;
+
+function _newSrc() { return DATA && DATA.source === "cloud" ? "cloud" : "local"; }
+
+function _readSeenStore() {
+  try {
+    const raw = localStorage.getItem(SEEN_KEY_V2);
+    if (raw) {
+      const o = JSON.parse(raw);
+      if (o && typeof o === "object") {
+        return { cloud: Array.isArray(o.cloud) ? o.cloud : [],
+                 local: Array.isArray(o.local) ? o.local : [] };
+      }
     }
+    // 넘겨받기 — 옛 키(배열 하나)가 있으면 «두 출처 모두»의 기록으로 삼는다.
+    // 한쪽만 채우면 업그레이드 직후 반대쪽 출처에서 126건이 통째로 «새 사업»이 된다.
+    const old = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]");
+    if (Array.isArray(old) && old.length) return { cloud: old.slice(), local: old.slice() };
+  } catch (e) { /* 저장소를 못 읽는다 — 아래 memStore 로 */ }
+  return memStore ? { cloud: memStore.cloud.slice(), local: memStore.local.slice() } : null;
+}
+
+function _writeSeenStore(store) {
+  memStore = { cloud: store.cloud.slice(), local: store.local.slice() };   // 세션 대비는 항상
+  try { localStorage.setItem(SEEN_KEY_V2, JSON.stringify(store)); } catch (e) {}
+}
+
+function _readDismissSig() {
+  try {
+    const o = JSON.parse(localStorage.getItem(NEW_DISMISS_KEY) || "null");
+    if (o && typeof o.sig === "string") return o.sig;
+  } catch (e) {}
+  return memDismiss;
+}
+
+function _writeDismissSig(sig) {
+  memDismiss = sig;
+  try { localStorage.setItem(NEW_DISMISS_KEY, JSON.stringify({ sig: sig, at: Date.now() })); } catch (e) {}
+}
+
+// 새로 나온 이름 묶음의 서명 — 순서가 달라도 같은 묶음이면 같은 값이 나와야 한다.
+function _batchSig(names) { return names.slice().sort().join(""); }
+
+function checkNewPrograms() {
+  const names = (DATA.programs || []).map((p) => p.사업명);
+  const src = _newSrc();
+  const store = _readSeenStore();
+
+  // ① 이 출처로 처음 온 경우 — 배너 없이 «지금 목록»만 기록한다(첫 방문 규칙 유지).
+  if (!store || !store[src] || !store[src].length) {
+    const base = store || { cloud: [], local: [] };
+    base[src] = names.slice(-SEEN_MAX);
+    _writeSeenStore(base);
+    return;
   }
-  // 이번 방문 기준으로 현재 목록을 '본 것'으로 저장(다음 추가분만 알림)
-  try { localStorage.setItem(SEEN_KEY, JSON.stringify(names)); } catch (e) {}
+
+  const seenSet = new Set(store[src]);
+  newProgramNames = names.filter((n) => !seenSet.has(n));
+  if (!newProgramNames.length) return;                 // 새 것이 없다 — 저장할 일도 없다
+
+  // ② 이미 «됐다»고 한 묶음이면 다시 띄우지 않는다(출처가 오가 계산이 달라져도 같은 묶음이면 같은 서명).
+  newBatchSig = _batchSig(newProgramNames);
+  if (newBatchSig && newBatchSig === _readDismissSig()) {
+    markNewSeen(false);                                // 조용히 기록만 하고 끝낸다
+    return;
+  }
+
+  // ③ 띄운다. ⛔ 여기서 저장하지 않는다 — 저장은 «보기 / X 를 누른 그때»(markNewSeen).
+  $("newBannerText").textContent = `새로 추가된 지원사업 ${newProgramNames.length}건이 있어요!`;
+  $("newBanner").hidden = false;
+}
+
+/* 사용자가 «확인»한 순간에만 기록한다. 「보기」로 목록을 열어도 본 것으로 친다
+   (양호창님 「한번 확인하거나 X 를 누르면」).
+   hideBanner=false 는 ②의 «조용한 기록» 경로 — 배너가 애초에 떠 있지 않다. */
+function markNewSeen(hideBanner) {
+  const src = _newSrc();
+  const store = _readSeenStore() || { cloud: [], local: [] };
+  const merged = store[src].concat(newProgramNames.filter((n) => store[src].indexOf(n) < 0));
+  store[src] = merged.slice(-SEEN_MAX);               // 상한을 넘으면 오래된 것부터 버린다
+  _writeSeenStore(store);
+  if (newBatchSig) _writeDismissSig(newBatchSig);
+  if (hideBanner !== false) $("newBanner").hidden = true;
 }
 
 // ---------- 홈: 카테고리 칩 ----------
@@ -1136,9 +1390,25 @@ function renderCategoryChips() {
   //   · 홈의 버튼 총량을 상한(3개) 안으로 줄이면서 «전체 보기» 길은 그대로 남긴다.
   //   · data-cat 이 없으므로 «분야 필터»가 아니다 → 아래 분야 칩 바인딩에서 제외하고,
   //     ui.js 의 «자주 찾는 8개만 펴기»(chip-more)에서도 제외한다(.chip-all).
+  /* ★ C-06 (2026-08-24 양호창님 결정) — 분야 칩은 «세로 2단»이다.
+       ┌──────┐   윗줄 : 이모지(24px)
+       │  🌾  │   아랫줄 : 분야 이름(12px, 가운데)
+       │농림축│
+       │수산업│
+       └──────┘
+     한 줄로 두면 긴 이름 때문에 폰에서 4열이 물리적으로 불가능했다(단장 실측).
+     ⚠ 이모지는 «그대로 둔다» — 규격서 13절 「이모지 금지」의 유일한 예외가 분야 칩이다.
+        (ui.js 의 이모지→SVG 치환 표(DYN)에도 분야 이모지는 들어 있지 않다. 확인함.)
+     ⚠ aria-label 에 «이름만» 넣는다. 낭독기가 「가방 이모지 청소년 교육」처럼 읽지 않고
+        「청소년·교육」이라고 바로 읽는다. 눈으로 보는 정보는 그대로다(색만으로 알리지 않기).
+     ⛔ 이름을 줄이지 말 것 — 목록의 단일 출처는 config.POLICY_CATEGORIES 다. */
   box.innerHTML = `<button class="chip chip-all" type="button">전체</button>` +
-    DATA.categories.map((c) =>
-      `<button class="chip" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+    DATA.categories.map((c) => {
+      const f = splitFieldLabel(c);
+      return `<button class="chip chip-2" data-cat="${esc(c)}" aria-label="${esc(f.name)}">`
+        + (f.icon ? `<span class="chip-ic">${esc(f.icon)}</span>` : "")
+        + `<span class="chip-nm">${esc(f.name)}</span></button>`;
+    }).join("");
   const allChip = box.querySelector(".chip-all");
   if (allChip) allChip.addEventListener("click", () => {
     state.selectedCats = new Set();
@@ -1153,10 +1423,17 @@ function renderCategoryChips() {
 }
 
 // ---------- 맞춤추천: 상황 체크 ----------
-// 한 번에 펴 보이는 선택지는 «8개»까지(규격서 0절 개수 상한 — 시민앱은 엄격히).
-// 상황 17개를 한꺼번에 늘어놓지 않고 자주 고르는 8개만 펴고 나머지는 접는다.
-// ⚠ «없앤 것»이 아니다 — 버튼에 남은 개수를 적어 두어 사라진 줄 알지 않게 한다.
-const SITUATION_OPEN = 8;
+/* ★ C-01 (2026-08-24 양호창님 지시) — «전부 펴 두고, 대신 여러 열로 놓는다».
+   예전에는 자주 고르는 8개만 펴고 나머지를 「더 보기 (9)」로 접었다(개수 상한 8).
+   그런데 한 열로 세로로 쌓여 있어 8개만 해도 화면을 다 먹었고, 자기에게 해당하는
+   상황이 «접힌 쪽»에 있으면 있는 줄도 모르고 지나쳤다 — 분야 칩에서 이미 겪은 일이다.
+   → 접기를 없애고, style.css §Ⓐ 의 다중열 격자로 한 화면에 담는다.
+     세로 길이는 «접었을 때»보다 오히려 짧아진다(17개 ÷ 2~4열).
+   ⛔ 8개만 펴는 방식으로 되돌리지 말 것. 되돌리려면 양호창님 결정이 있어야 한다.
+   ※ 상수를 지우지 않고 Infinity 로 둔 이유 — 아래 buildSituationToggle 이
+     «숨은 개수 ≤ 0» 이면 버튼을 아예 만들지 않으므로, 한 줄만 되돌리면 옛 동작으로
+     돌아갈 수 있다(원복 지점을 한 곳에 남겨 둔다). */
+const SITUATION_OPEN = Infinity;
 
 function renderSituations() {
   const box = $("situationList");
@@ -1273,18 +1550,46 @@ let listOnlyNames = null;   // 특정 사업명만 보여줄 때(예: 신규 사
 //  ⚠ 날짜는 «클라우드에서 온 사업 정보»에만 있다. 내장 data.json 만으로 화면이 뜬
 //    경우(오프라인·클라우드 지연)에는 값이 하나도 없으므로 정렬 컨트롤을 숨기고
 //    기존 순서를 그대로 쓴다 — 아무 일도 못 하는 조작을 화면에 두지 않는다.
+//  "team"    = 팀별순 — 담당팀 «가나다순». 같은 팀 안에서는 기본순 그대로.
+//              ⚠ 공무원앱 A-11 · PC앱 P-09 와 «글자 단위로 같은» 사양이다.
+//                 값 "team" · 이름 「팀별순」 · 목록에서 셋째 자리 · 아래 SORT_TEAM 규칙.
+//              날짜와 달리 팀명은 내장 data.json 에도 늘 있으므로 «항상» 고를 수 있다.
 let listSort = "default";
 function listHasDates() {
   return !!(DATA && DATA.programs && DATA.programs.some((p) => (p._date || "").trim()));
 }
+
+/* ── 팀별순 비교 규칙 (A-11 · P-09 공통 사양) ──────────────────────────────
+   ① 팀명이 «있는» 사업이 먼저, «없는»(빈 문자열·'-'·'담당팀 확인 필요') 사업이 뒤.
+   ② 있는 것끼리는 팀명 가나다순 — localeCompare("ko") · 대소문자/부호 무시하지 않음.
+   ③ 팀명이 같으면 0 을 돌려준다 → Array.sort 의 안정성이 «기본순»을 그대로 지킨다.
+   ⛔ 팀 «색»(teamColor)이나 팀 개수로 정렬하지 않는다 — 시민이 예측할 수 없다.       */
+const TEAM_NONE = ["", "-", "담당팀 확인 필요"];
+function teamSortKey(p) {
+  const s = ((p && p.팀명) || "").trim();
+  return TEAM_NONE.indexOf(s) >= 0 ? "" : s;
+}
+function compareByTeam(a, b) {
+  const ka = teamSortKey(a), kb = teamSortKey(b);
+  if (!ka && !kb) return 0;
+  if (!ka) return 1;
+  if (!kb) return -1;
+  return ka.localeCompare(kb, "ko");
+}
+
 function syncListToolbar() {
   const bar = $("listToolbar");
   if (!bar) return;
-  const ok = listHasDates();
-  bar.hidden = !ok;
-  if (!ok) listSort = "default";
+  // 「팀별순」은 언제나 쓸 수 있으므로 정렬 줄 자체는 «항상» 보인다.
+  bar.hidden = false;
   const sel = $("listSort");
-  if (sel) sel.value = listSort;
+  if (!sel) return;
+  // 「최신순」만 조건부 — 등록일이 하나도 없는 환경에서는 아무 일도 못 하므로 목록에서 뺀다.
+  const opt = sel.querySelector('option[value="new"]');
+  const ok = listHasDates();
+  if (opt) opt.hidden = !ok;
+  if (!ok && listSort === "new") listSort = "default";
+  sel.value = listSort;
 }
 
 let _listPendingTimer = 0;
@@ -1344,6 +1649,9 @@ function renderList() {
       if (!db) return -1;
       return db < da ? -1 : (db > da ? 1 : 0);   // 내림차순(늦은 날짜가 위)
     });
+  } else if (listSort === "team") {
+    // 팀별순 — 위 compareByTeam 이 유일한 규칙. 같은 팀 안은 안정 정렬로 기본순 유지.
+    results = results.slice().sort(compareByTeam);
   }
   $("listMeta").textContent = `${results.length}개 사업`;
   const box = $("listResults");
@@ -1364,6 +1672,8 @@ function renderList() {
     });
     return;
   }
+  // 걸러 보고 있는 분야(있으면) — 카드마다 다시 계산하지 않도록 한 번만 읽는다
+  const picked = pickedCategory();
   box.innerHTML = results.map((p) => {
     const idx = DATA.programs.indexOf(p);
     const teamName = (p.팀명 || "").trim() || "담당팀 확인 필요";
@@ -1386,13 +1696,25 @@ function renderList() {
     //     제목 버튼이므로 Tab 이동·Enter/Space 가 브라우저 기본으로 동작한다.
     //   ⚠ 목록에서 바로 신청하면 상세를 안 볼 수 있으므로, 신청서 맨 위에 사업명을 띄운다
     //     (openApply 가 #applyTitle 에 넣는다 — 잘못 신청 방지).
-    return `<div class="card" data-idx="${idx}">
-      <h3><button class="card-open" type="button" aria-describedby="${did} ${mid}">${esc(p.사업명)}</button></h3>
-      <p id="${did}">${esc(previewText(p.내용 || p.대상자상세기준))}</p>
-      <span class="card-meta" id="${mid}">
-        <span class="team" data-team="${esc(teamName)}" title="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
-      </span>
-      <button class="card-apply tap" type="button" aria-label="${esc(p.사업명)} 신청하기">신청하기</button>
+    /* 🎨 C안 «세움» 머리띠 (규격서 19-3) — 분야색 36px 띠 + 흰 본문 + 그림자 --e3.
+       · 색은 data-fg 로만 «알린다». 실제 색값은 style.css §Ⓕ 한 블록에 있다.
+       · 표에 없는 분야는 data-fg 가 비어 무채색으로 떨어진다(19-2 안전장치).
+       · 색만으로 알리지 않도록 띠 «안»에 분야명 글자를 반드시 함께 둔다(규격서 8절).
+       · 이모지는 «분야 칩»과 같은 예외로 그대로 둔다(규격서 13절). */
+    const fg = primaryField(p, picked);
+    // ⚠ 머리띠의 분야명을 aria-describedby 에 «반드시» 넣는다. 넣지 않으면 화면낭독기
+    //    이용자에게는 분야가 «색으로만» 전해지는 셈이 된다(= 아무것도 안 전해진다).
+    const bid = `cardB${idx}`;
+    return `<div class="card c-card" data-idx="${idx}"${fg.group ? ` data-fg="${fg.group}"` : ""}>
+      <div class="card-band"><span class="card-band-t" id="${bid}">${esc(fg.label)}</span></div>
+      <div class="card-body">
+        <h3><button class="card-open" type="button" aria-describedby="${bid} ${did} ${mid}">${esc(p.사업명)}</button></h3>
+        <p id="${did}">${esc(previewText(p.내용 || p.대상자상세기준))}</p>
+        <span class="card-meta" id="${mid}">
+          <span class="team" data-team="${esc(teamName)}" title="${esc(teamName)}">${esc(teamName)}</span>${noteFlag}
+        </span>
+        <button class="card-apply tap" type="button" aria-label="${esc(p.사업명)} 신청하기">신청하기</button>
+      </div>
     </div>`;
   }).join("");
   box.querySelectorAll(".card").forEach((el) => {
@@ -1415,12 +1737,34 @@ function openDetail(idx) {
   currentIdx = idx;
   const p = DATA.programs[idx];
   $("topTitle").textContent = "사업 상세";
-  // 본문 칸(내용·대상·이용방법·필요서류)은 linkifyHtml 로 «이스케이프 + 주소만 링크».
+  // 본문 칸(내용·대상·이용방법·필요 서류)은 linkifyHtml 로 «이스케이프 + 주소만 링크».
   // 그 밖의 칸(종료일 등)은 순수 텍스트라 esc 만 쓴다.
-  const block = (k, v) => v ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${linkifyHtml(v)}</div></div>` : "";
-  const blockText = (k, v) => v ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : "";
-  const blockHtml = (k, html) => html ? `<div class="detail-block"><div class="k">${k}</div><div class="v">${html}</div></div>` : "";
-  const tags = (p.categories || []).map((c) => `<span class="t">${esc(c)}</span>`).join("");
+  /* ★ C-04 (2026-08-24) — 상세 화면을 «글자 나열»에서 «항목별 타일»로.
+     예전에는 제목·본문이 위에서 아래로 줄줄이 이어져, 어디까지가 «대상»이고
+     어디부터가 «이용 방법»인지 눈으로 끊기 어려웠다.
+     → 항목마다 아이콘 + 분야 색군 틴트 머리 + 흰 본문의 «타일»로 세운다(규격서 19-2·19-4).
+     ⚠ 만드는 함수는 아래 tile() 하나뿐이다. 새 항목이 생겨도 여기만 쓴다.
+     ⚠ wide=true 는 «글이 긴» 항목(내용·대상) — 넓은 화면에서 한 줄을 다 쓴다.
+        짧은 항목까지 넓히면 글줄이 길어져 오히려 읽기 나빠진다(규격서 19-4 각주). */
+  const tile = (icon, k, innerHtml, wide) => innerHtml
+    ? `<section class="d-tile${wide ? " d-tile--wide" : ""}">
+         <h3 class="d-tile-k">${icon}<span>${esc(k)}</span></h3>
+         <div class="d-tile-v">${innerHtml}</div>
+       </section>`
+    : "";
+  const block = (icon, k, v, wide) => v ? tile(icon, k, linkifyHtml(v), wide) : "";
+  const blockText = (icon, k, v, wide) => v ? tile(icon, k, esc(v), wide) : "";
+  const blockHtml = (icon, k, html, wide) => html ? tile(icon, k, html, wide) : "";
+  /* 이 사업의 «대표 분야» — 머리띠 색과 타일 틴트가 모두 여기서 나온다(분야→색군 표는 파일 위 한 곳).
+     ⚠ 목록과 «같은 값»을 쓴다(pickedCategory). 목록 카드에 「💍 결혼·신혼부부」라고 적혀 있었는데
+        눌러서 들어온 상세가 「🎓 청년」이면, 시민은 다른 사업을 연 줄 안다. */
+  const fg = primaryField(p, pickedCategory());
+  /* 분야 칩 — 머리띠에 이미 적힌 «대표 분야»는 빼고 «나머지»만 보여 준다.
+     같은 말을 바로 위아래에 두 번 적으면 화면이 어수선해지고, 분야가 하나뿐인 사업에서는
+     띠와 칩이 똑같은 글자로 겹쳐 보인다. 분야가 하나뿐이면 칩 줄 자체가 사라진다. */
+  const tags = (p.categories || [])
+    .filter((c) => String(c) !== fg.label)
+    .map((c) => `<span class="t">${esc(c)}</span>`).join("");
   // 담당: 팀명이 없으면 '담당팀 확인 필요'. 팀명은 팀별 색 배지로 표시(색은 렌더 후 주입).
   const team = (p.팀명 || "").trim() || "담당팀 확인 필요";
   const org = (p.기관명 || "").trim();
@@ -1453,26 +1797,50 @@ function openDetail(idx) {
          <p class="notice-v">${linkifyHtml(note)}</p>
        </div>`
     : "";
+  // 타일 아이콘 — 인라인 SVG(이모지 금지, 규격서 13절). 아이콘은 «장식»이라 aria-hidden.
+  const SV = (d) => `<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const IC_BOOK = SV('<path d="M4 4.6h5.6a3 3 0 0 1 2.4 1.2 3 3 0 0 1 2.4-1.2H20v13h-5.6a3 3 0 0 0-2.4 1.2 3 3 0 0 0-2.4-1.2H4z"/><path d="M12 5.8v13"/>');
+  const IC_PEOPLE = SV('<circle cx="8" cy="7.6" r="2.8"/><circle cx="16.4" cy="9" r="2.4"/><path d="M2.8 19.4a5.2 5.2 0 0 1 10.4 0"/><path d="M14.4 19.4a4.2 4.2 0 0 1 6.8 0"/>');
+  const IC_PEN = SV('<path d="M4 20h4.2L20 8.2 15.8 4 4 15.8z"/><path d="m14.4 5.4 4.2 4.2"/>');
+  const IC_COPY = SV('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15h-.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/>');
+  const IC_CAL = SV('<rect x="3.6" y="5" width="16.8" height="15" rx="2.2"/><path d="M3.6 9.6h16.8"/><path d="M8.4 3.2v3.4M15.6 3.2v3.4"/>');
+  const IC_PHONE = SV('<path d="M6.4 3.6h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.4 5.8a2 2 0 0 1 2-2.2z"/>');
+  /* 「문의」 — 예전에는 «담당»과 «연락처»가 따로 놓여 있었다. 시민이 찾는 것은
+     «어디에 물어보나» 하나이므로 한 타일로 합친다(요구 C-04 의 「문의」). */
+  const askHtml = [chargeHtml, telHtml].filter(Boolean).join('<span class="d-tile-sep"></span>');
+  /* 「지급 시기」 — 아직 자료에 그 칸이 없다(🟢곳간 C-05·C-12 에서 새 필드가 생긴다).
+     ⚠ 필드가 생기면 «이 한 줄»만 살아난다 — 화면 코드를 다시 고칠 필요가 없게 미리 읽어 둔다.
+     그때까지는 지금 있는 「종료일」을 «신청 마감»으로 보여 준다(없는 말을 지어내지 않는다). */
+  const payWhen = String(p.지급시기 || "").trim();
+  const whenTile = payWhen
+    ? blockText(IC_CAL, "지급 시기", payWhen)
+    : blockText(IC_CAL, "신청 마감", p.종료일);
   $("detailContent").innerHTML = `
-    <h2>${esc(p.사업명)}</h2>
-    ${tags ? `<div class="detail-tags">${tags}</div>` : ""}
+    <div class="detail-head c-card"${fg.group ? ` data-fg="${fg.group}"` : ""}>
+      <div class="card-band"><span class="card-band-t">${esc(fg.label)}</span></div>
+      <div class="card-body">
+        <h2>${esc(p.사업명)}</h2>
+        ${tags ? `<div class="detail-tags">${tags}</div>` : ""}
+      </div>
+    </div>
     ${noteHtml}
-    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.6h5.6a3 3 0 0 1 2.4 1.2 3 3 0 0 1 2.4-1.2H20v13h-5.6a3 3 0 0 0-2.4 1.2 3 3 0 0 0-2.4-1.2H4z"/><path d="M12 5.8v13"/></svg> 사업 내용', p.내용)}
-    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="7.6" r="2.8"/><circle cx="16.4" cy="9" r="2.4"/><path d="M2.8 19.4a5.2 5.2 0 0 1 10.4 0"/><path d="M14.4 19.4a4.2 4.2 0 0 1 6.8 0"/></svg> 지원 대상', p.대상자상세기준)}
-    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4.2L20 8.2 15.8 4 4 15.8z"/><path d="m14.4 5.4 4.2 4.2"/></svg> 이용 방법', p.이용방법)}
-    ${block('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15h-.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg> 필요 서류', p.필요서류)}
-    <div id="formsDownload"></div>
-    ${blockHtml('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 9.6V20h15.2V9.6"/><path d="M3 9.4 5.2 4h13.6L21 9.4a2.9 2.9 0 0 1-5.7 0 2.9 2.9 0 0 1-5.7 0 2.9 2.9 0 0 1-5.6 0z"/></svg> 담당', chargeHtml)}
-    ${blockHtml('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.4 3.6h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.4 5.8a2 2 0 0 1 2-2.2z"/></svg> 연락처', telHtml)}
-    ${blockText('<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 5 3.4 3v1.6H6.6V12L10 9z"/><path d="M12 13.6V21"/></svg> 종료일', p.종료일)}
-    <button class="big-btn primary full" id="detailApply"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11"/></svg> 신청하기</button>
+    <div class="detail-tiles"${fg.group ? ` data-fg="${fg.group}"` : ""}>
+      ${block(IC_BOOK, "지원 내용", p.내용, true)}
+      ${block(IC_PEOPLE, "지원 대상", p.대상자상세기준, true)}
+      ${block(IC_PEN, "이용 방법", p.이용방법)}
+      ${block(IC_COPY, "필요 서류", p.필요서류)}
+      <div id="formsDownload"></div>
+      ${whenTile}
+      ${blockHtml(IC_PHONE, "문의", askHtml)}
+    </div>
+    <button class="big-btn primary full" id="detailApply">${SV('<path d="m5 13 4 4 10-11"/>')} 신청하기</button>
     ${callHtml}
   `;
   showView("detail");
   const teamEl = $("detailContent").querySelector(".detail-team");
   if (teamEl) applyTeamColor(teamEl, teamEl.dataset.team);
   $("detailApply").addEventListener("click", () => openApply(idx));
-  // 📎 필요서류 서식 다운로드(Supabase) — 비동기로 채운다.
+  // 📎 필요 서류 서식 다운로드(Supabase) — 비동기로 채운다.
   // 등록된 서식이 없거나 저장소 미준비면 섹션 자체를 숨긴 채로 둔다(기존 화면 무손상).
   renderFormsDownload(p, idx);
 }
@@ -1482,11 +1850,13 @@ function openDetail(idx) {
 async function renderFormsDownload(p, idx) {
   const host = $("formsDownload");
   if (!host || !window.SangjuForms) return;
+  // 비어 있을 때는 class 까지 지운다 — 타일 격자 안의 «빈 칸»이 남지 않게(#formsDownload:empty).
+  const clear = () => { host.className = ""; host.innerHTML = ""; };
   let rows = [];
   try { rows = await SangjuForms.listForms(p); } catch (e) { rows = []; }
   // 그 사이 다른 사업으로 이동했으면(빠른 전환) 낡은 결과를 반영하지 않는다.
   if (currentIdx !== idx) return;
-  if (!rows || !rows.length) { host.innerHTML = ""; return; }
+  if (!rows || !rows.length) { clear(); return; }
   const items = rows.map((row) => {
     const nm = String(row.file_name || "서식");
     const ext = (nm.split(".").pop() || "").toUpperCase();
@@ -1505,11 +1875,11 @@ async function renderFormsDownload(p, idx) {
         </a>
       </li>`;
   }).join("");
-  if (!items) { host.innerHTML = ""; return; }
-  host.innerHTML = `<div class="detail-block">
-      <div class="k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15h-.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg> 필요서류 서식 다운로드</div>
-      <div class="v"><ul class="forms-dl-list">${items}</ul></div>
-    </div>`;
+  if (!items) { clear(); return; }
+  // 상세의 다른 항목들과 «같은 타일 모양»(.d-tile) — 새 모양을 만들지 않는다(규격서 0절).
+  host.className = "d-tile";
+  host.innerHTML = `<h3 class="d-tile-k"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6v10.2m0 0-3.4-3.4M12 13.8l3.4-3.4"/><path d="M4.6 15.4v2.8a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-2.8"/></svg><span>필요 서류 서식 내려받기</span></h3>
+    <div class="d-tile-v"><ul class="forms-dl-list">${items}</ul></div>`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1943,34 +2313,15 @@ async function sendApply() {
     if (el && el.focus) { try { el.focus({ preventScroll: false }); } catch (e) { el.focus(); } }
     return;
   }
-  const key = window.WEB3FORMS_KEY || "";
-  if (!key || key.indexOf("여기에") !== -1) {
-    setFormError("applyFormErr",
-      "신청 접수 설정이 아직 완료되지 않았습니다. 담당 부서로 연락해 주세요. (" + SUPPORT_EMAIL + ")");
-    return;
-  }
-
-  // 기계 판독용 페이로드(공무원 PC 자동접수가 파싱) — 마커로 감싼다
-  const payload = {
-    사업명: p.사업명, 신청자: name, 연락처: phone, 문의사항: memo,
-    // 🏘 읍·면·동 — PC 자동접수.py 가 접수대장에 기록한다(키 이름 «읍면동» 고정).
-    읍면동: region,
-    담당팀: p.팀명, 담당자이메일: p.담당자이메일, 기관명: p.기관명,
-  };
-  const form = {
-    access_key: key,
-    subject: `[모바일신청] ${p.사업명} - ${name}`,
-    from_name: "상주시 정책플랫폼(모바일)",
-    "사업명": p.사업명,
-    "신청자": name,
-    "연락처": phone,
-    "읍면동": region || "(미선택)",
-    "문의사항": memo || "(없음)",
-    "담당팀": p.팀명 || "-",
-    "담당자이메일": p.담당자이메일 || "-",
-    payload: "@@SJSTART@@" + JSON.stringify(payload) + "@@SJEND@@",
-    botcheck: "",
-  };
+  /* 📮 «신청 메일»은 없다 — 2026-08-24 양호창님 지시로 «완전히» 제거했다.
+     예전에는 신청 한 건이 두 갈래로 나갔다.
+       ① Supabase 저장(공무원앱이 실시간으로 보는 정본)
+       ② Web3Forms → 담당 부서 메일 → PC 자동접수.py 가 엑셀 접수대장에 기록
+     ②를 없앴으므로 «신청이 남는 곳은 ① 하나뿐»이다. 이 사실이 아래 모든 안내 문구를 바꾼다.
+     ⛔ 여기에 access_key·subject·payload 를 다시 만들지 말 것. 시민의 이름·연락처가
+        외부 폼메일 서비스로 나가는 통로를 되살리는 일이다(처리방침 5절도 함께 고쳐야 한다).
+     ⚠ window.WEB3FORMS_KEY 는 «불편신고»(sendInquiry)가 아직 쓰므로 config.js 에 남아 있다.
+        신청 경로에서는 키를 «읽지도 않는다» — 키가 비어 있어도 신청은 정상 접수된다. */
 
   const btn = $("applySend");
   // ⚠ textContent 로 저장·복원하면 버튼 «안의 SVG 아이콘»이 사라진다(글자만 남는다).
@@ -1991,9 +2342,8 @@ async function sendApply() {
   const receiptNo = (window.SangjuApply && SangjuApply.genReceiptNo)
     ? SangjuApply.genReceiptNo(1) : "";
   // 🔑 조회코드(클라 생성) — 나중에 «내 신청 현황»을 여는 열쇠.
-  //    ⚠ 메일(Web3Forms) 본문에는 «넣지 않는다». 메일 경로(PC 자동접수)는 엑셀 접수대장에
-  //      기록할 뿐 Supabase 행을 만들지 않아, 그 코드로는 조회되지 않는다.
-  //      → 코드는 Supabase 저장이 «성공했을 때만» 기기에 보관하고 화면에 보여 준다.
+  //    ⚠ 코드는 Supabase 저장이 «성공했을 때만» 기기에 보관하고 화면에 보여 준다.
+  //      저장이 실패하면 조회할 행 자체가 없으므로 코드도 의미가 없다.
   //    ⚠ genLookupCode 는 안전한 난수를 만들 수 없으면 «오류를 낸다»(Math.random 폴백 없음).
   //      그때는 신청을 진행하지 않고 멈춘다 — 예측 가능한 코드로 남의 신청이 열리면 안 된다.
   let lookupCode = "";
@@ -2019,16 +2369,18 @@ async function sendApply() {
     if (attachAvail === "ok") attachTicket = makeAttachTicket();
   }
 
-  // ── 두 경로를 «독립» 실행 ──────────────────────────────────────────────
-  //  (1) Supabase 저장 = «접수»의 정본(공무원앱 실시간 접수)  (2) 메일 = 보조 알림.
-  //  ⚠ 어느 하나가 실패해도 다른 하나로 접수되면 «완료»로 본다(둘 다 실패해야 실패 안내).
-  //  ⚠ applications 테이블이 아직 없을 수 있으므로(미실행) Supabase 실패는 삼키고
-  //     기존 메일 경로(PC 자동접수)가 접수를 이어받게 한다 — 앱이 깨지지 않게 방어.
-  let supaOK = false, mailOK = false, supaErr = null, mailErr = null;
+  /* ── 접수 경로는 «하나»다 (2026-08-24) ────────────────────────────────
+     Supabase 저장 = 접수 그 자체. 공무원앱이 실시간으로 보는 정본이고, 여기 실패하면
+     신청은 «아무 데도 남지 않는다». 예전처럼 받쳐 주는 메일 경로는 없다.
+     ⛔ 그러므로 이 실패를 «조용히» 삼키면 안 된다 — 시민은 접수된 줄 알고 화면을 닫는다.
+        실패하면 완료 화면을 «절대» 그리지 않고, 「접수되지 않았으니 다시 신청해 주세요」를
+        분명히 말한다(아래 else 가지).
+     ⚠ 실패해도 입력하신 값은 그대로 둔다(칸을 비우지 않고, 임시저장도 지우지 않는다) —
+        시민이 그 자리에서 버튼만 다시 누르면 되도록. */
+  let supaOK = false, supaErr = null;
   let savedReceipt = receiptNo;
-  let supaWhy = "";          // 클라우드 저장이 실패했을 때 완료 화면에 덧붙일 «다음 할 일»
 
-  // (1) Supabase 직접 저장 — 개인정보(이름·연락처)가 클라우드로 전송됨(프로토타입·승인됨).
+  // Supabase 직접 저장 — 개인정보(이름·연락처)가 클라우드로 전송됨(프로토타입·승인됨).
   if (window.SangjuApply && SangjuApply.submitApplication) {
     try {
       const insertRow = {
@@ -2056,10 +2408,11 @@ async function sendApply() {
          그런데 region 은 이제 «필수»라 늘 값이 있으므로, 컬럼이 없는 서버에서는
          attach_ticket 처럼 «값이 있을 때만 넣기»로는 막을 수 없다 —
          그대로 두면 supabase/읍면동_260820.sql 을 실행하기 «전»에 배포될 경우
-         모든 신청이 저장에 실패한다(메일로만 접수되고 확인 번호가 안 나온다).
+         모든 신청이 저장에 실패한다 — 받쳐 주는 메일 경로가 없어진 지금은
+         그 순간 «신청 자체가 안 된다»(예전에는 메일로라도 접수됐다). 이 되돌림이 더 중요해졌다.
          → 한 번 넣어 보고, «그 컬럼이 없다»는 뜻의 오류면 빼고 «한 번만» 다시 보낸다.
          ⚠ 이 되돌림은 컬럼이 생기면 저절로 안 쓰이게 된다(스스로 낫는 구조).
-         ⚠ 메일 경로에는 읍·면·동이 «그대로» 실려 가므로 SQL 적용 전에도 자료는 남는다.
+         ⚠ 이때 읍·면·동은 어디에도 기록되지 않는다(통계만 비고, 접수는 정상).
          ⛔ 재시도를 두 번 이상 돌리지 말 것 — 같은 신청이 두 건 저장될 수 있다. */
       if (region) insertRow.region = region;
       let row;
@@ -2085,8 +2438,7 @@ async function sendApply() {
       supaOK = true;
       if (row && row.receipt_no) savedReceipt = row.receipt_no;
       // 이 기기에 조회코드를 보관 → 다음에 «내 신청 현황»에서 자동으로 조회된다.
-      //   ⚠ 보관 조건은 여전히 «Supabase 저장 성공»이다(여기 try 안에서만 부른다).
-      //     메일만 나간 접수는 Supabase 행이 없어 그 코드로 조회되지 않는다.
+      //   ⚠ 보관 조건은 «Supabase 저장 성공»이다(여기 try 안에서만 부른다).
       saveLookupEntry({
         code: lookupCode,
         receipt_no: savedReceipt,
@@ -2095,46 +2447,29 @@ async function sendApply() {
       });
     } catch (e) {
       supaErr = e;
-      // «조용한 실패» — 시민에게는 알리지 않는다(접수 자체는 메일 경로로 이어진다).
-      //   시민을 불안하게 만들 이유가 없고, 시민이 할 수 있는 조치도 없다.
-      //   대신 원인 분류(conn/perm/setup/other)를 콘솔에 함께 남겨,
-      //   «닿지 못함(conn)»과 «권한 거부(perm)»를 나중에 구분할 수 있게 한다.
-      //   ⚠ perm 이 반복되면 서버 정책이 아니라 «클라이언트가 RETURNING 을 쓰고 있지 않은지»를
-      //     먼저 의심할 것(2026-08-18 실제 장애 원인).
+      /* ⛔ 예전에는 여기가 «조용한 실패»였다 — 메일 경로가 접수를 이어받았으므로
+         시민에게 알릴 이유가 없었다. 메일이 사라진 지금 그 침묵은 «거짓»이다.
+         → 여기서는 원인만 콘솔에 남기고, 시민 안내는 아래 else 가지가 «접수 실패»로 말한다.
+         원인 분류(conn/perm/setup/other)를 함께 남겨 «닿지 못함(conn)»과
+         «권한 거부(perm)»를 나중에 구분할 수 있게 한다.
+         ⚠ perm 이 반복되면 서버 정책이 아니라 «클라이언트가 RETURNING 을 쓰고 있지 않은지»를
+           먼저 의심할 것(2026-08-18 실제 장애 원인). */
       let kind = "";
       try { kind = (window.SangjuApply && SangjuApply.errKind) ? SangjuApply.errKind(e) : ""; } catch (e2) {}
-      console.warn("[신청] Supabase 저장 실패(메일 경로로 접수 진행) kind=" + kind + ":", e);
-      /* ⭐ 시민에게 «무엇을 해야 하는지»를 남긴다 (2026-08-20)
-         예전에는 완료 화면에 「온라인 조회 등록에 실패했습니다」 한 줄만 떴다.
-         맞는 말이지만 시민은 그다음에 무엇을 할지 알 수 없었다.
-         ⛔ 여기서 «다시 신청해 보세요» 라고 하면 안 된다 — 메일 경로로 이미 접수됐으므로
-            다시 누르면 같은 신청이 두 건이 된다(되돌릴 수 없다).
-            두 경로가 «모두» 실패한 경우의 재시도 안내는 아래 else 가지에 따로 있다. */
-      supaWhy = "접수번호와 확인 번호는 발급되지 않아 「내 신청 현황」에서는 조회되지 않습니다."
-        + " 진행 상태가 궁금하시면 담당 부서(" + SUPPORT_EMAIL + ")로 문의해 주세요.";
+      console.warn("[신청] 접수 실패(경로가 하나뿐이라 이 신청은 어디에도 남지 않음) kind=" + kind + ":", e);
     }
+  } else {
+    /* 접수 모듈(apply_client.js)이 아예 실려 있지 않은 경우.
+       예전에는 메일이 대신 받아 줬지만 이제는 «신청을 받을 방법이 없다» —
+       조용히 넘어가지 말고 아래 else 가지가 실패로 안내하게 둔다. */
+    supaErr = new Error("apply_client.js 미로딩 — 접수 모듈 없음");
+    console.warn("[신청] 접수 모듈(SangjuApply.submitApplication)이 없습니다.");
   }
 
-  // (2) 메일(Web3Forms) — 기존 로직 그대로. Supabase 성공/실패와 무관하게 항상 발송.
-  try {
-    const res = await fetch("https://api.web3forms.com/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(form),
-    });
-    const j = await res.json();
-    if (!j.success) throw new Error(j.message || "전송 실패");
-    mailOK = true;
-  } catch (e) {
-    mailErr = e;
-    console.warn("[신청] 메일 전송 실패:", e);
-  }
-
-  // 📎 (3) 첨부 업로드 — «접수가 성공한 뒤»에만. 통행증은 그 접수 행에만 열린다.
-  //    메일로만 접수된 경우(supaOK=false)에는 통행증을 검사할 행이 없어 올릴 수 없다.
+  // 📎 첨부 업로드 — «접수가 성공한 뒤»에만. 통행증은 그 접수 행에만 열린다.
   let attachMsg = "";
-  if (attachFiles.length) {
-    if (supaOK && attachTicket) {
+  if (attachFiles.length && supaOK) {
+    if (attachTicket) {
       btn.textContent = "서류 올리는 중...";
       btn.disabled = true;
       const r = await uploadAttachments(savedReceipt, attachTicket);
@@ -2145,6 +2480,8 @@ async function sendApply() {
       attachMsg = "증빙서류는 보내지 못했습니다. 신청은 접수되었으니 담당 부서로 연락해 주세요.";
     }
   }
+  // ⚠ 접수가 실패했으면 첨부 안내를 만들지 않는다 — 완료 화면 자체를 그리지 않으므로
+  //    「신청은 접수되었으니」가 붙은 문장이 나가면 안 된다.
 
   // Supabase 저장이 성공했다 = 서버에 닿았다. 앱을 켤 때 프로브가 네트워크 때문에
   // 실패해 «아직 모름»으로 남아 있다면, 완료 화면을 그리기 «전에» 한 번 더 확인한다.
@@ -2158,28 +2495,37 @@ async function sendApply() {
   btn.disabled = false;
   btn.innerHTML = orig;
 
-  if (supaOK || mailOK) {
+  if (supaOK) {
     // 💾 접수됐으니 이 기기에 남긴 임시 저장을 «즉시» 지운다(보관 규약 ①).
     //    ⚠ 완료 화면을 그리기 «전»에 지운다 — 뒤로 갔다 오면 옛 내용이 되살아나면 안 된다.
+    //    ⛔ 이 두 줄은 «성공했을 때만» 부른다. 실패했는데 지우면 시민이 적은 내용이
+    //       사라져 처음부터 다시 쓰게 된다(어르신에게는 사실상 포기다).
     clearApplyDraft();
     hideApplyDraftBanner();
-    // 접수번호·조회코드는 Supabase 저장이 성공했을 때만 표시(그 값이 공무원앱과 공유되는 정본).
-    //   ⚠ supaOK 를 «함께» 넘긴다 — 저장이 실패했으면 showDone 이 그 사실을 한 줄로 알린다.
-    //     (예전에는 값만 감추고 이유를 말하지 않아, 시민도 담당자도 무슨 일이 있었는지 몰랐다)
-    showDone(p, supaOK ? savedReceipt : "", supaOK ? lookupCode : "", attachMsg, supaOK, supaWhy);
+    showDone(p, savedReceipt, lookupCode, attachMsg);
     attachFiles = [];             // 완료됐으니 비운다(뒤로 갔다 와도 딸려 가지 않게)
     renderAttachList();
   } else {
-    // ⚠ 예전에는 여기서 예외 메시지를 «그대로» 화면에 붙였다.
-    //    두 경로가 모두 실패하는 상황은 대부분 네트워크 문제라, 시민에게는
-    //    「(TypeError: Failed to fetch)」 같은 영어 개발자 문구가 그대로 보였다.
-    //    무슨 뜻인지 알 수 없고, 다음에 무엇을 해야 하는지도 알려 주지 않는다.
-    //    → 화면에는 «지금 할 수 있는 일»만 남기고, 원인은 콘솔에 남긴다(기존 진단 유지).
-    const detail = (supaErr && supaErr.message) || (mailErr && mailErr.message) || "";
-    console.warn("[신청] 두 경로 모두 실패 — 원인:", detail, { supaErr, mailErr });
+    /* ⭐⭐ 접수가 «되지 않았다» — 이 문장이 이번 구조에서 가장 중요하다 (2026-08-24)
+       경로가 하나뿐이라, 여기 도달했다는 것은 신청이 어디에도 남지 않았다는 뜻이다.
+       시민이 「접수됐겠지」 하고 화면을 닫으면 그대로 사라진다.
+       → «접수되지 않았다» + «다시 신청해 주세요»를 «반드시» 함께 말한다.
+       ⛔ 「전달되었습니다」·「담당 부서로 접수」 같은 말을 여기에 쓰지 말 것.
+       ⛔ 예외 메시지 원문(TypeError: Failed to fetch, 42501 …)을 화면에 붙이지 말 것 —
+          시민이 알 수 없는 영어 문구다. 원인은 콘솔에만 남긴다(기존 진단 유지).
+       ⚠ 입력하신 값은 칸에 그대로 남아 있고 임시저장도 지우지 않았다 —
+          「신청서 보내기」를 한 번 더 누르시면 된다. 그래서 그렇게 안내한다. */
+    const detail = (supaErr && supaErr.message) || "";
+    console.warn("[신청] 접수 실패 — 원인:", detail, supaErr);
     setFormError("applyFormErr",
-      "신청 접수에 실패했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요. "
+      "신청이 접수되지 않았습니다. 적어 주신 내용은 그대로 남아 있으니, "
+      + "인터넷 연결을 확인하신 뒤 아래 「신청서 보내기」를 다시 눌러 주세요. "
       + "계속 안 되시면 담당 부서(" + SUPPORT_EMAIL + ")로 알려 주세요.");
+    // 오류 안내로 초점을 옮긴다 — 화면 아래쪽이라 못 보고 지나칠 수 있다(가장 위험한 지점).
+    const errEl = $("applyFormErr");
+    if (errEl) {
+      try { errEl.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* 무시 */ }
+    }
   }
 }
 
@@ -2245,6 +2591,10 @@ async function sendInquiry() {
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.textContent = "보내는 중...";
+  /* 📮 이 앱에 남은 «유일한» 메일 발송이다 (2026-08-24)
+     사업신청 메일은 완전히 제거됐고, 여기 불편신고만 Web3Forms 를 쓴다.
+     시민이 앱 오류를 알릴 다른 길이 없으므로 «그대로 둔다».
+     ⛔ 이 경로를 신청 접수에 다시 쓰지 말 것. */
   try {
     const res = await fetch("https://api.web3forms.com/submit", {
       method: "POST",
@@ -2262,9 +2612,6 @@ async function sendInquiry() {
     if ($("doneStatus")) $("doneStatus").hidden = true;
     // 직전 신청의 첨부 안내가 남지 않게 함께 감춘다
     if ($("doneAttach")) { $("doneAttach").textContent = ""; $("doneAttach").hidden = true; }
-    // ☁ 직전 신청의 «클라우드 저장 실패» 안내도 함께 감춘다.
-    //    불편신고는 클라우드에 저장하지 않으므로 그 줄이 남아 있으면 «거짓 안내»가 된다.
-    if ($("doneCloudWarn")) { $("doneCloudWarn").textContent = ""; $("doneCloudWarn").hidden = true; }
     document.querySelector("#view-done h2").textContent = "알려 주셔서 감사합니다";
     document.querySelector("#view-done .done-desc").innerHTML =
       "담당자에게 내용이 전달되었습니다.<br>빠르게 확인하겠습니다.";
@@ -2281,18 +2628,21 @@ async function sendInquiry() {
   }
 }
 
-/* ⚠ supaOK — 클라우드(=공무원앱이 보는 정본)에 저장됐는가.
-     false 면 접수번호·확인 번호가 없고, «왜 없는지»를 아래 doneCloudWarn 이 알린다.
-     ⛔ 인자를 빼지 말 것. 빼면 다시 «값만 조용히 사라지는» 화면으로 돌아간다.
-     ⚠ 부르는 곳이 늘어나면 그곳에서도 반드시 넘길 것(안 넘기면 undefined → 경고가 뜬다).
-        불편신고 완료 화면은 showDone 을 «지나가지 않는다» — sendInquiry 가 직접 그리므로
-        거기서도 이 줄을 감춰 둔다(직전 신청의 안내가 남지 않게). */
-function showDone(p, receiptNo, lookupCode, attachMsg, supaOK, cloudWhy) {
+/* ⭐ 이 화면은 «접수가 실제로 성공했을 때만» 그린다 (2026-08-24)
+     접수 경로가 Supabase 하나뿐이므로, 여기까지 왔다는 것은 정본에 행이 남았다는 뜻이고
+     접수번호·확인 번호가 «반드시» 있다.
+     ⛔ 실패한 신청을 이 화면으로 보내지 말 것 — 시민이 접수된 줄 알고 화면을 닫는다.
+        실패 안내는 sendApply 의 else 가지(#applyFormErr)가 «접수되지 않았습니다»로 말한다.
+     ⚠ 예전에 있던 supaOK·cloudWhy 인자와 doneCloudWarn 줄은 «메일로는 접수됐지만
+        클라우드 저장은 실패한» 상태를 알리기 위한 것이었다. 그 상태가 사라졌으므로 함께 걷어냈다.
+        ⛔ 되살리지 말 것 — 지금 구조에서는 «접수됐지만 조회는 안 됨»이 존재할 수 없다. */
+function showDone(p, receiptNo, lookupCode, attachMsg) {
   $("topTitle").textContent = "접수 완료";
   // 문의 완료로 바뀌었던 문구를 신청 완료용으로 복원
   document.querySelector("#view-done h2").textContent = "신청이 접수되었습니다";
+  // ⚠ index.html 의 .done-desc 와 «같은 글자»여야 한다(불편신고 완료가 덮어쓴 것을 되돌리는 자리).
   document.querySelector("#view-done .done-desc").innerHTML =
-    "담당 부서로 신청 내용이 전달되었습니다.<br>처리 결과는 담당자가 연락처로 안내드립니다.";
+    "신청 내용이 담당 부서로 접수되었습니다.<br>처리 결과는 담당자가 연락처로 안내드립니다.";
   $("doneProgram").textContent = p.사업명;
   // 접수번호(Supabase 저장 성공 시) — 있으면 표시, 없으면 숨김
   const rc = $("doneReceipt");
@@ -2307,21 +2657,6 @@ function showDone(p, receiptNo, lookupCode, attachMsg, supaOK, cloudWhy) {
     const m = (attachMsg || "").trim();
     at.textContent = m;
     at.hidden = !m;
-  }
-  /* ☁ 클라우드 저장 실패 안내 — «접수는 됐지만 온라인 조회는 안 된다»는 사실을 알린다.
-     ⚠ 문구는 supabase/신청정책_복구_진단.sql 에 합의된 «그대로»다. 임의로 바꾸지 말 것
-        (세 앱·SQL 문서가 같은 문장을 쓴다).
-     ⛔ 오류 원문(42501·Failed to fetch 등)을 덧붙이지 말 것 — 콘솔에만 남긴다. */
-  const cw = $("doneCloudWarn");
-  if (cw) {
-    if (supaOK) { cw.textContent = ""; cw.hidden = true; }
-    else {
-      /* 첫 문장은 합의된 «그대로» 두고, 뒤에 «시민이 다음에 할 일»만 덧붙인다
-         (2026-08-20 — 안내가 사실만 알리고 끝나서 시민이 무엇을 할지 몰랐다). */
-      cw.textContent = "온라인 조회 등록에 실패했습니다. 접수는 담당 부서로 정상 전달되었습니다."
-        + ((cloudWhy || "").trim() ? " " + String(cloudWhy).trim() : "");
-      cw.hidden = false;
-    }
   }
   // 🔑 조회코드 안내 — 저장이 성공했고, 서버에 조회 함수가 «없다고 확인되지 않았을 때» 보여 준다.
   //    (함수가 «없다»고 확인된 서버에서만 감춘다. «아직 모름»이면 보여 준다 —
@@ -3586,7 +3921,9 @@ function bindEvents() {
   // 목록 정렬(기본순/최신순)
   const listSortEl = $("listSort");
   if (listSortEl) listSortEl.addEventListener("change", (e) => {
-    listSort = e.target.value === "new" ? "new" : "default";
+    // ⚠ 아는 값만 받는다(A-11·P-09 와 같은 사양) — 모르는 값이 오면 기본순으로.
+    const v = e.target.value;
+    listSort = (v === "new" || v === "team") ? v : "default";
     renderList();
   });
   // 제출은 form 의 submit 으로 받는다 — 버튼 클릭·Enter·휴대폰 자판 «완료» 모두 동작.
@@ -3719,14 +4056,17 @@ function bindEvents() {
     const v = (msRecP4.value || "").replace(/[^0-9]/g, "").slice(0, 4);
     if (v !== msRecP4.value) msRecP4.value = v;
   });
-  // 신규 사업 알림 배너
+  // 신규 사업 알림 배너 — ★ N-08: «본 것» 기록은 여기서만 한다(페이지 로드가 아니라).
   $("newBannerView").addEventListener("click", () => {
+    // 「보기」로 목록을 열면 «확인한 것»으로 친다(양호창님 「한번 확인하거나」).
+    // ⚠ 목록을 여는 것보다 «먼저» 기록한다 — openList 안에서 무슨 일이 나도 기록은 남는다.
+    markNewSeen(true);
     state.selectedCats = new Set();
     openList({ title: "새로 추가된 사업", onlyNames: newProgramNames });
   });
   // 닫으면 버튼이 사라지므로 초점을 본문으로 옮긴다(초점 유실 방지 — KWCAG 6.4.3)
   $("newBannerClose").addEventListener("click", () => {
-    $("newBanner").hidden = true;
+    markNewSeen(true);            // ★ N-08: X 를 누른 «그때» 기록 → 다음부터 안 뜬다
     focusMain();
   });
   // 사업 정보 갱신 알림 띠 — «새로고침»을 눌러야 반영(자동 교체 없음)

@@ -138,9 +138,73 @@
                 status, admin_reply, like_count, is_hidden, created_at, updated_at  */
   // 목록(제안 목록·「내 신청 › 제안한 정책」) — 카드에 보이는 값만.
   //   is_hidden 은 «거르기 조건»으로만 쓰므로 받아 올 필요가 없다.
-  const COLS_LIST = "id,title,category,status,like_count,created_at";
+  //   ★ 2026-08-24 C-07 — proposal_no(접수번호 표시)·comment_count(의견 수 배지)를 «더했다».
+  const COLS_LIST = "id,title,category,status,like_count,created_at,proposal_no,comment_count";
   // 상세 — 본문·닉네임·지역·담당부서 답변까지. 수정 화면(PIN)도 이 값을 그대로 채운다.
-  const COLS_DETAIL = "id,title,body,category,author_nick,region,status,admin_reply,like_count,created_at";
+  //   ★ 2026-08-24 C-07 — 템플릿 세 칸(body_problem·body_idea·body_effect)을 «더했다».
+  //     ⚠ body 는 «그대로 둔다». 옛 글과, body 만 읽는 곳(내보내기·보고서)이 깨지지 않아야 한다.
+  const COLS_DETAIL = "id,title,body,category,author_nick,region,status,admin_reply,like_count,created_at"
+    + ",proposal_no,comment_count,body_problem,body_idea,body_effect";
+
+  /* ════════════════════════════════════════════════════════════════════
+     ⭐ C-07 예시 문안 — «이 파일의 이 표 하나»가 정본
+     --------------------------------------------------------------------
+     양호창님 지시 — 「기대효과와 그 밖의 것들도 예시를 넉넉히 보여서
+     자연스럽고 쉽게 작성하도록 유도해줘.」
+
+     ⛔ 한 벌(제목·1칸·2칸·3칸)이 «같은 사연의 앞뒤»여야 한다.
+        칸마다 따로 굴리면 교통 문제 + 육아 제안 + 환경 효과가 섞여 오히려 헷갈린다.
+        그래서 「다른 예시 보기」는 네 곳을 «한꺼번에» 바꾼다.
+     ⛔ 문안 원칙 — 존댓말 · 공무원을 탓하지 않는 어조 · «구체적 숫자·지명».
+        막연한 「불편합니다」가 아니라 「40분에 한 대」처럼 쓴다. 시민이 이 결을 따라 쓰면
+        담당 부서가 «바로 검토할 수 있는 글»이 된다.
+     ⚠ cats 는 «분야 이름 목록»이 아니라 «어느 분야를 고른 사람에게 먼저 보여 줄지»의 힌트다.
+        이모지를 뗀 이름으로 적는다(app.js fgKeyOf 가 같은 방식으로 키를 만든다).
+        ⛔ 이 값으로 분야 «목록»을 만들지 말 것 — 목록의 단일 출처는 config.POLICY_CATEGORIES
+           → data.json → DATA.categories 다(fillCategorySelects 참조).
+        ⚠ 분야가 바뀌어도(예: C-13) 여기는 «고치지 않아도 된다» — 맞는 벌이 없으면
+           그냥 첫 벌부터 보여 준다. 예시는 «권하는» 장치일 뿐 검사·차단에 쓰지 않는다.
+     ════════════════════════════════════════════════════════════════════ */
+  const PW_EXAMPLES = [
+    {
+      cats: ["교통·안전"],
+      title: "함창–시청 출근 시간대 직통버스 운행",
+      problem: "함창읍에서 시내버스로 시청에 가려면 한 번에 가는 노선이 없어 두 번 갈아타야 합니다. 아침에는 40분에 한 대뿐이라 한 대를 놓치면 지각합니다.",
+      idea: "출근 시간대(7~9시)만이라도 함창–시청 직통 버스를 하루 두 번 운행해 주시면 좋겠습니다.",
+      effect: "통근·통학하는 주민의 이동 시간이 30분가량 줄고, 갈아탈 곳에서 오래 기다리는 불편이 없어집니다."
+    },
+    {
+      cats: ["영유아·보육", "다자녀·가족"],
+      title: "읍·면 지역 시간제 보육 자리 확대",
+      problem: "아이를 키우다 갑자기 일이 생기면 맡길 곳이 없습니다. 어린이집은 오후에 끝나고, 시간제 보육은 자리가 늘 차 있습니다.",
+      idea: "읍·면 지역에도 시간제 보육 자리를 늘리고, 당일 신청이 가능하도록 해 주시면 좋겠습니다.",
+      effect: "갑작스러운 병원 진료나 경조사에도 아이를 안심하고 맡길 수 있어, 부모가 일을 그만두지 않아도 됩니다."
+    },
+    {
+      cats: ["노인·어르신", "건강·의료"],
+      title: "마을회관으로 찾아오는 진료 차량 운영",
+      problem: "저희 마을에서 보건지소까지 걸어서 30분이 걸립니다. 어르신들이 무릎이 아파 진료를 미루다 병을 키우십니다.",
+      idea: "한 달에 두 번이라도 마을회관으로 찾아오는 진료 차량을 운영해 주시면 좋겠습니다.",
+      effect: "거동이 불편한 어르신도 정기적으로 혈압·혈당을 확인하실 수 있어, 큰 병으로 번지는 것을 미리 막을 수 있습니다."
+    },
+    {
+      cats: ["환경·에너지"],
+      title: "분리수거장 간이 지붕 설치",
+      problem: "저희 단지 분리수거장에 지붕이 없어 비가 오면 종이류가 젖어 뒤엉킵니다. 수거해 가시는 분들도 고생이 많으십니다.",
+      idea: "이용량이 많은 곳부터 간이 지붕을 설치해 주시면 좋겠습니다.",
+      effect: "재활용되는 양이 늘고, 젖은 쓰레기가 썩으면서 나던 냄새와 벌레도 줄어듭니다."
+    },
+    {
+      cats: ["청년", "문화·체육·관광"],
+      title: "저녁 시간 청년 공유 공간 개방",
+      problem: "저녁에 청년들이 모여 공부하거나 이야기 나눌 공간이 마땅치 않습니다. 카페는 일찍 닫고 도서관도 저녁에 문을 닫습니다.",
+      idea: "시 유휴 공간이나 폐교를 저녁 시간대에 청년 공유 공간으로 열어 주시면 좋겠습니다.",
+      effect: "청년들이 상주에 머물 이유가 하나 늘고, 스터디나 창업 모임이 자연스럽게 생겨납니다."
+    }
+  ];
+  // 칸별 글자 상한 — ⚠ supabase/제안템플릿_260824.sql 의 검사와 «같은 값»이어야 한다.
+  //    (서버가 정본이다. 여기 값은 «서버에 가기 전에 친절히 알려 주기» 위한 것뿐이다.)
+  const PW_MAX = { title: 80, problem: 700, idea: 700, effect: 400 };
 
   const $ = (id) => document.getElementById(id);
   /* 수집·이용 동의 오류 표시 — app.js setFieldError 와 같은 규약
@@ -273,6 +337,106 @@
     }
   }
 
+  /* ── ⭐ C-07 예시 보이기 ────────────────────────────────────────────────
+     · 예시는 «지워지지 않는 글»이다(placeholder 가 아니다).
+     · 「다른 예시 보기」는 제목·1칸·2칸·3칸을 «한꺼번에» 다음 벌로 넘긴다.
+     · 고른 분야에 맞는 벌이 있으면 «그 벌부터» 보여 준다.
+     · 바뀐 사실은 aria-live 영역(#pwExLive)이 낭독기 이용자에게 알린다. */
+  let pwExIdx = 0;
+
+  // 지금 고른 분야에 «맞는» 예시 벌의 번호. 없으면 -1.
+  //   ⚠ 분야 이름 비교는 app.js fgKeyOf 와 «같은 방식»(앞머리 이모지를 떼고 본다).
+  //     app.js 가 아직 안 실린 옛 캐시 환경을 대비해 같은 일을 하는 대체 구현을 둔다.
+  function exKey(cat) {
+    if (typeof window.fgKeyOf === "function") return window.fgKeyOf(cat);
+    const t = String(cat == null ? "" : cat).trim();
+    const m = t.match(/[가-힣A-Za-z0-9].*$/);
+    return (m ? m[0] : t).trim();
+  }
+  function exIndexForCategory(cat) {
+    const k = exKey(cat);
+    if (!k) return -1;
+    for (let i = 0; i < PW_EXAMPLES.length; i++) {
+      if (PW_EXAMPLES[i].cats.indexOf(k) >= 0) return i;
+    }
+    return -1;
+  }
+
+  // 예시 한 벌을 화면에 얹는다. announce=true 면 낭독기에도 «바뀌었다»를 알린다.
+  function paintExample(announce) {
+    const ex = PW_EXAMPLES[pwExIdx % PW_EXAMPLES.length];
+    if (!ex) return;
+    const put = (id, v) => {
+      const el = $(id);
+      if (!el) return;
+      const slot = el.querySelector(".pw-ex-v");
+      if (slot) slot.textContent = v;
+    };
+    put("pwExTitle", ex.title);
+    put("pwExProblem", ex.problem);
+    put("pwExIdea", ex.idea);
+    put("pwExEffect", ex.effect);
+    if (announce && $("pwExLive")) {
+      $("pwExLive").textContent =
+        `예시가 바뀌었습니다. ${pwExIdx + 1}번째 예시 — ${ex.title}`;
+    }
+  }
+  function nextExample() {
+    pwExIdx = (pwExIdx + 1) % PW_EXAMPLES.length;
+    paintExample(true);
+  }
+  // 분야를 고르면 그 분야에 맞는 예시로 갈아 끼운다(맞는 벌이 없으면 그대로 둔다).
+  function syncExampleToCategory() {
+    const sel = $("pwCategory");
+    if (!sel) return;
+    const i = exIndexForCategory(sel.value);
+    if (i >= 0 && i !== pwExIdx) { pwExIdx = i; paintExample(true); }
+  }
+
+  /* 글자 수 세기 — 서버가 700/700/400 에서 «거절»하기 전에 화면에서 먼저 알린다.
+     ⚠ aria-live 를 붙이지 않는다. 한 글자마다 낭독하면 글을 쓸 수가 없다.
+        상한을 넘는 «사건»은 제출할 때 field 오류로 따로 알린다. */
+  function paintCount(taId, outId, max) {
+    const ta = $(taId), out = $(outId);
+    if (!ta || !out) return;
+    const n = String(ta.value || "").length;
+    out.textContent = n;
+    out.parentNode.classList.toggle("is-over", n > max);
+  }
+  function paintAllCounts() {
+    paintCount("pwProblem", "pwProblemCount", PW_MAX.problem);
+    paintCount("pwIdea", "pwIdeaCount", PW_MAX.idea);
+    paintCount("pwEffect", "pwEffectCount", PW_MAX.effect);
+  }
+
+  /* 폼을 «템플릿(세 칸)» 또는 «옛 글(한 칸)» 모습으로 바꾼다.
+     ⚠ 숨기는 쪽의 값을 지우지 않는다 — 되돌아왔을 때 쓰던 내용이 남아 있어야 한다.
+        대신 제출·«작성 중» 판정은 지금 보이는 쪽만 본다(isLegacyMode 참조). */
+  let legacyMode = false;      // true = 옛 글 수정 중(칸 하나)
+  function setLegacyMode(on) {
+    legacyMode = !!on;
+    const tpl = ["pwProblem", "pwIdea", "pwEffect"];
+    tpl.forEach((id) => {
+      const ta = $(id);
+      if (!ta) return;
+      // label·예시·글자수까지 함께 감춰야 «빈 라벨만 남는» 화면이 되지 않는다
+      const lab = document.querySelector(`label[for="${id}"]`);
+      if (lab) lab.hidden = legacyMode;
+      ta.hidden = legacyMode;
+    });
+    ["pwExProblem", "pwExIdea", "pwExEffect"].forEach((id) => {
+      const el = $(id); if (el) el.hidden = legacyMode;
+    });
+    document.querySelectorAll("#view-pwrite .pw-count").forEach((el) => { el.hidden = legacyMode; });
+    const bar = document.querySelector("#view-pwrite .pw-ex-bar");
+    if (bar) bar.hidden = legacyMode;
+    // 제목 예시는 옛 글 수정에서도 도움이 되므로 «남긴다»(제목 규칙은 그대로다).
+    const wrap = $("pwLegacyWrap");
+    if (wrap) wrap.hidden = !legacyMode;
+  }
+  // app.js 의 «작성 중» 판정이 지금 보이는 칸만 보게 한다(DIRTY_FIELDS 와 한 쌍).
+  window.ppIsLegacyWrite = function () { return legacyMode; };
+
   // ---------- 진입: 목록 화면 ----------
   function open() {
     fillCategorySelects();
@@ -352,6 +516,7 @@
         <h3>${esc(p.title)}</h3>
         <div class="pp-card-meta">
           <span class="pp-like"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 21V10l4.5-7 1 .6a2 2 0 0 1 .9 2.2L12.5 9H19a2 2 0 0 1 2 2.4l-1.5 7A2.4 2.4 0 0 1 17 20.5H7z"/><path d="M7 10.5H4V21h3"/></svg> ${Number(p.like_count) || 0}</span>
+          <span class="pp-cmt"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg> ${Number(p.comment_count) || 0}</span>
           <span class="pp-date">${fmtDate(p.created_at)}</span>
         </div>
       </div>`;
@@ -387,8 +552,39 @@
     showView("pdetail");
   }
 
+  /* ★ C-07 — 상세 본문 그리기.
+     새 글(세 칸이 있는 글)은 «나눠» 보여 주고, 옛 글은 body 한 덩어리 그대로 보여 준다.
+     ⛔ 옛 글을 억지로 쪼개지 않는다(사양서 6절 «옛 글 호환»).
+     ⚠ 판정 기준은 body_problem 하나다 — 서버가 create_proposal_v2 에서만 채운다.
+     ⚠ 라벨은 «작성 폼과 같은 묻는 말투»여야 한다. 화면마다 말이 달라지면
+        시민이 「내가 쓴 그 칸이 이건가?」를 다시 생각해야 한다. */
+  function proposalBodyHtml(p) {
+    const q = (v) => String(v == null ? "" : v).trim();
+    const problem = q(p.body_problem), idea = q(p.body_idea), effect = q(p.body_effect);
+    if (!problem) return `<div class="pd-body">${esc(p.body)}</div>`;   // 옛 글
+    const part = (k, v) => v
+      ? `<section class="pd-part">
+           <h3 class="pd-part-k">${esc(k)}</h3>
+           <div class="pd-part-v">${esc(v)}</div>
+         </section>`
+      : "";
+    return `<div class="pd-parts">
+        ${part("어떤 점이 불편하신가요?", problem)}
+        ${part("어떻게 하면 좋을까요?", idea)}
+        ${part("이렇게 되면 무엇이 좋아질까요?", effect)}
+      </div>`;
+  }
+
   function renderDetail(p) {
     const b = STATUS_BADGE[p.status] || STATUS_BADGE["접수"];
+    const bodyHtml = proposalBodyHtml(p);
+    /* 접수번호 — «표시만» 한다.
+       ⛔ 조회·본인확인의 열쇠로 쓰지 말 것(🩷자물쇠 규약). 본인확인은 PIN 이 한다.
+          번호는 규칙적이라 남의 번호를 쉽게 짐작할 수 있다 — 열쇠가 되는 순간 남의 글을 만진다. */
+    const pno = String(p.proposal_no || "").trim();
+    const noHtml = pno
+      ? `<p class="pd-no"><span class="pd-no-k">접수번호</span> <span class="pd-no-v">${esc(pno)}</span></p>`
+      : "";
     const liked = likedSet().has(String(p.id));
     const timeline = STATUS_ORDER.map((s) => {
       // 현재 상태 이전 단계는 완료, 현재는 강조, 이후는 흐리게(반영/불채택/보류는 종결 분기)
@@ -411,7 +607,8 @@
       </div>
       <h2 class="pd-title">${esc(p.title)}</h2>
       <div class="pd-meta">닉네임 <b>${esc(p.author_nick || "익명")}</b>${p.region ? " · " + esc(p.region) : ""} · ${fmtDate(p.created_at)}</div>
-      <div class="pd-body">${esc(p.body)}</div>
+      ${noHtml}
+      ${bodyHtml}
 
       <div class="pd-like-box">
         <div class="pd-like-count" aria-live="polite"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 21V10l4.5-7 1 .6a2 2 0 0 1 .9 2.2L12.5 9H19a2 2 0 0 1 2 2.4l-1.5 7A2.4 2.4 0 0 1 17 20.5H7z"/><path d="M7 10.5H4V21h3"/></svg> 공감 <b id="pdLikeCount">${Number(p.like_count) || 0}</b></div>
@@ -427,11 +624,15 @@
         <button id="pdEditDel" class="big-btn full">본인 글 수정/삭제 (PIN)</button>
         <button id="pdReport" class="big-btn full pp-ghost" aria-label="이 제안 신고하기"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4"/><path d="M6 5h11l-2 3.6 2 3.6H6"/></svg> 신고</button>
       </div>
+      <div id="pdComments" class="cmt-wrap"></div>
+
       <p class="apply-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
     `;
     $("pdLikeBtn").addEventListener("click", () => toggleLike(p));
     $("pdEditDel").addEventListener("click", () => openPinModal(p));
     $("pdReport").addEventListener("click", () => openReportModal(p));
+    // 💬 의견(댓글·답글) — 비동기로 채운다. 실패해도 상세 화면은 그대로 살아 있어야 한다.
+    renderComments(p);
   }
 
   // ---------- 공감(토글) ----------
@@ -485,6 +686,14 @@
     $("topTitle").textContent = "정책 제안하기";
     $("pwTitle").value = "";
     $("pwBody").value = "";
+    // ★ C-07 — 새 제안은 «언제나» 템플릿(세 칸)이다. 옛 글 모드는 수정에서만 켜진다.
+    setLegacyMode(false);
+    ["pwProblem", "pwIdea", "pwEffect"].forEach((id) => { if ($(id)) $(id).value = ""; });
+    paintAllCounts();
+    // 고른 분야에 맞는 예시부터 보여 준다(맞는 벌이 없으면 첫 벌).
+    const exi0 = exIndexForCategory($("pwCategory") ? $("pwCategory").value : "");
+    pwExIdx = exi0 >= 0 ? exi0 : 0;
+    paintExample(false);
     $("pwNick").value = "";
     // 🏘 읍·면·동 — 목록은 app.js fillRegionSelect(=data.json 단일 출처)가 채운다.
     //    ⛔ 여기에 행정구역을 적어 넣지 말 것(두 곳이 어긋난다).
@@ -505,16 +714,27 @@
     if ($("pwHoney").value.trim() !== "") { return; }
 
     const title = $("pwTitle").value.trim();
-    const body = $("pwBody").value.trim();
+    /* ★ C-07 — 내용은 «세 칸»이다.
+       ⛔ 세 칸을 이어 붙인 body 를 여기서 만들지 말 것. 서버(compose_proposal_body)가 만든다.
+          앱과 서버 두 곳에 이어붙이기 규약이 생기면 반드시 어긋난다(사양서 5절). */
+    const problem = ($("pwProblem") ? $("pwProblem").value : "").trim();
+    const idea = ($("pwIdea") ? $("pwIdea").value : "").trim();
+    const effect = ($("pwEffect") ? $("pwEffect").value : "").trim();
     const nick = $("pwNick").value.trim();
     const region = $("pwRegion").value.trim();
     const pin = $("pwPin").value.trim();
     const cat = $("pwCategory").value;
 
     if (!title) { appAlert("제목을 입력해 주세요."); return; }
-    if (title.length > 80) { appAlert("제목은 80자 이내로 적어주세요."); return; }
-    if (!body) { appAlert("내용을 입력해 주세요."); return; }
-    if (body.length > 2000) { appAlert("내용은 2000자 이내로 적어주세요."); return; }
+    if (title.length > PW_MAX.title) { appAlert("제목은 80자 이내로 적어주세요."); return; }
+    if (!problem) { appAlert("「어떤 점이 불편하신가요?」 칸을 적어 주세요."); return; }
+    if (problem.length > PW_MAX.problem) { appAlert("「어떤 점이 불편하신가요?」 칸은 700자 이내로 적어주세요."); return; }
+    if (!idea) { appAlert("「어떻게 하면 좋을까요?」 칸을 적어 주세요."); return; }
+    if (idea.length > PW_MAX.idea) { appAlert("「어떻게 하면 좋을까요?」 칸은 700자 이내로 적어주세요."); return; }
+    /* ⛔ 「이렇게 되면 무엇이 좋아질까요?」가 비어 있는지 «묻지 않는다».
+       사양서 2절 — 3번 칸은 선택이며, 비어 있어도 경고·재확인 없이 그대로 제출된다.
+       권하되 막지 않는다. 강요하면 제안 자체를 포기한다. */
+    if (effect.length > PW_MAX.effect) { appAlert("「이렇게 되면 무엇이 좋아질까요?」 칸은 400자 이내로 적어주세요."); return; }
     if (!nick) { appAlert("닉네임을 입력해 주세요. (실명 금지)"); return; }
     /* 🏘 읍·면·동(필수) — 2026-08-20 양호창님 지시. 지역별 정책 수요를 세기 위한 값이다.
        ⚠ 「기타·타지역」이 목록에 있으므로 상주시민이 아니어도 막히지 않는다.
@@ -537,7 +757,7 @@
     }
     if (!$("pwAgree").checked) { appAlert("동의 항목에 체크해 주세요."); return; }
 
-    const combined = title + " " + body + " " + nick;
+    const combined = [title, problem, idea, effect, nick].join(" ");
     if (RE_JUMIN.test(combined)) { appAlert("주민등록번호로 보이는 숫자가 있습니다.\n개인정보는 입력할 수 없습니다."); return; }
     if (RE_PHONE.test(combined)) { appAlert("전화번호로 보이는 숫자가 있습니다.\n개인정보는 입력하지 말아주세요."); return; }
 
@@ -548,9 +768,14 @@
     const orig = btn.textContent;
     btn.disabled = true; btn.textContent = "등록 중...";
     try {
-      const { data, error } = await client.rpc("create_proposal", {
-        p_title: title, p_body: body, p_category: cat,
-        p_nick: nick, p_region: region || null, p_pin: pin,
+      /* ★ C-07 — create_proposal_v2 (supabase/제안템플릿_260824.sql)
+         인자 이름·차례는 «서버 정의 그대로»다. 하나라도 어긋나면 함수를 못 찾는다.
+           create_proposal_v2(p_title, p_problem, p_idea, p_effect, p_category, p_nick, p_region, p_pin)
+         ⚠ p_effect 는 빈 문자열을 그대로 보낸다 — 서버가 btrim 뒤 빈 절을 «통째로 뺀다».
+         ⛔ p_body 를 보내지 말 것. body 는 서버가 compose_proposal_body 로 만든다. */
+      const { data, error } = await client.rpc("create_proposal_v2", {
+        p_title: title, p_problem: problem, p_idea: idea, p_effect: effect,
+        p_category: cat, p_nick: nick, p_region: region || null, p_pin: pin,
       });
       if (error) throw error;
       // 이 기기에 «제안 번호»를 남긴다 → 「내 신청 › 제안한 정책」에서 상태를 볼 수 있다.
@@ -639,7 +864,28 @@
     $("topTitle").textContent = "제안 수정하기";
     $("pwriteTitle").textContent = "제안 수정하기";
     $("pwTitle").value = pinTarget.title || "";
-    $("pwBody").value = pinTarget.body || "";
+    /* ★ C-07 «옛 글 호환» — 여기가 이 기능에서 가장 조심할 자리다.
+       판정 기준은 단 하나: body_problem 이 비어 있으면 «옛 글»이다(사양서 6절).
+         · 옛 글  → 지금까지 쓰던 칸 하나(pwBody) + 옛 RPC(edit_proposal)
+         · 새 글  → 세 칸(pwProblem·pwIdea·pwEffect) + edit_proposal_v2
+       ⛔ 옛 글을 억지로 세 칸으로 쪼개지 말 것 — 어디서 끊을지 알 수 없다.
+          그리고 «없던 칸을 나눠 적는 숙제»를 옛 글 작성자에게 내는 셈이 된다. */
+    const isLegacy = !String(pinTarget.body_problem || "").trim();
+    setLegacyMode(isLegacy);
+    if (isLegacy) {
+      $("pwBody").value = pinTarget.body || "";
+      ["pwProblem", "pwIdea", "pwEffect"].forEach((id) => { if ($(id)) $(id).value = ""; });
+    } else {
+      $("pwBody").value = "";
+      if ($("pwProblem")) $("pwProblem").value = pinTarget.body_problem || "";
+      if ($("pwIdea")) $("pwIdea").value = pinTarget.body_idea || "";
+      if ($("pwEffect")) $("pwEffect").value = pinTarget.body_effect || "";
+    }
+    paintAllCounts();
+    // 수정 화면에서도 예시는 그대로 보인다(고쳐 쓰실 때 길잡이가 된다).
+    const exiE = exIndexForCategory(pinTarget.category || "");
+    pwExIdx = exiE >= 0 ? exiE : 0;
+    paintExample(false);
     $("pwNick").value = pinTarget.author_nick || "";
     /* 🏘 읍·면·동 — 예전에는 자유 입력이라 「무양」·「상주 무양동」 같은 값이 있다.
        그대로 넣으면 목록에 없어 select 가 «조용히» 값을 버린다 → 시민이 적어 둔 동네가 사라진다.
@@ -665,10 +911,25 @@
   async function submitEdit() {
     const title = $("pwTitle").value.trim();
     const body = $("pwBody").value.trim();
+    const problem = ($("pwProblem") ? $("pwProblem").value : "").trim();
+    const idea = ($("pwIdea") ? $("pwIdea").value : "").trim();
+    const effect = ($("pwEffect") ? $("pwEffect").value : "").trim();
     const cat = $("pwCategory").value;
     if (!title) { appAlert("제목을 입력해 주세요."); return; }
-    if (!body) { appAlert("내용을 입력해 주세요."); return; }
-    const combined = title + " " + body;
+    if (title.length > PW_MAX.title) { appAlert("제목은 80자 이내로 적어주세요."); return; }
+    if (legacyMode) {
+      // 옛 글 — 지금까지와 «똑같이» 검사한다(규칙을 바꾸면 고칠 수 없는 글이 생긴다).
+      if (!body) { appAlert("내용을 입력해 주세요."); return; }
+      if (body.length > 2000) { appAlert("내용은 2000자 이내로 적어주세요."); return; }
+    } else {
+      if (!problem) { appAlert("「어떤 점이 불편하신가요?」 칸을 적어 주세요."); return; }
+      if (problem.length > PW_MAX.problem) { appAlert("「어떤 점이 불편하신가요?」 칸은 700자 이내로 적어주세요."); return; }
+      if (!idea) { appAlert("「어떻게 하면 좋을까요?」 칸을 적어 주세요."); return; }
+      if (idea.length > PW_MAX.idea) { appAlert("「어떻게 하면 좋을까요?」 칸은 700자 이내로 적어주세요."); return; }
+      // ⛔ effect 는 비어도 묻지 않는다(작성과 같은 규칙).
+      if (effect.length > PW_MAX.effect) { appAlert("「이렇게 되면 무엇이 좋아질까요?」 칸은 400자 이내로 적어주세요."); return; }
+    }
+    const combined = legacyMode ? (title + " " + body) : [title, problem, idea, effect].join(" ");
     if (RE_JUMIN.test(combined)) { appAlert("주민등록번호로 보이는 숫자가 있습니다."); return; }
     if (RE_PHONE.test(combined)) { appAlert("전화번호로 보이는 숫자가 있습니다."); return; }
     const client = getClient();
@@ -678,10 +939,19 @@
     const orig = btn.textContent;
     btn.disabled = true; btn.textContent = "저장 중...";
     try {
-      const { error } = await client.rpc("edit_proposal", {
-        p_id: editing.id, p_pin: editing.pin,
-        p_title: title, p_body: body, p_category: cat,
-      });
+      /* ★ C-07 — 옛 글은 «옛 RPC 그대로», 새 글은 _v2.
+           edit_proposal   (p_id, p_pin, p_title, p_body, p_category)
+           edit_proposal_v2(p_id, p_pin, p_title, p_problem, p_idea, p_effect, p_category)
+         ⛔ 옛 글에 _v2 를 쓰지 말 것 — 세 칸이 빈 채로 저장되어 본문이 통째로 사라진다. */
+      const { error } = legacyMode
+        ? await client.rpc("edit_proposal", {
+          p_id: editing.id, p_pin: editing.pin,
+          p_title: title, p_body: body, p_category: cat,
+        })
+        : await client.rpc("edit_proposal_v2", {
+          p_id: editing.id, p_pin: editing.pin,
+          p_title: title, p_problem: problem, p_idea: idea, p_effect: effect, p_category: cat,
+        });
       if (error) throw error;
       // 등록과 «같은 차례»로 마무리한다 — 버튼 원복 → 칸 비우기 → 곶감 톡 → 알림 → 이동.
       // (칸을 안 비우면 뒤로 갈 때 「작성 중인 내용이 사라집니다」가 떠 버린다)
@@ -707,6 +977,9 @@
   // 작성/수정 폼을 작성 기본 상태로 되돌린다
   function resetWriteForm() {
     editing = null;
+    // ★ C-07 — «옛 글 수정» 흔적을 반드시 지운다. 안 지우면 다음에 새 제안을 쓸 때
+    //   칸 하나짜리 옛 화면이 그대로 뜬다(그 상태로 올리면 create_proposal_v2 가 빈 칸을 거절).
+    setLegacyMode(false);
     $("pwriteTitle").textContent = "정책 제안하기";
     $("pwSubmit").textContent = "제안 등록";
   }
@@ -720,7 +993,9 @@
         경고도 그대로 떠야 한다(경고 자체를 없애는 것이 아니다).
      ⚠ 읍·면·동은 app.js fillRegionSelect 가 목록의 단일 출처다(openWrite 와 같은 방식). */
   function clearWriteFields() {
-    ["pwTitle", "pwBody", "pwNick", "pwPin", "pwHoney"].forEach((id) => {
+    // ★ C-07 — 새 칸 셋을 «반드시» 함께 비운다. 빠뜨리면 등록을 마치고 목록으로 갈 때
+    //   app.js 의 _isDirtyView() 가 「작성 중인 내용이 사라집니다」를 띄운다.
+    ["pwTitle", "pwBody", "pwProblem", "pwIdea", "pwEffect", "pwNick", "pwPin", "pwHoney"].forEach((id) => {
       const el = $(id);
       if (el) el.value = "";
     });
@@ -733,12 +1008,337 @@
     setPwConsentErr("");
     if ($("pwConsent")) $("pwConsent").checked = false;
     if ($("pwAgree")) $("pwAgree").checked = false;
+    paintAllCounts();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     💬 C-07 의견(댓글·답글)                                   2026-08-24
+     ----------------------------------------------------------------------
+     DB 규약 : supabase/제안댓글_260824.sql  (🩷자물쇠 확정 · 적용·검증 완료)
+       표   : proposal_comments — 비밀 칸이 «하나도 없다» → select("*") 가 허용된다.
+              ⚠ proposals · proposal_likes 와 다른 점이다. 그 둘은 칸 권한을 회수해서
+                 select("*") 가 통째로 401 이 된다. 여기서 흉내 내 칸을 나열하면,
+                 나중에 칸이 늘 때마다 앱이 «조용히» 낡은 목록으로 읽게 된다.
+       PIN  : proposal_comment_pins — 아무 역할에도 권한이 없다(RPC 만 들여다본다).
+       RPC  : add_proposal_comment(p_proposal_id, p_parent_id, p_body, p_nick, p_pin)
+              edit_comment(p_id, p_pin, p_body) · delete_comment(p_id, p_pin)
+              report_comment(p_id, p_reason, p_reporter)
+     ----------------------------------------------------------------------
+     화면 규칙
+       · 답글은 «1단까지»(댓글 → 답글). 답글에는 답글 버튼을 두지 않는다
+         (서버 트리거도 막지만, 누를 수 있는데 실패하는 버튼을 두지 않는다).
+       · 공무원 답글은 is_official 로 «배지 + 다른 색». 색만으로 알리지 않도록
+         「담당 부서」라는 글자를 함께 둔다(규격서 8절).
+       · 지워진 의견은 자리만 남긴다 — 서버가 내용·닉네임을 «실제로 비워» 보낸다.
+       · 익명이 남기므로 PIN 이 곧 열쇠다. 비워 두면 나중에 못 고치고 못 지운다 —
+         그 사실을 «미리» 글로 알린다(나중에 알면 늦다).
+     ══════════════════════════════════════════════════════════════════════ */
+  const CMT_MAX = 500;                 // ⚠ 서버 검사와 같은 값(제안댓글_260824.sql)
+  let cmtP = null;                     // 지금 상세에 떠 있는 제안
+  let cmtRows = [];                    // 마지막으로 읽어 온 의견들
+
+  function cmtCountOf(p) { return Number(p && p.comment_count) || 0; }
+
+  async function renderComments(p) {
+    cmtP = p;
+    const host = $("pdComments");
+    if (!host) return;
+    const client = getClient();
+    if (!client) { host.innerHTML = ""; return; }   // DB 미준비 — 조용히 접는다(기존 방어 원칙)
+    host.innerHTML = `<div class="pd-section-title">의견</div>` +
+      (window.skeletonHtml ? window.skeletonHtml(2) : `<p class="cmt-loading">불러오는 중입니다.</p>`);
+    let rows = [];
+    try {
+      /* ✅ select("*") 를 «일부러» 쓴다 — 위 머리말 참조. 이 표에는 비밀 칸이 없고,
+         칸을 나열하면 칸이 늘 때마다 세 앱이 함께 낡는다(🩷자물쇠 설계). */
+      const { data, error } = await client
+        .from("proposal_comments")
+        .select("*")
+        .eq("proposal_id", p.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      rows = data || [];
+    } catch (e) {
+      console.warn("[정책참여] 의견 조회 실패:", e);
+      // 상세 화면 전체를 깨뜨리지 않는다 — 의견만 «못 불러왔다»고 알리고 쓰기는 열어 둔다.
+      host.innerHTML = `<div class="pd-section-title">의견</div>
+        <p class="cmt-err" role="status">지금은 의견을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.</p>`
+        + cmtFormHtml(null);
+      bindCmtForm(host.querySelector(".cmt-form"));
+      return;
+    }
+    // 그 사이 다른 제안으로 갔으면 낡은 결과를 그리지 않는다(빠른 전환 방어)
+    if (!cmtP || String(cmtP.id) !== String(p.id)) return;
+    cmtRows = rows;
+    paintComments(host, rows);
+  }
+
+  function paintComments(host, rows) {
+    const tops = rows.filter((r) => !r.parent_id);
+    const kids = {};
+    rows.filter((r) => r.parent_id).forEach((r) => {
+      (kids[String(r.parent_id)] = kids[String(r.parent_id)] || []).push(r);
+    });
+    const n = rows.length;
+    const listHtml = tops.length
+      ? `<ul class="cmt-list">` + tops.map((c) => {
+        const replies = kids[String(c.id)] || [];
+        return `<li class="cmt-item">
+            ${cmtHtml(c, false)}
+            ${replies.length ? `<ul class="cmt-replies">${replies.map((r) => `<li>${cmtHtml(r, true)}</li>`).join("")}</ul>` : ""}
+            <div class="cmt-reply-slot" data-parent="${esc(c.id)}"></div>
+          </li>`;
+      }).join("") + `</ul>`
+      : `<p class="cmt-empty">아직 남겨진 의견이 없습니다. 첫 의견을 남겨 주세요.</p>`;
+    host.innerHTML =
+      `<div class="pd-section-title">의견 <span class="cmt-n">${n}</span></div>
+       ${listHtml}
+       <div class="cmt-write-box">
+         <h3 class="cmt-write-k">의견 남기기</h3>
+         ${cmtFormHtml(null)}
+       </div>`;
+    host.querySelectorAll(".cmt-form").forEach(bindCmtForm);
+    host.querySelectorAll("[data-cmt-act]").forEach((btn) => {
+      btn.addEventListener("click", () => onCmtAction(btn.dataset.cmtAct, btn.dataset.cmtId));
+    });
+  }
+
+  // 의견 한 개 — 지워진 것 / 공무원 답글 / 보통 의견 세 갈래
+  function cmtHtml(c, isReply) {
+    if (c.is_deleted) {
+      return `<div class="cmt cmt-gone${isReply ? " is-reply" : ""}">
+          <p class="cmt-body">삭제된 의견입니다.</p>
+        </div>`;
+    }
+    const official = !!c.is_official;
+    const dept = String(c.official_dept || "").trim();
+    /* 공무원 답글임을 «배지 글자»로 알린다 — 색만으로 알리지 않는다(규격서 8절).
+       ⛔ official_dept 에는 부서명만 온다(사람 이름·이메일은 서버가 넣지 않는다). */
+    const badge = official
+      ? `<span class="cmt-badge cmt-official-badge"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2 20 7v5.4c0 4.3-3.2 7.2-8 8.4-4.8-1.2-8-4.1-8-8.4V7z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></svg> 담당 부서${dept ? " · " + esc(dept) : ""}</span>`
+      : "";
+    const acts = official
+      // 공무원 답글은 시민이 고치거나 지울 수 없다(신고만 가능)
+      ? `<button type="button" class="cmt-act" data-cmt-act="report" data-cmt-id="${esc(c.id)}">신고</button>`
+      : `${isReply ? "" : `<button type="button" class="cmt-act" data-cmt-act="reply" data-cmt-id="${esc(c.id)}">답글</button>`}
+         <button type="button" class="cmt-act" data-cmt-act="mine" data-cmt-id="${esc(c.id)}">수정·삭제</button>
+         <button type="button" class="cmt-act" data-cmt-act="report" data-cmt-id="${esc(c.id)}">신고</button>`;
+    return `<div class="cmt${official ? " is-official" : ""}${isReply ? " is-reply" : ""}" data-id="${esc(c.id)}">
+        <div class="cmt-head">
+          <span class="cmt-nick">${esc(c.author_nick || "익명")}</span>
+          ${badge}
+          <span class="cmt-date">${esc(fmtDate(c.created_at))}</span>
+        </div>
+        <p class="cmt-body">${esc(c.body)}</p>
+        <div class="cmt-acts">${acts}</div>
+        <div class="cmt-panel" data-panel="${esc(c.id)}"></div>
+      </div>`;
+  }
+
+  /* 의견 쓰기 폼 — 댓글과 답글이 «같은 모양»을 쓴다(새 모양을 만들지 않는다, 규격서 0절).
+     parentId 가 있으면 답글이다. */
+  function cmtFormHtml(parentId) {
+    const pid = parentId ? esc(parentId) : "";
+    return `<form class="cmt-form" data-parent="${pid}">
+        <div class="cmt-form-row">
+          <label class="sr-only" for="cmtNick-${pid || "new"}">닉네임</label>
+          <input id="cmtNick-${pid || "new"}" class="text-input cmt-in-nick" type="text" maxlength="20" placeholder="닉네임 (실명 금지)" autocomplete="off" />
+          <label class="sr-only" for="cmtPin-${pid || "new"}">수정용 PIN 4자리</label>
+          <input id="cmtPin-${pid || "new"}" class="text-input cmt-in-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" autocomplete="off" />
+        </div>
+        <label class="sr-only" for="cmtBody-${pid || "new"}">의견 내용</label>
+        <textarea id="cmtBody-${pid || "new"}" class="text-input cmt-in-body" rows="3" maxlength="${CMT_MAX}"
+                  placeholder="${parentId ? "답글을 적어 주세요." : "이 제안에 대한 생각을 적어 주세요."}"></textarea>
+        <p class="cmt-help">PIN 은 <b>내가 남긴 의견을 나중에 고치거나 지울 때만</b> 씁니다.
+          비워 두시면 올린 뒤에는 고치거나 지우실 수 없습니다.<br>
+          실명·전화번호 등 개인정보는 적지 말아 주세요.</p>
+        <p class="field-err cmt-form-err" role="alert" hidden></p>
+        <button type="submit" class="big-btn primary full cmt-send">${parentId ? "답글 남기기" : "의견 남기기"}</button>
+      </form>`;
+  }
+
+  function bindCmtForm(form) {
+    if (!form || form.dataset.bound) return;
+    form.dataset.bound = "1";
+    form.addEventListener("submit", (e) => { e.preventDefault(); sendComment(form); });
+    const pin = form.querySelector(".cmt-in-pin");
+    if (pin) pin.addEventListener("input", (ev) => { ev.target.value = ev.target.value.replace(/[^0-9]/g, ""); });
+  }
+
+  function cmtFormErr(form, msg) {
+    const el = form.querySelector(".cmt-form-err");
+    if (!el) { if (msg) appAlert(msg); return; }
+    el.textContent = msg || "";
+    el.hidden = !msg;
+  }
+
+  async function sendComment(form) {
+    const nick = form.querySelector(".cmt-in-nick").value.trim();
+    const pin = form.querySelector(".cmt-in-pin").value.trim();
+    const body = form.querySelector(".cmt-in-body").value.trim();
+    const parent = form.dataset.parent || null;
+    if (!body) { cmtFormErr(form, "내용을 적어 주세요."); return; }
+    if (body.length > CMT_MAX) { cmtFormErr(form, "의견은 " + CMT_MAX + "자 이내로 적어 주세요."); return; }
+    if (!nick) { cmtFormErr(form, "닉네임을 적어 주세요. (실명은 적지 마세요)"); return; }
+    // PIN 은 «선택»이지만, 적으실 거면 4자리여야 한다(서버도 같은 검사).
+    if (pin && !/^\d{4}$/.test(pin)) { cmtFormErr(form, "PIN 은 숫자 4자리로 적어 주세요."); return; }
+    const combined = nick + " " + body;
+    if (RE_JUMIN.test(combined)) { cmtFormErr(form, "주민등록번호로 보이는 숫자가 있습니다. 개인정보는 적을 수 없습니다."); return; }
+    if (RE_PHONE.test(combined)) { cmtFormErr(form, "전화번호로 보이는 숫자가 있습니다. 개인정보는 적지 말아 주세요."); return; }
+    cmtFormErr(form, "");
+    const client = getClient();
+    if (!client) { cmtFormErr(form, "지금은 의견을 남길 수 없습니다."); return; }
+    const btn = form.querySelector(".cmt-send");
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = "올리는 중...";
+    try {
+      const { error } = await client.rpc("add_proposal_comment", {
+        p_proposal_id: cmtP.id,
+        p_parent_id: parent || null,          // ⚠ null 이면 «댓글», 있으면 그 댓글의 답글
+        p_body: body, p_nick: nick, p_pin: pin || "",
+      });
+      if (error) throw error;
+      btn.disabled = false; btn.textContent = orig;
+      // 서버가 comment_count 를 트리거로 올린다 → 다시 읽어 화면을 맞춘다.
+      if (cmtP) cmtP.comment_count = cmtCountOf(cmtP) + 1;
+      await renderComments(cmtP);
+    } catch (e) {
+      console.warn("[정책참여] 의견 등록 실패:", e);
+      cmtFormErr(form, cmtRpcMsg(e, "의견 등록"));
+    } finally {
+      if (btn.disabled) { btn.disabled = false; btn.textContent = orig; }
+    }
+  }
+
+  /* 서버가 raise exception 으로 준 «사람이 읽는 말»을 그대로 보여 준다.
+     (도배 방지·글자 수·개인정보 차단 문구가 모두 서버에 한국어로 적혀 있다.
+      앱에서 다시 지어내면 두 곳의 말이 어긋난다.) */
+  function cmtRpcMsg(e, what) {
+    if (errKind(e) === "conn") return actionErrMsg(e, what);
+    const m = (e && (e.message || e.hint || e.details)) ? String(e.message || e.hint || e.details) : "";
+    const clean = m.replace(/^ERROR:\s*/i, "").trim();
+    return clean || (what + "에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+
+  // 눌린 자리에서 «그 자리»에 패널을 편다(답글 / 수정·삭제 / 신고)
+  function cmtSel(base, id) {
+    // CSS.escape 가 없는 옛 브라우저를 위해 속성 선택자를 직접 만든다
+    const v = String(id).replace(/["\\]/g, "\\$&");
+    return document.querySelector(base + '="' + v + '"]');
+  }
+
+  function onCmtAction(act, id) {
+    const row = cmtRows.find((r) => String(r.id) === String(id));
+    if (!row) return;
+    if (act === "report") { openReportModal({ id: row.id }, "comment"); return; }
+    if (act === "reply") {
+      const slot = cmtSel(".cmt-reply-slot[data-parent", id);
+      if (!slot) return;
+      if (slot.innerHTML) { slot.innerHTML = ""; return; }        // 한 번 더 누르면 접는다
+      slot.innerHTML = cmtFormHtml(id);
+      bindCmtForm(slot.querySelector(".cmt-form"));
+      const ta = slot.querySelector(".cmt-in-body");
+      if (ta) { try { ta.focus(); } catch (err) { /* 무시 */ } }
+      return;
+    }
+    if (act === "mine") {
+      const panel = cmtSel(".cmt-panel[data-panel", id);
+      if (!panel) return;
+      if (panel.innerHTML) { panel.innerHTML = ""; return; }
+      /* 본인 확인은 «PIN» 이 한다 — 접수번호나 닉네임으로 확인하지 않는다.
+         ⚠ 모달을 새로 만들지 않고 «그 의견 자리»에 편다. 어느 의견을 고치는지가
+            화면에서 보이므로 엉뚱한 글을 지우는 사고가 줄어든다. */
+      panel.innerHTML = `<div class="cmt-mine">
+          <label class="sr-only">PIN 4자리</label>
+          <input class="text-input cmt-mine-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" autocomplete="off" />
+          <textarea class="text-input cmt-mine-body" rows="3" maxlength="${CMT_MAX}"></textarea>
+          <p class="field-err cmt-mine-err" role="alert" hidden></p>
+          <div class="cmt-mine-acts">
+            <button type="button" class="big-btn cmt-mine-save">수정 저장</button>
+            <button type="button" class="big-btn pp-danger cmt-mine-del">삭제</button>
+            <button type="button" class="big-btn cmt-mine-cancel">취소</button>
+          </div>
+        </div>`;
+      const pinEl = panel.querySelector(".cmt-mine-pin");
+      const bodyEl = panel.querySelector(".cmt-mine-body");
+      bodyEl.value = row.body || "";
+      pinEl.addEventListener("input", (ev) => { ev.target.value = ev.target.value.replace(/[^0-9]/g, ""); });
+      panel.querySelector(".cmt-mine-cancel").addEventListener("click", () => { panel.innerHTML = ""; });
+      panel.querySelector(".cmt-mine-save").addEventListener("click", () => editComment(row, panel));
+      panel.querySelector(".cmt-mine-del").addEventListener("click", () => deleteComment(row, panel));
+      try { pinEl.focus(); } catch (err) { /* 무시 */ }
+    }
+  }
+
+  function minePanelErr(panel, msg) {
+    const el = panel.querySelector(".cmt-mine-err");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.hidden = !msg;
+  }
+
+  async function editComment(row, panel) {
+    const pin = panel.querySelector(".cmt-mine-pin").value.trim();
+    const body = panel.querySelector(".cmt-mine-body").value.trim();
+    if (!/^\d{4}$/.test(pin)) { minePanelErr(panel, "PIN 4자리를 넣어 주세요."); return; }
+    if (!body) { minePanelErr(panel, "내용을 적어 주세요."); return; }
+    if (body.length > CMT_MAX) { minePanelErr(panel, "의견은 " + CMT_MAX + "자 이내로 적어 주세요."); return; }
+    minePanelErr(panel, "");
+    const client = getClient();
+    if (!client) { minePanelErr(panel, "지금은 고치실 수 없습니다."); return; }
+    const btn = panel.querySelector(".cmt-mine-save");
+    btn.disabled = true;
+    try {
+      const { error } = await client.rpc("edit_comment", { p_id: row.id, p_pin: pin, p_body: body });
+      if (error) throw error;
+      await renderComments(cmtP);
+    } catch (e) {
+      console.warn("[정책참여] 의견 수정 실패:", e);
+      btn.disabled = false;
+      minePanelErr(panel, cmtRpcMsg(e, "의견 수정"));
+    }
+  }
+
+  async function deleteComment(row, panel) {
+    const pin = panel.querySelector(".cmt-mine-pin").value.trim();
+    if (!/^\d{4}$/.test(pin)) { minePanelErr(panel, "PIN 4자리를 넣어 주세요."); return; }
+    // 되돌릴 수 없는 동작이므로 반드시 한 번 묻는다(규격서 12절).
+    const ok = await appConfirm("이 의견을 지우시겠습니까?\n지운 뒤에는 되돌릴 수 없습니다.", { title: "의견 삭제" });
+    if (!ok) return;
+    minePanelErr(panel, "");
+    const client = getClient();
+    if (!client) { minePanelErr(panel, "지금은 지우실 수 없습니다."); return; }
+    const btn = panel.querySelector(".cmt-mine-del");
+    btn.disabled = true;
+    try {
+      const { error } = await client.rpc("delete_comment", { p_id: row.id, p_pin: pin });
+      if (error) throw error;
+      if (cmtP) cmtP.comment_count = Math.max(0, cmtCountOf(cmtP) - 1);
+      await renderComments(cmtP);
+    } catch (e) {
+      console.warn("[정책참여] 의견 삭제 실패:", e);
+      btn.disabled = false;
+      minePanelErr(panel, cmtRpcMsg(e, "의견 삭제"));
+    }
   }
 
   // ---------- 신고 ----------
   let reportTarget = null;
-  function openReportModal(p) {
+  /* ★ C-07 — 같은 신고 모달을 «제안»과 «의견» 두 곳이 함께 쓴다.
+     새 모달을 만들지 않는다(규격서 0절 — 이 앱의 모달은 이렇게 생겼다는 감각을 지킨다).
+     kind 는 "proposal"(기본) 또는 "comment". 부르는 RPC 만 갈린다.
+     ⚠ 화면 부제를 바꿔 «무엇을 신고하는지» 눈으로 보이게 한다 — 두 버튼이 같은 창을
+        띄우는데 무엇을 신고하는지 안 보이면 엉뚱한 것을 신고하게 된다. */
+  let reportKind = "proposal";
+  function openReportModal(p, kind) {
     reportTarget = p;
+    reportKind = (kind === "comment") ? "comment" : "proposal";
+    const sub = document.querySelector("#reportModal .install-sub");
+    const ttl = $("reportModalTitle");
+    if (ttl) ttl.textContent = (reportKind === "comment") ? "의견 신고" : "제안 신고";
+    if (sub) sub.textContent = (reportKind === "comment")
+      ? "이 «의견»의 부적절한 내용을 알려주세요"
+      : "이 «제안»의 부적절한 내용을 알려주세요";
     $("reportReason").value = "욕설·비방";
     $("reportMemo").value = "";
     $("reportModal").hidden = false;
@@ -756,13 +1356,20 @@
     const client = getClient();
     if (!client || !reportTarget) { appAlert("신고할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
     try {
-      const { error } = await client.rpc("report_proposal", {
+      /* 두 RPC 는 인자 이름·차례가 «같다» — report_proposal(p_id,p_reason,p_reporter) ·
+         report_comment(p_id,p_reason,p_reporter). 이름만 갈아 끼운다.
+         ⚠ 서로 다른 표를 보므로 «제안 신고»와 «의견 신고»는 따로 쌓인다(둘 다 5명 누적 시 자동 숨김). */
+      const fn = (reportKind === "comment") ? "report_comment" : "report_proposal";
+      const { error } = await client.rpc(fn, {
         p_id: reportTarget.id, p_reason: reason, p_reporter: voterKey(),
       });
       if (error) throw error;
+      const wasComment = (reportKind === "comment");
       // 신고 모달을 «먼저» 닫고 알림을 띄운다(모달 두 겹이 겹쳐 보이지 않게)
       closeReportModal();
       appAlert("신고가 접수되었습니다. 검토 후 조치하겠습니다.", { title: "신고 접수" });
+      // 의견 신고는 누적으로 «감춰질» 수 있으므로 목록을 다시 읽어 화면을 맞춘다.
+      if (wasComment && cmtP) { try { renderComments(cmtP); } catch (err) { /* 무시 */ } }
     } catch (e) {
       console.warn("[정책참여] 신고 실패:", e);
       appAlert(actionErrMsg(e, "신고"));
@@ -780,12 +1387,49 @@
     return !$("pinModal").hidden || !$("reportModal").hidden || !$("view-pwrite").hidden;
   }
 
+  /* ★ 2026-08-24 (🩵물결 지적) — «지금 무언가 쓰고 있는가».
+     ────────────────────────────────────────────────────────────────────────
+     상세 화면을 실시간으로 다시 그리면 #pdetailContent 의 innerHTML 이 통째로
+     갈린다. 그 안에 의견 쓰기 폼이 «들어 있으므로», 쓰던 글과 커서가 함께 사라진다.
+     ⛔⛔ 입력 유실은 실시간보다 «나쁘다». 시민이 세 줄 쓰다 날리면 다시 쓰지 않는다.
+     → 아래 중 하나라도 참이면 다시 그리지 않고 «배너만» 올린다.
+        ① 초점이 상세 화면 안의 입력칸에 있다 (한 글자도 안 썼어도 «쓰려는 중»이다)
+        ② 의견 폼·수정 패널의 어느 칸에든 글자가 있다
+        ③ 제안 작성·수정 폼(세 칸 포함)에 글자가 있다  ← _isDirtyView 가 판정
+     ⚠ ①이 없으면 «빈 칸에 커서를 두고 생각 중»인 사람의 커서를 빼앗게 된다.
+     ⚠ 배너는 그대로 쌓이므로 «놓치는 것»은 없다 — 다 쓰고 나면 눌러서 보면 된다. */
+  function cmtTyping() {
+    // ① 초점이 상세 화면 «안»의 입력칸에 있는가
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) {
+      const host = $("view-pdetail");
+      if (host && !host.hidden && host.contains(a)) return true;
+    }
+    // ② 의견 폼·수정 패널에 «쓰다 만 글»이 있는가
+    const sels = ".cmt-in-nick, .cmt-in-pin, .cmt-in-body, .cmt-mine-pin, .cmt-mine-body";
+    const list = document.querySelectorAll(sels);
+    for (let i = 0; i < list.length; i++) {
+      if (String(list[i].value || "").trim() !== "") return true;
+    }
+    // ③ 제안 작성·수정 폼(app.js 가 «지금 보이는 칸»만 센다)
+    try { if (window._isDirtyView && window._isDirtyView()) return true; } catch (e) { /* 무시 */ }
+    return false;
+  }
+
   function syncRtBanner() {
     const box = $("ppRtBanner");
-    if (!box) return;
-    const show = rtPending > 0 && !$("view-propose").hidden && !rtBusy();
-    if (show) $("ppRtText").textContent = `새 제안·변경 ${rtPending}건이 있습니다`;
-    box.hidden = !show;
+    if (box) {
+      const show = rtPending > 0 && !$("view-propose").hidden && !rtBusy();
+      if (show) $("ppRtText").textContent = `새 제안·변경 ${rtPending}건이 있습니다`;
+      box.hidden = !show;
+    }
+    /* ★ 2026-08-24 — 의견 실시간 구독을 «화면에 맞춰» 여닫는다.
+       이 함수는 app.js 의 showView() 가 화면이 바뀔 때마다 window.Proposals.syncNotice 로
+       부르는 «유일하게 믿을 수 있는 길목»이다. 상세에 들어오면 열리고, 어떤 경로로
+       나가든 닫힌다. 멱등이라 여러 번 불려도 안전하다.
+       ⚠ 배너가 없는 화면(box 가 null)에서도 «반드시» 여기까지 와야 하므로,
+         위의 조기 return 을 if 로 감쌌다. 되돌리면 구독이 안 닫힌다. */
+    try { syncCommentSub(); } catch (e) { /* 실시간이 실패해도 화면은 멀쩡해야 한다 */ }
   }
 
   function applyRtRefresh() {
@@ -794,32 +1438,141 @@
     reload();
   }
 
+  /* ★ 2026-08-24 (🩵물결 지적으로 메운 구멍) — 상세를 열어 둔 채로도 «남의 의견»이 보인다.
+     ────────────────────────────────────────────────────────────────────────
+     예전에는 이 핸들러가 배너만 올렸다. 그래서 시민 A 가 제안 상세를 열어 두고 있을 때
+     시민 B 가 댓글을 달면 A 의 화면에는 «영영» 나타나지 않았다.
+     「세 앱이 아무 조작 없이 맞물린다」는 이 프로젝트의 설계가 의견에서만 깨져 있었다.
+
+     구독이 «둘»인 이유 — 표가 둘이고, 각자 말하는 것이 다르다.
+       ① proposals   … 댓글이 «늘고 줄 때» (트리거가 comment_count 를 고쳐 UPDATE 가 난다)
+                        + 제안 자체의 상태·공감·본문 변화. «목록»의 관심사다.
+       ② proposal_comments … 댓글 «그 자체». 본문 수정(edit_comment)은 count 를 바꾸지
+                        않으므로 ①에는 «아무 신호도 나지 않는다». 상세 화면의 관심사다.
+     ★ 2026-08-24 정정 (🩷자물쇠 결정 · 🩵물결 검수) — 여기 예전에 「proposal_comments 전용
+       구독을 만들지 말 것」이라 적혀 있었다. «틀렸다». 그때는 ②가 없어 공무원이 답글을
+       고쳐도 시민 화면이 영영 그대로였다. supabase/제안댓글_260824.sql:340 참조 —
+       고칠 곳은 «표(트리거)»가 아니라 «화면(구독)»이라는 것이 자물쇠의 결정이다.
+       ⛔ 트리거의 「update of is_hidden, is_deleted」 한정을 넓혀서 풀려고 하지 말 것.
+          (댓글 오타 하나에 proposals 가 통째로 방송되고, 공무원앱의 «최근 변경»이 흔들린다)
+
+     ⚠ 두 구독이 «같은 타이머»(_rtQuietTimer)를 쓴다 — 새 댓글 하나는 ①②를 동시에
+       깨우므로, 타이머가 따로면 화면을 «두 번» 다시 그린다. 반드시 하나로 묶어 둔다.
+     ⚠ 1500ms 는 app.js 의 benefits 구독과 «같은 값»이다(한 번에 수십 행이 쏟아져도 한 번만). */
+  const RT_QUIET_MS = 1500;
+  let _rtQuietTimer = 0;
+
+  /* 상세 화면을 «조용히» 다시 그리도록 예약한다 — ①②가 함께 쓰는 단 하나의 길목.
+     ⛔ 여기를 우회해서 refreshDetailQuietly() 를 직접 부르지 말 것 —
+        디바운스와 cmtTyping() 두 보호막이 «모두» 이 안에 있다. 빠뜨리면
+        시민이 의견을 쓰는 도중에 화면이 갈려 쓰던 글이 날아간다. */
+  function scheduleDetailRefresh() {
+    // 상세를 보고 있지 않으면 여기까지 — 목록은 지금까지처럼 사용자가 누를 때만 갱신한다.
+    if ($("view-pdetail").hidden) return;
+    if (_rtQuietTimer) clearTimeout(_rtQuietTimer);
+    _rtQuietTimer = setTimeout(() => {
+      _rtQuietTimer = 0;
+      // ⚠ «타이머가 끝나는 그 순간»에 다시 판정한다. 1.5초 사이에 시민이 타자를 시작했을 수 있다.
+      if ($("view-pdetail").hidden || cmtTyping()) return;   // 배너는 이미 올라가 있다
+      refreshDetailQuietly();
+    }, RT_QUIET_MS);
+  }
+
+  function onProposalsChanged() {
+    rtPending += 1;              // 배너 카운트는 «언제나» 쌓는다(놓치는 것이 없게)
+    syncRtBanner();
+    scheduleDetailRefresh();
+  }
+
+  /* ② proposal_comments 핸들러.
+     ⛔ rtPending 을 «올리지 않는다». 새 댓글은 ①이 이미 세고 있어 두 번 세면 「2건」이 된다.
+        본문 수정은 애초에 «목록»에서 갱신할 거리가 없다(댓글 수가 그대로다).
+        → 이 구독은 «지금 보고 있는 상세»를 다시 그리는 일에만 쓴다. */
+  function onCommentsChanged() {
+    scheduleDetailRefresh();
+  }
+
   function subscribeRealtime() {
     const client = getClient();
     if (!client || realtimeSub) return;
     try {
       realtimeSub = client
         .channel("proposals-citizen")
-        .on("postgres_changes", { event: "*", schema: "public", table: "proposals" }, () => {
-          rtPending += 1;       // 화면은 그대로 두고 «알림»만
-          syncRtBanner();
-        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "proposals" }, onProposalsChanged)
         .subscribe();
     } catch (e) {
       console.warn("[정책참여] 실시간 구독 실패(무시):", e);
     }
   }
 
+  /* ── ② 댓글 구독 — «상세 화면을 보는 동안에만» 열어 둔다 ──────────────────
+     왜 상시가 아닌가: 목록에는 댓글 본문이 없다. 늘 열어 두면 시(市) 전체의 모든
+     댓글이 모든 시민에게 방송되는 셈이라, 쓸모없는 연결과 통신만 남는다.
+     ⚠ 여닫는 곳은 syncRtBanner() 한 곳뿐이다 — app.js 의 showView() 가 «화면이 바뀔
+       때마다» 그것을 부르므로(app.js §showView 의 syncNotice 호출), 뒤로가기·스와이프·
+       홈 버튼 등 «어떤 경로로 상세를 떠나든» 반드시 닫힌다. 나갈 길마다 따로 적으면
+       언젠가 한 길을 빠뜨린다.
+     ⚠ 서버쪽 filter 로 «이 제안의 댓글»만 받는다. 그래야 옆 제안 댓글에 깨지 않는다.
+        └ 이 구독이 «못 받는» 경우가 둘 있다. 둘 다 ① proposals 구독이 대신 받으므로
+          놓치는 것은 없다 — 그래서 filter 를 빼거나 RLS 를 풀 이유가 없다.
+            · 완전 삭제(답글 없는 본인 삭제·공무원 삭제) — DELETE 의 old 에는 기본
+              replica identity 상 id 밖에 없어 이 filter 에 걸리지 않는다.
+            · 숨김 처리(is_hidden=true) — 정책 pcomments_read_public 이 「is_hidden=false」라
+              바뀐 뒤의 행이 anon 의 RLS 를 통과하지 못해 방송되지 않는다.
+          두 경우 모두 comment_count 가 바뀌어 트리거가 proposals 를 갱신한다 → ①이 받는다.
+     ⛔ removeAllChannels() 를 쓰지 말 것(이 파일 머리말) — 사업정보 구독까지 끊긴다. */
+  let cmtSub = null;
+  let cmtSubPid = "";
+
+  function syncCommentSub() {
+    const wantPid = (!$("view-pdetail").hidden && currentP) ? String(currentP.id) : "";
+    if (wantPid === cmtSubPid) return;      // 이미 맞다 — 아무것도 하지 않는다(멱등)
+    const client = getClient();
+    if (!client) return;
+    // 열려 있던 것을 먼저 닫는다(상세를 떠났거나, 다른 제안 상세로 옮겨 갔거나)
+    if (cmtSub) {
+      try { client.removeChannel(cmtSub); } catch (e) { /* 무시 */ }
+      cmtSub = null;
+      cmtSubPid = "";
+    }
+    if (!wantPid) return;                   // 상세를 떠났다 → 닫은 채로 끝
+    try {
+      cmtSub = client
+        .channel("pcomments-citizen-" + wantPid)
+        .on("postgres_changes",
+            { event: "*", schema: "public", table: "proposal_comments", filter: "proposal_id=eq." + wantPid },
+            onCommentsChanged)
+        .subscribe();
+      cmtSubPid = wantPid;
+    } catch (e) {
+      cmtSub = null; cmtSubPid = "";
+      console.warn("[정책참여] 의견 실시간 구독 실패(무시):", e);
+    }
+  }
+
+  /* 상세를 «조용히» 다시 그린다 — 시민이 아무것도 누르지 않았는데 화면이 바뀌는 자리라
+     지켜야 할 것이 셋 있다.
+       ① 보던 자리(스크롤)를 유지한다. 의견이 하나 늘면 문서가 길어져 글이 밀린다.
+       ② 초점을 빼앗지 않는다 → 부르기 «전»에 cmtTyping() 으로 걸러 두었다.
+       ③ 제안 본문을 못 읽어 왔더라도 «의견만이라도» 맞춘다(이 기능의 목적이 의견이다).
+     ⚠ renderDetail() 이 끝에서 renderComments() 를 부른다 — 여기서 또 부르면 두 번 읽는다.
+        그래서 ③의 «못 읽었을 때»에만 따로 부른다. */
   async function refreshDetailQuietly() {
     const client = getClient();
     if (!client || !currentP) return;
+    const keepY = window.scrollY || window.pageYOffset || 0;      // ①
     try {
       const { data, error } = await client.from("proposals").select(COLS_DETAIL).eq("id", currentP.id).single();
-      if (!error && data && !$("view-pdetail").hidden) {
+      if ($("view-pdetail").hidden) return;                        // 그 사이 화면을 떠났다
+      if (!error && data) {
         currentP = data;
-        renderDetail(data);
+        renderDetail(data);            // ← 이 안에서 renderComments(data) 가 불린다
+      } else {
+        renderComments(currentP);      // ③ 본문은 못 읽었어도 의견은 맞춘다
       }
-    } catch (e) {}
+      // 다시 그린 뒤 보던 자리로 되돌린다(브라우저가 스크롤을 0 으로 깎는 것을 막는다)
+      try { window.scrollTo(0, keepY); } catch (e) { /* 무시 */ }
+    } catch (e) { /* 조용히 — 실시간 갱신이 실패해도 화면은 그대로 살아 있다 */ }
   }
 
   // ---------- 이벤트 바인딩 ----------
@@ -870,7 +1623,7 @@
           ${p.category ? `<span class="pp-cat">${esc(p.category)}</span>` : ""}
         </div>
         <div class="ms-card-title"><button class="ms-open" type="button" data-id="${esc(p.id)}">${esc(p.title)}<span class="ms-open-go" aria-hidden="true">제안 내용 보기 ›</span></button></div>
-        <div class="ms-card-meta">올린 날 ${esc(fmtDate(p.created_at))} · 공감 ${Number(p.like_count) || 0}</div>
+        <div class="ms-card-meta">올린 날 ${esc(fmtDate(p.created_at))} · 공감 ${Number(p.like_count) || 0} · 의견 ${Number(p.comment_count) || 0}${p.proposal_no ? " · 접수번호 " + esc(p.proposal_no) : ""}</div>
       </div>`;
     }).join("");
     box.querySelectorAll(".ms-open").forEach((btn) => {
@@ -905,6 +1658,18 @@
     if ($("pwRegion")) $("pwRegion").addEventListener("change", () => {
       if ($("pwRegion").value) setPwRegionErr("");
     });
+    /* ★ C-07 — 「다른 예시 보기」·글자 수 세기·분야 연동
+       ⚠ 「다른 예시 보기」는 제목·1칸·2칸·3칸을 «한꺼번에» 다음 벌로 넘긴다(사양서 3.2-2).
+          칸마다 따로 굴리면 교통 문제 + 육아 제안 + 환경 효과가 섞여 오히려 헷갈린다. */
+    if ($("pwExNext")) $("pwExNext").addEventListener("click", nextExample);
+    if ($("pwCategory")) $("pwCategory").addEventListener("change", syncExampleToCategory);
+    [["pwProblem", "pwProblemCount", "problem"], ["pwIdea", "pwIdeaCount", "idea"],
+     ["pwEffect", "pwEffectCount", "effect"]].forEach(([ta, out, key]) => {
+      const el = $(ta);
+      // ⚠ 한글(IME) 조합 중에도 input 은 계속 온다 — 그대로 세면 된다(막지 않는다).
+      if (el) el.addEventListener("input", () => paintCount(ta, out, PW_MAX[key]));
+    });
+
     // PIN은 숫자만
     if ($("pwPin")) $("pwPin").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ""); });
     if ($("pinInput")) $("pinInput").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ""); });

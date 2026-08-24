@@ -124,6 +124,156 @@ def dedupe_keep_latest(records):
 tidy_text = config.tidy_text
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  📑 C-05 · 장황한 「내용」·「이용방법」을 «파생 필드»로 갈라 준다 (2026-08-24)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  ⭐ 왜 «파생»인가 — 원본을 절대 건드리지 않는다
+#     엑셀의 「내용」·「이용방법」은 상주시 홈페이지 연동(web_import)이 **덮어쓴다.**
+#     엑셀을 쪼개 놓으면 다음 연동에서 원상복구되고, 그 사이 담당자가 손댄 것도 함께 날아간다.
+#     그래서 «읽어서 갈라 붙이는» 일은 오직 이 빌드 시점에만 한다.
+#     → data.json 의 「내용」·「이용방법」은 **원문 그대로 남는다.** 아래 필드가 «덧붙는다».
+#
+#  만들어지는 파생 필드 (없으면 "" 또는 [] — 화면은 «있을 때만» 그리면 된다)
+#    · 내용본문     : 「내용」에서 아래 꼬리들을 떼어낸 나머지 (= 실제 지원 내용)
+#    · 이용방법본문 : 「이용방법」에서 「신청기간:」 머리줄과 「자세히 보기: URL」 줄을 떼어낸 나머지
+#    · 신청기간     : 언제 신청하는가            (「내용」의 «/ 신청기한:» 꼬리 우선, 없으면 「이용방법」의 «신청기간:» 줄)
+#    · 지원기간     : 지원이 얼마나 계속되는가   (「내용」의 «/ 지원기간:» 꼬리)
+#    · 유의사항     : ※ 로 시작하는 안내 «목록»  (list[str])
+#    · 상세링크     : 상주시 홈페이지 원문 주소  (「이용방법」의 «자세히 보기:» 줄)
+#
+#  ⚠ 규칙으로 못 가르는 것은 «건드리지 않는다». 억지로 자르면 문장이 깨진다.
+#    - ※ 가 «괄호 안»에 있으면 문장의 일부다(예: 「월 최대 20만원(※ 관내 졸업자 40만원)」) → 자르지 않는다.
+#    - ※ 뒤가 너무 길면(_NOTE_MAX_LEN 초과) 안내가 아니라 본문이다 → 자르지 않는다.
+#    - 「/」 로 나뉜 조각에 아래 머리말이 없으면 본문이다 → 그대로 둔다.
+
+# 「/」 조각·줄머리에서 «신청 시기»로 인정할 머리말
+_HEAD_APPLY = ("신청기한", "신청기간", "신청시기", "접수기간", "접수기한", "신청일정")
+# 「/」 조각에서 «지원 지속기간»으로 인정할 머리말
+_HEAD_PERIOD = ("지원기간", "지급기간")
+
+# 앞에 붙는 머리표(- · ○ ▶ …)는 무시하고 머리말을 알아본다.
+#   실제 자료에 「- 신청기간 : 상시접수」처럼 머리표를 달고 오는 줄이 있다.
+_BULLET = r"[\-·ㆍ○●▶◇◆*]?\s*"
+_RE_APPLY = re.compile(r"^\s*%s(?:%s)\s*[:：]\s*(.+)$" % (_BULLET, "|".join(_HEAD_APPLY)), re.S)
+_RE_PERIOD = re.compile(r"^\s*%s(?:%s)\s*[:：]\s*(.+)$" % (_BULLET, "|".join(_HEAD_PERIOD)), re.S)
+_RE_MORE = re.compile(r"^\s*자세히\s*보기\s*[:：]\s*(\S+)\s*$")
+_RE_HOWTO = re.compile(r"\s*[-·]?\s*신청\s*방법\s*[:：]\s*")
+
+# 머리말 없이 「/」 뒤에 붙은 짧은 «신청 안내»(예: 「매년 연초 신청」·「연중 신청 가능」)
+_SHORT_APPLY_MAX = 20
+# ※ 뒤 안내가 이보다 길면 «안내»가 아니라 본문으로 본다(잘라 내면 정보가 사라진다)
+_NOTE_MAX_LEN = 150
+
+
+def _cut_note(seg):
+    """한 조각 → (※ 앞 본문, ※ 안내 목록).
+
+    ※ 가 «괄호 밖»에 있을 때만 자른다. 괄호 안 ※ 는 문장의 일부다."""
+    depth = 0
+    for i, ch in enumerate(seg):
+        if ch in "([{（〔":
+            depth += 1
+        elif ch in ")]}）〕":
+            depth = max(0, depth - 1)
+        elif ch == "※" and depth == 0:
+            tail = seg[i + 1:].strip()
+            if not tail or len(tail) > _NOTE_MAX_LEN:
+                break                       # 안내로 보기엔 너무 길다 → 자르지 않는다
+            head, rest = seg[:i].rstrip(), tail
+            # ※ 가 여러 개 이어 붙은 경우까지 훑는다
+            notes = []
+            for part in rest.split("※"):
+                part = part.strip()
+                if part:
+                    notes.append(part)
+            return head, notes
+    return seg, []
+
+
+def _parse_content(text):
+    """「내용」 → (본문, 신청기간 목록, 지원기간 목록, 유의사항 목록)."""
+    body, apply_at, period, notes = [], [], [], []
+    for line in str(text or "").split("\n"):
+        keep = []
+        for seg in line.split(" / "):
+            m = _RE_APPLY.match(seg)
+            if m:
+                v, nt = _cut_note(m.group(1).strip())
+                if v:
+                    apply_at.append(v)
+                notes.extend(nt)
+                continue
+            m = _RE_PERIOD.match(seg)
+            if m:
+                v, nt = _cut_note(m.group(1).strip())
+                if v:
+                    period.append(v)
+                notes.extend(nt)
+                continue
+            head, nt = _cut_note(seg)
+            notes.extend(nt)
+            head = head.strip()
+            if not head:
+                continue
+            # 머리말 없는 짧은 신청 안내(「매년 연초 신청」 등)
+            if keep and len(head) <= _SHORT_APPLY_MAX and "신청" in head:
+                apply_at.append(head)
+                continue
+            keep.append(head)
+        if keep:
+            body.append(" / ".join(keep))
+    return "\n".join(body).strip(), apply_at, period, notes
+
+
+def _parse_howto(text):
+    """「이용방법」 → (본문, 신청기간 목록, 상세링크)."""
+    body, apply_at, link = [], [], ""
+    for line in str(text or "").split("\n"):
+        m = _RE_MORE.match(line)
+        if m:                                   # 「자세히 보기: https://…」 줄
+            link = link or m.group(1)
+            continue
+        m = _RE_APPLY.match(line)
+        if m:
+            v = m.group(1).strip()
+            # 「신청기간: 상시접수 - 신청방법 : 읍면동…」처럼 한 줄에 붙어 온 경우 갈라 둔다
+            parts = _RE_HOWTO.split(v, maxsplit=1)
+            if parts[0].strip():
+                apply_at.append(parts[0].strip())
+            if len(parts) > 1 and parts[1].strip():
+                body.append(parts[1].strip())
+            continue
+        if line.strip():
+            body.append(line.rstrip())
+    return "\n".join(body).strip(), apply_at, link
+
+
+def _uniq(seq):
+    out = []
+    for s in seq:
+        s = str(s or "").strip()
+        if s and s not in out:
+            out.append(s)
+    return out
+
+
+def derive_fields(content, howto):
+    """「내용」·「이용방법」 원문 → 파생 필드 dict. 원문은 건드리지 않는다."""
+    c_body, c_apply, c_period, c_notes = _parse_content(content)
+    h_body, h_apply, link = _parse_howto(howto)
+    # 신청기간은 「내용」 쪽이 더 구체적이다(「2026.3.3.~12.14.」). 없을 때만 「이용방법」 값을 쓴다.
+    apply_at = _uniq(c_apply) or _uniq(h_apply)
+    return {
+        "내용본문": c_body,
+        "이용방법본문": h_body,
+        "신청기간": " / ".join(apply_at),
+        "지원기간": " / ".join(_uniq(c_period)),
+        "유의사항": _uniq(c_notes),
+        "상세링크": link,
+    }
+
+
 def categorize(record):
     """PC 앱 rebuild_categories_from_db 와 동일한 규칙으로 한 사업의 카테고리 키 목록을 만든다."""
     cats = []
@@ -147,6 +297,11 @@ def main():
         print("[오류] 엑셀을 찾을 수 없습니다:", EXCEL)
         sys.exit(1)
 
+    # 🔒 분류 규칙 자기점검 — «분야가 실제로 다시 계산되는» 이 자리가 잡아낼 마지막 기회다.
+    #    (예: 💍 결혼·신혼부부에 맨 '결혼'을 넣으면 다문화 사업이 딸려 온다 — config 주석 참조)
+    for _p in getattr(config, "verify_category_rules", lambda: [])():
+        print("[⚠ 분류규칙 경고]", _p)
+
     if EXCEL.lower().endswith(".csv"):
         try:
             df = pd.read_csv(EXCEL, encoding="utf-8-sig").fillna("")
@@ -163,12 +318,14 @@ def main():
         cats = config.categories_for_record(r)
         for c in cats:
             found.add(c)
+        # ⚠ config.clean_text 가 아니라 tidy_text — 본문 속 신청 URL 을 살린다(위 주석 참조)
+        _content = tidy_text(r.get("내용", ""))
+        _howto = tidy_text(r.get("이용방법", ""))
         programs.append({
             "사업명": str(r.get("사업명", "")).strip(),
-            # ⚠ config.clean_text 가 아니라 tidy_text — 본문 속 신청 URL 을 살린다(위 주석 참조)
-            "내용": tidy_text(r.get("내용", "")),
+            "내용": _content,
             "대상자상세기준": tidy_text(r.get("대상자 상세기준", "")),
-            "이용방법": tidy_text(r.get("이용방법", "")),
+            "이용방법": _howto,
             "필요서류": tidy_text(r.get("필요서류", "")),
             "기관명": str(r.get("기관명", "")).strip(),
             "팀명": str(r.get("팀명", "")).strip(),
@@ -177,8 +334,13 @@ def main():
             # 종료일: 신규 DB에는 열이 없을 수 있다(없으면 "" → 화면에서 렌더 생략).
             "종료일": str(r.get("종료일", "")).strip(),
             # 비고: 접수 마감/재접수 시기 등 시민에게 반드시 보여야 할 안내(📌 접수 안내)
-            "비고": tidy_text(r.get("비고", "")),
+            # ⚠ «※[내부]» 로 시작하는 줄은 담당자끼리 남긴 내부 메모라 시민에게 내보내지 않는다.
+            #   (규칙·함수는 config.py 단일 출처 — config.strip_internal_notes 주석 참조)
+            "비고": config.strip_internal_notes(tidy_text(r.get("비고", ""))),
             "categories": cats,
+            # 📑 C-05 파생 필드 — 원문(내용·이용방법)은 위에 그대로 두고 «덧붙인다».
+            #    화면은 값이 있을 때만 그리면 된다(빈 문자열/빈 배열이면 없는 것).
+            **derive_fields(_content, _howto),
         })
 
     # DB에 사업이 없어도 항상 보여줄 카테고리(PC 앱과 동일)
@@ -193,6 +355,13 @@ def main():
 
     # 맞춤추천 규칙(PC 앱 recommend_view 와 동일) — 클라이언트가 그대로 사용
     situation_map = [
+        # 2026-08-24 (C-13 승인) — 「결혼」이 빠져 있었다. 상주시 인구정책의 축이
+        #   «결혼 → 출산 → 양육»인데 상황 목록은 임신부터 시작해, 결혼을 앞둔 시민이
+        #   맞춤추천으로는 결혼장려금·신혼부부 주거지원을 만날 길이 없었다.
+        #   ⚠ 순서상 «임신·출산 앞»에 둔다(사람의 생애 순서를 따른다).
+        #   ⚠ PC앱 recommend_view.py·data_service.py 에 같은 표의 «사본»이 있다 —
+        #     그쪽은 🟠단장·🔵손길 몫이라 여기서 건드리지 않았다(C-13 파급 목록 참조).
+        ["결혼 예정이거나 신혼(혼인 7년 이내)", "💍 결혼·신혼부부"],
         ["임신 중이거나 출산 예정", "👶 임신·출산"],
         ["영유아·미취학 아동 자녀가 있음", "🧸 영유아·보육"],
         ["초·중·고 학생 자녀가 있음", "📚 청소년·교육"],
@@ -207,8 +376,13 @@ def main():
         ["소상공인·창업 준비 중", "🏪 소상공인·기업"],
         ["구직 중·취업 준비 중", "💼 일자리·구직"],
         ["무주택·주거 지원이 필요", "🏠 주거·부동산"],
+        # 2026-08-24 (C-13 승인) — 🚚 전입·정착 신설에 맞춰 추가.
+        ["상주시로 이사 왔거나 이사 예정", "🚚 전입·정착"],
         ["국가유공자·보훈 대상", "🎖️ 보훈·유공자"],
-        ["여성(경력단절 등)", "👩 여성"],
+        # 2026-08-24 (C-13) — 라벨을 「경력단절 등」에서 바꿨다. 새 기준으로 👩 여성은
+        #   «수혜자가 여성 본인»인 16건(산전·산후, 난임, 생리용품 등)인데, 정작
+        #   «경력단절» 사업은 이 DB에 0건이라 라벨이 없는 것을 가리키고 있었다.
+        ["여성(여성 건강·임신·출산 등)", "👩 여성"],
         ["건강·의료 지원이 필요", "🏥 건강·의료"],
     ]
 
@@ -274,6 +448,12 @@ def main():
         for p in programs)
     print(f"[완료] {len(programs)}개 사업, {len(categories)}개 카테고리 → {OUT}")
     print(f"       비고(접수 안내) 있는 사업 {n_note}건 / 종료일 있는 사업 {n_end}건")
+    # 📑 C-05 파생 필드가 몇 건에 붙었는지 — 0 이 되면 파싱 규칙이 죽었다는 신호다.
+    print("       파생: 신청기간 %d · 지원기간 %d · 유의사항 %d · 상세링크 %d건"
+          % (sum(1 for p in programs if p.get("신청기간")),
+             sum(1 for p in programs if p.get("지원기간")),
+             sum(1 for p in programs if p.get("유의사항")),
+             sum(1 for p in programs if p.get("상세링크"))))
     print(f"       본문 속 신청 URL {n_url}개 보존(화면에서 링크로 표시)")
 
 

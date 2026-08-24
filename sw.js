@@ -22,9 +22,13 @@
 // 배포 버전 — 버전정보.json 의 "version" 및 version.js 의 APP_VERSION 과 항상 같은 값.
 // ⚠ 손으로 고치지 말고 루트의 `py -3 자원버전_동기화.py` 를 돌리면
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
-const ASSET_V = "0.5.0";
+const ASSET_V = "0.6.0";
 
-const CACHE = "sangju-v49";   // v49: 내 신청 «취소(삭제)» 추가(2026-08-21, 📱모바일).
+const CACHE = "sangju-v51";   // v51: 0.6.0 — 분야 25개 2단 배치·카드 색 머리띠, 정책제안 3칸 템플릿,
+                               //   댓글 실시간 반영, 신청 실패 안내, 처리방침 정정 등 반영
+                               //   (app.js·config.js·apply_client.js·forms.js·proposals.js 변경, 2026-08-24 21시 배포).
+                               // v50: 앱 아이콘 A안 교체 — icon-*-v3.png(2026-08-24, 🔵손길).
+//                              v49: 내 신청 «취소(삭제)» 추가(2026-08-21, 📱모바일).
 // (v48: data.js 폴백 라우팅 — 행정망 .json 차단 대비, 2026-08-21, 📱모바일)
 //                              v47: 푸터 「앱 아이콘 설치」 단추 추가(2026-08-21, 🔴검수).
 //                #installAppBtn 은 기존 #installModal/a2hs.js 를 그대로 연다 — 새 자료 없음.
@@ -136,11 +140,12 @@ const ESSENTIAL = [
 //   ⚠ data.js 는 «.js» 로 끝나지만 자원이 아니라 데이터다(data.json 의 사본).
 //      프리캐시에 넣거나 cache-first 로 흘리면 «옛 사업 목록»이 굳어 버린다.
 const OPTIONAL = [
-  // ⚠ 아이콘 파일명의 «-v2» 는 «옛 아이콘 재사용»을 끊기 위한 것이다(make_icons.py 머리말).
+  // ⚠ 아이콘 파일명의 «-v3» 은 «옛 아이콘 재사용»을 끊기 위한 것이다(루트 mkicons.py 머리말).
+  //   ★ 아이콘을 다시 뽑을 때는 반드시 파일명 끝 번호를 올리고 CACHE 도 한 칸 올릴 것.
   //    도안을 새로 만들 때는 이름을 또 바꾸고, manifest.json·index.html 과 «함께» 고칠 것.
-  "icon-192-v2.png",
-  "icon-512-v2.png",
-  "icon-maskable-512-v2.png",
+  "icon-192-v3.png",
+  "icon-512-v3.png",
+  "icon-maskable-512-v3.png",
   "qr.png",
   "assets/sangsang1.png",
   "assets/gotgam.png",
