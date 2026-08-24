@@ -2742,8 +2742,14 @@ function playGotgam(boxId) {
 //     · 예전: 코드마다 1회씩 8초 폴링 → 분당 최대 225회 = «코드 대입 공격»과 트래픽 모양이 같았다.
 //     · 배열 함수 check_application_status_many 를 «먼저» 부르고(1회 왕복),
 //       그 함수가 아직 서버에 없으면(PGRST202) 단건 함수로 «조용히» 폴백한다.
-//     · 2026-08-19: 주기 폴링을 아예 없앴다 → «화면 진입/복귀 시 1회»만 호출한다.
-//       트래픽이 «사람이 화면을 여는 횟수»와 같아져, 대입 공격과 확실히 구분된다.
+//     · 2026-08-19: 주기 폴링을 아예 없앴다 → «화면 진입/복귀 시 1회»만 호출했다.
+//     · ⭐ 2026-08-25 «되살렸다»(양호창님 지시) — 10초 주기. 없애 두었더니 공무원이 시민
+//       안내문을 써도 화면을 열어 둔 시민은 영영 그것을 못 봤다(이 화면의 존재 이유가 지워졌다).
+//       대입 공격과의 구분은 «폴링을 없애서»가 아니라 아래 세 가지로 지킨다:
+//         ① 배열 함수로 «1회 왕복»에 전부 조회 → 분당 6회(코드 수와 무관하다)
+//         ② 이 화면이 보일 때만 · document.hidden 이면 건너뜀
+//         ③ 가짜 코드를 서버에 던지지 않는다(프로브는 빈 배열)
+//       ⚠ ⏸ 정지 단추는 2026-08-25 양호창님 지시로 없었다. 근거는 msPaintAutoBtn 주석에 있다.
 //
 //  ⭐ 3값 프로브 (2026-08-18, 🔴 reviewer 가 찾은 실제 버그의 수정)
 //     예전에는 앱을 켤 때 프로브를 «딱 한 번» 던져 실패하면 msAvailable=false 로 굳었다.
@@ -2759,7 +2765,27 @@ const LOOKUP_KEY = "sangju_lookup_codes";   // [{code, receipt_no, benefit_name,
 const LOOKUP_MAX = 30;                      // 기기에 보관할 최대 건수(오래된 것부터 버림)
 const LOOKUP_TTL_MS = 180 * 24 * 60 * 60 * 1000;   // 보관 코드 자동 만료 — 180일
 const LOOKUP_TOUCH_MS = 12 * 60 * 60 * 1000;       // «마지막 확인일» 갱신 주기(잦은 쓰기 방지)
-// ⛔ MS_POLL_MS(폴링 주기)는 2026-08-19 폐지됐다 — 되살리지 말 것(위 ⭐ 참조).
+/* 🔄 자동 새로고침 주기 — ⭐ 2026-08-25 양호창님 지시로 «되살렸다».
+   ─────────────────────────────────────────────────────────────────────
+   ⛔ 2026-08-19 에 이것을 없앴던 것이 결함이었다. 공무원이 시민 안내문을 써도,
+      화면을 열어 둔 시민은 «영영» 그것을 못 봤다(다시 들어오지 않는 한).
+      그것이 이 화면이 있는 이유 자체를 지우고 있었다.
+   ⚠ 10초는 «PC앱과 같은 값»이다(webui/app.js 의 AUTO_REFRESH_MS = 10000).
+      ⛔ 여기만 다른 숫자로 바꾸지 말 것 — 서로 다른 주기가 둘 돌아다니면 나중에
+        한쪽만 고쳐진다. 바꾸려면 세 앱을 함께 바꾼다.
+   🔒 2026-08-19 에 없앤 «진짜» 이유는 트래픽 모양이었다 — 코드마다 1건씩 8초 폴링이라
+      분당 225회로 «코드 대입 공격»과 구분되지 않았다. 그 문제는 이미 다른 방법으로
+      풀려 있다: ① 배열 함수 check_application_status_many 로 «1회 왕복»에 전부 조회,
+      ② 이 화면이 «보일 때만» 돌고 document.hidden 이면 건너뜀, ③ 아래 ⏸ 로 시민이 멈춤.
+      곧 10초 주기라도 왕복은 «분당 6회»이고, 가짜 코드를 던지지 않는다.
+   ⚠⚠ 2026-08-25 양호창님 지시로 ⏸ 정지 단추를 없앨다 — 폴링은 그대로 돌아간다.
+      지침(KWCAG 2.2 «정지 기능 제공») 적합 근거는 msPaintAutoBtn 주석에 적어 두었다. */
+const MS_POLL_MS = 10000;
+/* ⚠ msAuto 는 2026-08-25 부터 «항상 true» 입니다 — 정지 단추를 없앨기 때문입니다.
+     ⛔ 다시 false 로 뒤집는 곳을 만들지 마세요 — 끄면 다시 켜는 길이 없습니다.
+     ☆ 변수는 남깁니다 — msTick() 이 이 값을 읽습니다. */
+let msAuto = true;
+let msTimer = null;        // setInterval 손잡이 — 화면에 처음 들어올 때 한 번만 건다
 
 let msAvail = "unknown";   // "unknown" | "ok" | "unavailable"  (위 ⭐ 3값 프로브)
 let msBatch = "unknown";   // 배열 호출 함수가 서버에 있는가: "unknown" | "yes" | "no"
@@ -3133,7 +3159,7 @@ async function msLoadMyProposals() {
   catch (e) { box.innerHTML = `<div class="ms-empty"><p>지금은 제안 목록을 볼 수 없습니다.</p></div>`; }
 }
 
-// 낭독은 «실제로 달라졌을 때만» — 20초마다 같은 말을 읽지 않게 한다.
+// 낭독은 «실제로 달라졌을 때만» — 10초마다 같은 말을 읽지 않게 한다.
 function msAnnounce(msg) {
   const el = $("msAnnounce");
   if (el) el.textContent = msg || "";
@@ -3159,7 +3185,7 @@ async function msLoad(force) {
   msBusy = true;
   try {
     const res = await msFetchRows();
-    // 서명에 «오류였는가»까지 넣는다 → 연결이 끊긴 동안 20초마다 같은 화면을 다시 그리지 않는다.
+    // 서명에 «오류였는가»까지 넣는다 → 연결이 끊긴 동안 10초마다 같은 화면을 다시 그리지 않는다.
     const sig = (res.failed ? "ERR|" : "OK|") + msSignature(res.rows);
     const changed = force || !msLoaded || sig !== msSig;
     msErr = res.failed;
@@ -3168,7 +3194,7 @@ async function msLoad(force) {
     msLoaded = true;
     if (changed) {
       if (!force && msListHasFocus()) {
-        // 초점을 뺏지 않는다 — 벗어나는 즉시(focusout) 또는 다음 주기에 반영한다.
+        // 초점을 뺏지 않는다 — 벗어나는 즉시(focusout) 또는 다음 주기(10초)에 반영한다.
         msDeferred = true;
         msAnnounce("진행 상태가 갱신되었습니다. 목록에서 초점을 옮기시면 화면에 반영됩니다.");
       } else {
@@ -3189,10 +3215,33 @@ async function msLoad(force) {
   }
 }
 
-/* ⛔ 폴링(msTick)과 ⏸ 정지 버튼(msPaintAutoBtn)은 2026-08-19 함께 삭제됐다.
-      이제 조회는 openMyStatus() 진입 시 1회 + 앱으로 돌아올 때 1회뿐이다.
-      되살리려면 «둘 다» 되살릴 것 — 스스로 바뀌는 화면에는 정지 수단이 있어야 한다
-      (KWCAG 2.2 «정지 기능 제공»). 한쪽만 되살리면 지침 위반이 된다. */
+/* 🔄 10초 주기 — «이 화면이 보일 때만». 다른 화면·백그라운드에서는 아무 일도 하지 않는다.
+   ⭐ 2026-08-25 복원(양호창님 지시). 아래 네 가지 «건너뛰기»가 이 폴링의 안전장치다:
+     ① msAuto 가 꺼져 있으면(시민이 ⏸ 로 멈췄으면) 아무 것도 하지 않는다
+     ② 이미 조회 중이면(msBusy) 겹쳐 쏘지 않는다
+     ③ 화면이 가려져 있으면(document.hidden) 건너뛴다 — 배터리·트래픽을 아낀다
+     ④ 지금 보는 화면이 «내 신청»이 아니면 건너뛴다
+   그 뒤 msLoad(false) 가 «서명이 같으면 다시 그리지 않고», «목록 안에 초점이 있으면
+   다시 그리기를 미룬다»(msDeferred). 이 장치들은 원래부터 있던 것을 그대로 쓴다.
+   ⛔ 여기서 msLoad(true)(=force)를 부르지 말 것 — force 는 «초점 보호»를 건너뛴다.
+      10초마다 강제로 다시 그리면 키보드·낭독기 사용자가 목록 맨 앞으로 튕긴다. */
+function msTick() {
+  msFlushDeferred();            // 미뤄 둔 갱신이 있으면 먼저 반영
+  if (!msAuto || msBusy) return;
+  if (document.hidden) return;
+  if (_currentView() !== "mystatus") return;
+  msLoad(false);
+}
+
+/* ⛔⛔ 「자동 새로고침 멈추기」 단추 — 2026-08-25 양호창님 지시로 «없앴습니다». 되살리지 마세요.
+   > 「모든 앱에서 자동 새로고침 멈추기 버튼은 제거해 줘.
+   >   사용자가 뭔지도 모르고 혼란스럽기만 할 거야.」
+   ★ 없앤 것은 «단추»뿐입니다 — 자동 새로고침 «기능»은 그대로 돕니다(msAuto 는 항상 true).
+   ★ 「확인 〇월 〇일 〇〇:〇〇」(#msUpdated)는 «남겼습니다» — 언제 기준인지는 알 수 있어야
+     하고, 그것은 «읽는 글»이라 혼란을 만들지 않습니다(혼란은 «누르는 것»에서 옵니다).
+   ⚠ 함수 자체는 남겼습니다 — 부르는 곳이 여럿이라 지우면 그쪽이 다 깨집니다.
+     지금은 «아무 일도 하지 않는» 함수입니다. */
+function msPaintAutoBtn() { /* 단추를 없앴습니다 — 그릴 것이 없습니다. */ }
 
 // 앱으로 돌아온 «그 순간» 한 번 따라잡는다. 화면이 가려진 동안은 아무 일도 하지 않는다.
 function msBindVisibility() {
@@ -3248,9 +3297,10 @@ function openMyStatus() {
   msSetTab("apply");            // 들어오면 언제나 «신청한 사업»부터
   msRenderList();               // 있던 내용을 먼저 그려 빈 화면을 보이지 않게
   showView("mystatus");
+  msPaintAutoBtn();             // ⏸ 단추 글자를 지금 상태(켜짐/꺼짐)에 맞춘다
   // 앱을 켤 때 프로브가 «네트워크 때문에» 실패했을 수 있다 → 들어온 김에 다시 확인한다.
   if (msAvail !== "ok") { try { msProbe(); } catch (e) { /* 무시 */ } }
-  msLoad(true);                 // 들어온 «그 순간» 한 번 확인
+  msLoad(true);                 // 들어온 «그 순간» 한 번 확인(10초를 기다리지 않는다)
   // 목록 안에서 초점이 빠져나가면 미뤄 둔 갱신을 즉시 반영한다(리스너는 한 번만 건다).
   if (!msFocusBound) {
     const box = $("msList");
@@ -3259,6 +3309,12 @@ function openMyStatus() {
       msFocusBound = true;
     }
   }
+  /* 🔄 10초 폴링 — 이 화면에 «처음» 들어올 때 한 번만 건다.
+     ⚠ 타이머를 화면을 나갈 때 끄지 않는다 — msTick 이 스스로 «지금 보는 화면»을 확인해
+        건너뛰므로 꺼도 되고 안 꺼도 되는데, 껐다 켰다 하면 리스너가 겹쳐 붙는다.
+     ⚠ 화면 복귀 시 «한 번 따라잡기»는 아래 msBindVisibility() 가 이미 한다 —
+        여기에 visibilitychange 를 또 걸지 말 것(2026-08-19 이전 코드는 두 곳에 걸려 있었다). */
+  if (!msTimer) msTimer = setInterval(msTick, MS_POLL_MS);
   msBindVisibility();
 }
 
@@ -4025,8 +4081,13 @@ function bindEvents() {
   const msClearBtn = $("msClear");
   // async 함수라 «조용한 rejection» 이 되지 않도록 반드시 받아 준다
   if (msClearBtn) msClearBtn.addEventListener("click", () => { msClearDevice().catch(() => {}); });
-  // ⛔ #msRefresh(지금 새로고침)·#msAutoBtn(자동 새로고침 멈추기) 바인딩은
-  //    2026-08-19 폴링 폐지와 함께 삭제됐다(위 «폴링 구조» 주석 참조).
+  /* ⏸ 자동 새로고침 멈추기/켜기 — 2026-08-25 복원(양호창님 지시).
+     ⚠ 껐다가 다시 켜면 «10초를 기다리지 않고» 그 자리에서 한 번 따라잡는다 —
+        켰는데 화면이 그대로면 시민은 「안 켜졌나?」 하고 다시 누른다.
+     ⚠ 낭독기에는 msAnnounce(role=status·aria-live=polite)로 «무엇이 바뀌었는지» 알린다.
+     ⛔ #msRefresh(지금 새로고침)는 되살리지 않는다 — 10초마다 저절로 갱신되므로 할 일이
+        없고, 규격서 §0 「한 화면 버튼 3개 상한」에도 걸린다(⏸ · 이 기기에서 지우기 ·
+        확인 번호로 찾기 로 이미 셋이다). */
   // 「신청한 사업 / 제안한 정책」 갈래
   const msTabA = $("msTabApply");
   if (msTabA) msTabA.addEventListener("click", () => msSetTab("apply"));

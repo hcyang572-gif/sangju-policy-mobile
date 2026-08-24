@@ -226,6 +226,48 @@
     : ((s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])));
 
+  /* ══════════════════════════════════════════════════════════════════════
+     🏷 제안 세 칸의 «라벨» — 값의 단 하나뿐인 출처 (⭐ 2026-08-25 양호창님 확정)
+     ────────────────────────────────────────────────────────────────────
+     > 「시민앱의 제안상세 화면과 공무원앱의 정책제안 검토의 내용이 달라.
+     >   «공무원앱을 기준으로» 3개 앱을 통일해줘」 (양호창님)
+     ⇒ 값은 «공무원앱 그대로»다 — cloudui/app.js openProposal() 의 tpl 배열.
+       (예전 시민앱 값: 「어떤 점이 불편하신가요?」·「어떻게 하면 좋을까요?」·
+        「이렇게 되면 무엇이 좋아질까요?」 — 폐기)
+     ⚠⚠ 입력 폼과 상세가 «같은 말»이어야 한다 — 시민이 「내가 쓴 그 칸이 이건가?」를
+        다시 생각하지 않게. 그래서 상세만 바꾸지 않고 «입력 폼까지» 함께 바꿨다.
+        아래 paintPartLabels() 가 index.html 의 라벨 세 개를 이 상수로 덮어쓴다.
+        ⛔ index.html 의 라벨 글자를 여기와 «다르게» 고치지 말 것 — JS 가 이깁니다.
+     ⛔ 저장 본문의 «머리표»([불편한 점]·[제안 내용]·[기대 효과])는 «다른 것»이며
+        건드리지 않는다 — 서버(create_proposal_v2)가 옛 글 호환용 body 를 만들 때 쓰는
+        값이고, 화면 라벨과 뜻이 같을 필요가 없다. 바꾸면 이미 저장된 글과 어긋난다.
+        (supabase/제안템플릿_260824.sql 41~78행)
+     ══════════════════════════════════════════════════════════════════════ */
+  const PART_LABELS = {
+    problem: "무엇이 문제인가요",
+    idea:    "어떻게 하면 좋을까요",
+    effect:  "무엇이 나아질까요",
+  };
+  /* 입력 폼(index.html)의 라벨 세 개를 위 상수로 맞춘다. 뒤에 붙은 «*»·«(없으면 비워 두세요)»
+     같은 표식은 그대로 두고 «묻는 말»만 갈아 끼운다(첫 자식 텍스트 노드). */
+  function paintPartLabels() {
+    [["pwProblem", "problem"], ["pwIdea", "idea"], ["pwEffect", "effect"]].forEach(([id, key]) => {
+      const lab = document.querySelector(`label[for="${id}"]`);
+      if (!lab) return;
+      const t = [...lab.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+      if (t) t.textContent = PART_LABELS[key] + " ";
+    });
+  }
+
+  /* 날짜 + 시각(YYYY-MM-DD HH:MM) — app.js 의 msFmtDateTime 을 그대로 쓴다.
+     ⚠ 새로 만들지 않는다. 그 함수가 «내 신청 현황»에서도 쓰는 표기이고,
+        공무원앱 cloudui/app.js 의 fmtDateTime 과도 «같은 꼴»이다(세 화면이 같아 보인다).
+     ⚠ 스크립트 읽는 차례 때문에 없을 수도 있으니 날짜만이라도 나오게 떨어뜨린다. */
+  function fmtDateTime(ts) {
+    if (typeof window.msFmtDateTime === "function") return window.msFmtDateTime(ts);
+    return fmtDate(ts);
+  }
+
   function fmtDate(ts) {
     if (!ts) return "";
     try {
@@ -513,7 +555,9 @@
           <span class="pp-badge ${b.cls}">${esc(b.label)}</span>
           ${p.category ? `<span class="pp-cat">${esc(p.category)}</span>` : ""}
         </div>
-        <h3>${esc(p.title)}</h3>
+        <!-- ⚠ title 속성 — 제목은 «두 줄»에서 …로 잘린다(2026-08-25 카드 높이 통일).
+             마우스를 올리면 온전한 제목이 뜬다. 낭독기에는 위 aria-label 이 이미 전문을 준다. -->
+        <h3 title="${esc(p.title)}">${esc(p.title)}</h3>
         <div class="pp-card-meta">
           <span class="pp-like"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 21V10l4.5-7 1 .6a2 2 0 0 1 .9 2.2L12.5 9H19a2 2 0 0 1 2 2.4l-1.5 7A2.4 2.4 0 0 1 17 20.5H7z"/><path d="M7 10.5H4V21h3"/></svg> ${Number(p.like_count) || 0}</span>
           <span class="pp-cmt"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg> ${Number(p.comment_count) || 0}</span>
@@ -556,8 +600,9 @@
      새 글(세 칸이 있는 글)은 «나눠» 보여 주고, 옛 글은 body 한 덩어리 그대로 보여 준다.
      ⛔ 옛 글을 억지로 쪼개지 않는다(사양서 6절 «옛 글 호환»).
      ⚠ 판정 기준은 body_problem 하나다 — 서버가 create_proposal_v2 에서만 채운다.
-     ⚠ 라벨은 «작성 폼과 같은 묻는 말투»여야 한다. 화면마다 말이 달라지면
-        시민이 「내가 쓴 그 칸이 이건가?」를 다시 생각해야 한다. */
+     ⚠ 라벨은 «작성 폼과 같은 말»이어야 한다. 화면마다 말이 달라지면
+        시민이 「내가 쓴 그 칸이 이건가?」를 다시 생각해야 한다.
+        → 그래서 위 PART_LABELS 한 곳에서 «입력 폼과 상세가 함께» 가져다 쓴다. */
   function proposalBodyHtml(p) {
     const q = (v) => String(v == null ? "" : v).trim();
     const problem = q(p.body_problem), idea = q(p.body_idea), effect = q(p.body_effect);
@@ -569,9 +614,9 @@
          </section>`
       : "";
     return `<div class="pd-parts">
-        ${part("어떤 점이 불편하신가요?", problem)}
-        ${part("어떻게 하면 좋을까요?", idea)}
-        ${part("이렇게 되면 무엇이 좋아질까요?", effect)}
+        ${part(PART_LABELS.problem, problem)}
+        ${part(PART_LABELS.idea, idea)}
+        ${part(PART_LABELS.effect, effect)}
       </div>`;
   }
 
@@ -606,7 +651,11 @@
         ${p.category ? `<span class="pp-cat">${esc(p.category)}</span>` : ""}
       </div>
       <h2 class="pd-title">${esc(p.title)}</h2>
-      <div class="pd-meta">닉네임 <b>${esc(p.author_nick || "익명")}</b>${p.region ? " · " + esc(p.region) : ""} · ${fmtDate(p.created_at)}</div>
+      <!-- ⭐ 2026-08-25 — 작성 시각을 «분»까지 보인다(공무원앱 검토 화면과 같은 표기).
+           예전에는 날짜만 보여, 같은 날 올린 여러 제안의 앞뒤를 시민이 알 수 없었다.
+           ⚠ 표기 함수는 app.js 의 msFmtDateTime «하나»를 쓴다(공무원앱 fmtDateTime 과 같은 꼴).
+              ⛔ 여기에 날짜 만드는 코드를 새로 적지 말 것. -->
+      <div class="pd-meta">닉네임 <b>${esc(p.author_nick || "익명")}</b>${p.region ? " · " + esc(p.region) : ""} · ${esc(fmtDateTime(p.created_at))}</div>
       ${noHtml}
       ${bodyHtml}
 
@@ -688,6 +737,7 @@
     $("pwBody").value = "";
     // ★ C-07 — 새 제안은 «언제나» 템플릿(세 칸)이다. 옛 글 모드는 수정에서만 켜진다.
     setLegacyMode(false);
+    paintPartLabels();          // 입력 폼 라벨을 PART_LABELS 한 곳에서 맞춘다
     ["pwProblem", "pwIdea", "pwEffect"].forEach((id) => { if ($(id)) $(id).value = ""; });
     paintAllCounts();
     // 고른 분야에 맞는 예시부터 보여 준다(맞는 벌이 없으면 첫 벌).
@@ -727,14 +777,14 @@
 
     if (!title) { appAlert("제목을 입력해 주세요."); return; }
     if (title.length > PW_MAX.title) { appAlert("제목은 80자 이내로 적어주세요."); return; }
-    if (!problem) { appAlert("「어떤 점이 불편하신가요?」 칸을 적어 주세요."); return; }
-    if (problem.length > PW_MAX.problem) { appAlert("「어떤 점이 불편하신가요?」 칸은 700자 이내로 적어주세요."); return; }
-    if (!idea) { appAlert("「어떻게 하면 좋을까요?」 칸을 적어 주세요."); return; }
-    if (idea.length > PW_MAX.idea) { appAlert("「어떻게 하면 좋을까요?」 칸은 700자 이내로 적어주세요."); return; }
-    /* ⛔ 「이렇게 되면 무엇이 좋아질까요?」가 비어 있는지 «묻지 않는다».
+    if (!problem) { appAlert(`「${PART_LABELS.problem}」 칸을 적어 주세요.`); return; }
+    if (problem.length > PW_MAX.problem) { appAlert(`「${PART_LABELS.problem}」 칸은 700자 이내로 적어주세요.`); return; }
+    if (!idea) { appAlert(`「${PART_LABELS.idea}」 칸을 적어 주세요.`); return; }
+    if (idea.length > PW_MAX.idea) { appAlert(`「${PART_LABELS.idea}」 칸은 700자 이내로 적어주세요.`); return; }
+    /* ⛔ 「무엇이 나아질까요」(PART_LABELS.effect)가 비어 있는지 «묻지 않는다».
        사양서 2절 — 3번 칸은 선택이며, 비어 있어도 경고·재확인 없이 그대로 제출된다.
        권하되 막지 않는다. 강요하면 제안 자체를 포기한다. */
-    if (effect.length > PW_MAX.effect) { appAlert("「이렇게 되면 무엇이 좋아질까요?」 칸은 400자 이내로 적어주세요."); return; }
+    if (effect.length > PW_MAX.effect) { appAlert(`「${PART_LABELS.effect}」 칸은 400자 이내로 적어주세요.`); return; }
     if (!nick) { appAlert("닉네임을 입력해 주세요. (실명 금지)"); return; }
     /* 🏘 읍·면·동(필수) — 2026-08-20 양호창님 지시. 지역별 정책 수요를 세기 위한 값이다.
        ⚠ 「기타·타지역」이 목록에 있으므로 상주시민이 아니어도 막히지 않는다.
@@ -922,12 +972,12 @@
       if (!body) { appAlert("내용을 입력해 주세요."); return; }
       if (body.length > 2000) { appAlert("내용은 2000자 이내로 적어주세요."); return; }
     } else {
-      if (!problem) { appAlert("「어떤 점이 불편하신가요?」 칸을 적어 주세요."); return; }
-      if (problem.length > PW_MAX.problem) { appAlert("「어떤 점이 불편하신가요?」 칸은 700자 이내로 적어주세요."); return; }
-      if (!idea) { appAlert("「어떻게 하면 좋을까요?」 칸을 적어 주세요."); return; }
-      if (idea.length > PW_MAX.idea) { appAlert("「어떻게 하면 좋을까요?」 칸은 700자 이내로 적어주세요."); return; }
+      if (!problem) { appAlert(`「${PART_LABELS.problem}」 칸을 적어 주세요.`); return; }
+      if (problem.length > PW_MAX.problem) { appAlert(`「${PART_LABELS.problem}」 칸은 700자 이내로 적어주세요.`); return; }
+      if (!idea) { appAlert(`「${PART_LABELS.idea}」 칸을 적어 주세요.`); return; }
+      if (idea.length > PW_MAX.idea) { appAlert(`「${PART_LABELS.idea}」 칸은 700자 이내로 적어주세요.`); return; }
       // ⛔ effect 는 비어도 묻지 않는다(작성과 같은 규칙).
-      if (effect.length > PW_MAX.effect) { appAlert("「이렇게 되면 무엇이 좋아질까요?」 칸은 400자 이내로 적어주세요."); return; }
+      if (effect.length > PW_MAX.effect) { appAlert(`「${PART_LABELS.effect}」 칸은 400자 이내로 적어주세요.`); return; }
     }
     const combined = legacyMode ? (title + " " + body) : [title, problem, idea, effect].join(" ");
     if (RE_JUMIN.test(combined)) { appAlert("주민등록번호로 보이는 숫자가 있습니다."); return; }

@@ -1,6 +1,6 @@
 /* 자동 생성 — build_data.py. data.json 과 «같은 내용»입니다. 손으로 고치지 마세요. */
 window.__SANGJU_DATA__ = {
- "generated": "2026-08-24",
+ "generated": "2026-08-25",
  "categories": [
   "👤 1인가구",
   "🏥 건강·의료",
