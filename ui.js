@@ -94,8 +94,8 @@
   var VIEW_OF = { home: "home", recommend: "recommend", propose: "propose", mystatus: "mystatus" };
   var TAB_ALIAS = { mscode: "mystatus", pdetail: "propose", pwrite: "propose" };
 
-  function goHome() {
-    // #privacyHome·#doneHome 의 처리와 «같은 순서»를 그대로 따른다(app.js 무수정).
+  function goHomeNow() {
+    // #privacyHome·#doneHome 의 처리와 «같은 순서»를 그대로 따른다(app.js goHomeReset).
     try {
       state.selectedCats = new Set();
       state.navStack = [{ v: "home", t: HOME_TITLE }];
@@ -104,6 +104,25 @@
       showView("home", false);
     } catch (e) {
       location.reload();
+    }
+  }
+
+  /* ★ A-02 (2026-08-25) — 쓰던 글을 «말없이» 날리지 않는다.
+     ────────────────────────────────────────────────────────────────────────
+     신청서·불편신고·정책제안을 쓰는 중에 하단 탭바 「홈」을 누르면 경고 없이 홈으로
+     가고, 다시 들어가면 칸이 비어 있었다(브라우저 뒤로가기에는 경고가 있었는데
+     이 길에만 없었다 — 같은 «나가기»인데 결과가 달랐다).
+     → app.js 의 confirmLeaveDirty() 를 거친다. 문구·단추(「나가기」/「계속 쓰기」)가
+       popstate·「처음으로」와 «글자 하나까지» 같다.
+     ⚠ appConfirm 은 기다리지 않는다(Promise) — 그래서 then 안에서 옮긴다.
+     ⚠ app.js 가 아직 안 떴거나 막힌 환경에서는 지금까지처럼 곧바로 홈으로 간다. */
+  function goHome() {
+    var ask = window.confirmLeaveDirty;
+    if (typeof ask !== "function") { goHomeNow(); return; }
+    try {
+      ask().then(function (ok) { if (ok) goHomeNow(); });
+    } catch (e) {
+      goHomeNow();
     }
   }
 

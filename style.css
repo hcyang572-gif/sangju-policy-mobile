@@ -343,7 +343,13 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 }
 .card:active { transform: scale(.99); }
 /* 제목은 목록에서 2줄까지만(넘치면 …). 상세에선 전문 노출(별도 요소). */
-.card h3 { margin: 0 0 6px; font-size: var(--fs-section); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+/* ⚠⚠ word-break 는 «keep-all» 이다 — break-word 로 되돌리지 말 것 (2026-08-25 B-01).
+   `word-break: break-word` 는 규격상 «word-break:normal + overflow-wrap:anywhere» 와
+   같은 뜻이라, §글줄마감 절의 body{word-break:keep-all} 을 «되돌려» 버린다.
+   그 결과 사업명이 낱말 가운데서 잘렸다 — 「청년 구직자 자격 / 증 취득 지원사업」,
+   「기업 근로자 기숙 / 사 임차비 지원사업」(실측 캡처).
+   keep-all 로 낱말을 지키고, 한 줄에 도저히 못 넣는 긴 낱말만 overflow-wrap 이 받는다. */
+.card h3 { margin: 0 0 6px; font-size: var(--fs-section); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: break-word; }
 .card p { margin: 0; font-size: var(--fs-body); color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card .team { display: inline-block; margin-top: 10px; font-size: var(--fs-eyebrow); color: var(--accent-text); background: var(--header); padding: 3px 9px; border-radius: 8px; }
 /* 카드 하단 배지 줄(담당팀 + 📌 접수 안내 표식) */
@@ -630,7 +636,8 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   background: var(--header); border-left: 5px solid var(--primary); border-radius: 10px;
 }
 .ms-reply-k { margin: 0 0 6px; font-size: var(--fs-caption); font-weight: var(--fw-heavy); color: var(--accent-text); }
-.ms-reply-v { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); white-space: pre-wrap; word-break: break-word; }
+/* 담당 부서 안내문 — 한글은 낱말 단위로만 끊는다(B-01 과 같은 규약). 주소는 아래 §글줄마감이 anywhere 로 받는다. */
+.ms-reply-v { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); white-space: pre-wrap; word-break: keep-all; overflow-wrap: break-word; }
 
 /* 다른 기기에서 신청한 경우 — 접수번호·조회코드 직접 입력 */
 .ms-manual { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
@@ -682,8 +689,11 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 
 .foot { text-align: center; font-size: var(--fs-eyebrow); color: var(--muted); padding: 20px 16px 78px; line-height: var(--lh-caption); }
 .foot-team { font-size: var(--fs-caption); font-weight: var(--fw-bold); color: var(--text); }
-/* 상주 곶감 정체성을 푸터에 은은한 포인트로 */
-.foot-gotgam { width: 18px; height: 18px; object-fit: contain; vertical-align: -3px; margin-right: 4px; opacity: .9; }
+/* ⚠ 2026-08-25 D-04 — 여기 있던 .foot-gotgam / .foot-inquiry / .foot-mail-btn 규칙을 지웠다.
+   세 이름 모두 index.html·app.js·proposals.js 어디에도 쓰이지 않는다(전수 확인).
+   푸터가 «톱니바퀴 + 처리방침 + 버전 + 앱 아이콘 설치»로 정리되면서 곶감 그림·문의 줄이
+   함께 사라졌는데, 규칙만 남아 «아직 있는 것»처럼 읽혔다.
+   ⚠ 문의 단추를 다시 두게 되면 .foot-link-btn 을 쓴다 — 같은 모양이고 44px 판도 이미 붙어 있다. */
 .gear-btn { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
 .foot-team .gear { color: var(--accent-text); font-weight: var(--fw-bold); text-decoration: underline; }
 
@@ -732,15 +742,6 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .team-list .role-mgr { color: #fff; background: var(--ok-bg); } /* 흰글자 5.13:1 */
 .team-list .m-name { font-size: var(--fs-section); font-weight: var(--fw-bold); color: var(--text); }
 .team-list .m-dept { margin-left: auto; font-size: var(--fs-caption); color: var(--muted); }
-.foot-inquiry { margin-top: 6px; }
-.foot-inquiry a { color: var(--accent-text); font-weight: var(--fw-bold); text-decoration: underline; }
-/* 화면 안에서 문의 화면으로 «전환»하는 조작이라 <a href="#"> 를 <button> 으로 바꿨다.
-   링크와 똑같이 보이도록 버튼 기본 스타일(테두리·배경·글꼴)을 지운다. */
-.foot-mail-btn {
-  margin: 0; padding: 0; border: none; background: none;
-  font: inherit; color: var(--accent-text); font-weight: var(--fw-bold);
-  text-decoration: underline; cursor: pointer;
-}
 
 /* 홈: '홈 화면에 추가' 작은 안내 띠 */
 .a2hs-tip {
@@ -914,6 +915,28 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
   min-width: 32px; min-height: 32px;
 }
 .rt-banner-close:active { background: rgba(0, 0, 0, .06); }
+
+/* ═══════════ 닫기(✕) 세 개의 «누르는 자리» 44px ═══════════  (2026-08-25 C-05)
+   실측 — #a2hsClose 28×24 · #inappClose 28×24 · #dataRtClose 36×32 로, 이 앱에서
+   44×44 를 못 채우던 «마지막 세 곳»이었다. 손가락이 굵거나 떨리는 분은 ✕ 를 못 눌러
+   띠를 영영 못 닫는다(닫기는 «되돌릴 수 없는 것»이 아니라 오히려 자주 쓰는 단추다).
+   ⚠ 보이는 크기는 «그대로 둔다» — 띠 높이가 커지면 홈 첫 화면이 그만큼 밀린다.
+     분야 칩(.chips .chip::after)과 «같은 규약»으로, 눈에 안 보이는 44px 투명판만 덧댄다.
+     ★ 보이는 것은 작게 · 누르는 것은 44px — 이 앱의 표적 크기 규약이다.
+   ⚠ 44px 판이 «왼쪽 이웃»(안내 열기·본문·새로고침 단추)과 겹치면 엉뚱한 것이 눌린다.
+     띠의 gap 이 8~9px 인데 24px 짜리 ✕ 의 판은 좌우로 10px 씩 넘친다 → 2px 모자란다.
+     그래서 margin-left 로 사이를 벌려 «겹침 0» 을 만든다(아래 값은 실측으로 확인).
+     #dataRtClose 는 보이는 폭이 32px 이라 넘침이 6px 뿐 → 벌릴 필요가 없다.
+   ⚠ 오른쪽·위아래로 넘치는 몫은 띠 자신의 안쪽 여백(11~12px) 안에 들어간다.
+   ⛔ 이 ::after 를 «쓸데없는 것»으로 보고 지우지 말 것 — 지우는 순간 표적 크기 위반이다. */
+.a2hs-close, .inapp-close, .rt-banner-close { position: relative; }
+.a2hs-close, .inapp-close { margin-left: 6px; }
+.a2hs-close::after, .inapp-close::after, .rt-banner-close::after {
+  content: ""; position: absolute;
+  left: 50%; top: 50%;
+  width: 44px; height: 44px;
+  transform: translate(-50%, -50%);
+}
 
 /* ───────────── 정책참여(시민 제안) Phase A ───────────── */
 /* 홈에서 정책참여를 '지원사업'과 다른 갈래로 분리: 구분선 + 섹션라벨 + 청록 카드 */
@@ -1563,7 +1586,12 @@ body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
 .card-open {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   width: 100%; margin: 0; padding: 0; border: 0; background: none;
-  font: inherit; color: inherit; text-align: left; word-break: break-word; cursor: pointer;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  /* ⚠⚠ 여기가 «목록·검색결과 카드 제목»을 실제로 그리는 자리다 (2026-08-25 B-01).
+     예전에는 word-break:break-word 였는데, 그것은 «normal + anywhere» 와 같은 뜻이라
+     body 의 keep-all 을 되돌려 한글이 낱말 가운데서 끊겼다
+     (「청년후계농 선 / 발 및 영농정착 지원」). ⛔ break-word 로 되돌리지 말 것. */
+  word-break: keep-all; overflow-wrap: break-word;
 }
 /* 카드 «아무 데나» 눌러도 상세로 — 제목 버튼을 카드 전체로 늘린다(투명 덮개) */
 .card-open::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-card); }
@@ -1583,8 +1611,8 @@ body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
 
 /* 작아 보여도 «누를 수 있는 높이»는 44px — 보이는 크기는 그대로 두고 투명 판만 늘린다.
    (상단 뒤로 34px · 푸터 링크 23px 이 규격 미달이었다. 칩·안내 버튼과 같은 방식) */
-.back-btn, .foot-link-btn, .foot-mail-btn, .gear-btn, .link-btn { position: relative; }
-.back-btn::after, .foot-link-btn::after, .foot-mail-btn::after,
+.back-btn, .foot-link-btn, .gear-btn, .link-btn { position: relative; }
+.back-btn::after, .foot-link-btn::after,
 .gear-btn::after, .link-btn::after {
   content: ""; position: absolute; left: 0; right: 0; top: 50%;
   height: 44px; transform: translateY(-50%);
@@ -1709,7 +1737,7 @@ body {
   overflow-wrap: break-word;   /* 그래도 한 줄에 못 넣는 긴 낱말만 예외로 자른다 */
 }
 /* 끊겨도 되는(끊겨야 하는) 값 — 주소·이메일·확인 번호처럼 «낱말»이 아닌 것 */
-.cl-guide-url, .code-box-v, .foot-mail-btn, .detail-tel, .ms-reply-v a, .detail-block .v a {
+.cl-guide-url, .code-box-v, .detail-tel, .ms-reply-v a, .detail-block .v a {
   overflow-wrap: anywhere;
 }
 
@@ -2463,39 +2491,15 @@ html.fontsize-lg { font-size: 125%; }
            400px 규칙을 파일 맨 끝에 붙였다가 768·1024 의 5열·6열이 통째로 4열로
            덮이는 것을 실측으로 잡았다.)
 
-   확정 열 수
-   | 폭        | 열 | 근거                                                        |
-   |-----------|----|-------------------------------------------------------------|
-   | 320~379   | 3  | 4열은 칸이 66~74px 이라 이름이 세 줄로 접힌다               |
-   | 380~767   | 4  | ★ 요구 C-06 「3열 → 4열」이 풀리는 구간(폰 384·390·412·430) |
-   | 768~1023  | 5  |                                                             |
-   | 1024~     | 6  | 더 늘리지 않는다                                            |
-
-   ★ 380px 을 경계로 삼은 이유 — 🟠단장이 준 표는 「480→4열(폰)」이었으나, 같은 지시의
-     본문은 「폰(390~430px)에서 4열이 되어야 요구가 풀린다」였다. 둘이 어긋난다.
-     원문 캡처(`수정요구사항_2608/캡처/시민앱_*.png`)의 기준 창은 «약 502px» 이고,
-     실제 국내 폰은 360~430px 다. 480 을 경계로 두면 «표»는 맞지만 «폰»에서는 여전히
-     3열이라 요구가 풀리지 않는다. 그래서 둘을 모두 만족하는 380 으로 내렸다.
-     (360급 폰은 3열로 남는다 — 4열로 내리면 칸이 65px 이라 이름이 세 줄이 된다.)
-
+   ⚠⚠ 여기 있던 «확정 열 수 표»(320~379:3열 · 380~767:4열 …)와 «한 줄·44px 모양» 주석을
+      지웠다 (2026-08-25 D-05). 둘 다 2026-08-24 의 결정인데, 바로 아래 2026-08-25 결정
+      (보이는 높이 32px · 열 수 사다리 2열 320 · 3열 430 · 4열 570 · 5열 710 · 6열 920)과
+      «정면으로 모순»된다. 서로 반대를 가리키는 주석이 나란히 있으면, 다음에 고치는 사람이
+      «어느 쪽이 맞는지» 알 길이 없다 — 그래서 «지금 살아 있는» 쪽 하나만 남긴다.
+      ⛔ 열 수·높이의 근거를 찾을 때는 아래 「📐 열 수 사다리」 블록 하나만 본다.
+      (옛 근거가 필요하면 git 이력에서 이 줄을 짚어 그 시점을 꺼내 볼 것.)
    ⛔ 분야 «이름»을 줄여서 맞추지 말 것 — config.POLICY_CATEGORIES 단일 출처다.
    ⚠ 12px 아래로 내리지 말 것(규격서 15절 최소치). 대신 줄바꿈으로 푼다 — 아래 참조. */
-/* ── 모양 : «한 줄»(이모지 + 이름 나란히) — 2026-08-24 되돌림(양호창님 지시) ──────
-   ⓘ 왜 되돌렸나 — 세로 2단은 «320px 에서도 4열»을 만들기 위한 «수단»이었는데, 그 대가로
-     칩 높이가 44 → 66px 로 절반이나 커져 분야 줄이 홈 화면을 통째로 먹었다.
-     목적은 「4열」이었지 「2단」이 아니었다. 그래서 «모양»은 예전(한 줄·44px)으로 되돌리고
-     4열은 «칸이 실제로 되는 폭부터» 준다(아래 열 수 표).
-   ⚠ 44px 은 2단 개편 «직전»(88a43e3^)의 실측 높이다 — 320·360·375·390·412·414·480·768·
-     1024·1440 전 폭에서 44px 로 균일했다(2026-08-24 그 시점 소스를 그대로 띄워 재측정).
-     ⛔ 이 값을 임의로 바꾸지 말 것. 터치 표적 44×44px(KWCAG)이 이 높이 하나로 충족된다.
-   ⚠ 왜 «두 줄까지»가 한계인가 — 13px × 1.4(캡션 배수) × 2줄 = 36.4px, 위아래 여백 4+4 를
-     더해 44.4px 이라 44px 안에 겨우 들어간다. 세 줄이 되면 곧바로 넘친다.
-     그래서 «열 수 경계 = 가장 긴 이름이 두 줄 안에 들어가는 폭» 이다(아래 실측).
-   ⚠ 가장 긴 이름은 「저소득·기초수급」이고, 가운뎃점에서 끊기면 「기초수급」(4글자 ≈ 52px)이
-     남는다 → 이름 칸이 52px 보다 좁아지는 순간 세 줄이 된다. 이것이 380 이 아니라
-     «390» 을 4열 경계로 삼은 근거다(375px 은 칸이 81px 이라 이름 칸이 51px 로 0.5px 모자랐다).
-   ⚠ 모든 칩이 «같은 높이»여야 한다 → 격자의 align-items:stretch 가 줄 단위로 맞추고,
-     min-height 44px 이 바닥을 받친다. 「글자 크게 보기」(125%)에서는 하한이라 저절로 커진다. */
 /* ⭐⭐ 2026-08-25 양호창님 확정 — 「공무원앱의 분야별 배지 높이로 시민앱 배지 높이를 맞춰야지」
    ⇒ 보이는 높이 44 → **32px** (공무원앱 .cat-tag 와 같은 값 · 규격서 §5 배지 규격).
    ⚠⚠⚠ 그런데 이 칩은 «누르는 것»이다. 보이는 높이를 32px 로 내리면 KWCAG 표적 크기
@@ -2667,6 +2671,24 @@ html.fontsize-lg { font-size: 125%; }
      같은 여유가 유지되고, 다른 화면에서는 마지막 버튼이 탭바에 물리지 않는다.        */
 body { padding-bottom: calc(var(--tabbar-h) + var(--sp-4)); }
 .foot { padding-bottom: var(--sp-5); }
+
+/* ── §Ⓙ-2  떠 있는 「‹ 뒤로」(FAB)가 본문 마지막 줄을 «가리지» 않게 (2026-08-25 B-03) ──
+   무엇이 문제였나 — .fab-back 은 position:fixed 라 문서 흐름에서 «빠져 있다». 그래서
+   본문은 그것이 있는 줄도 모르고 마지막 줄을 그 밑에 깔았다. 실측으로 가려진 것들:
+     · 상세 화면 맨 아래 「전화로 문의」 버튼
+     · 신청 화면의 첨부 안내문
+     · 필요 서류 서식의 「내려받기」 글자
+   단순히 «안 보이는» 것으로 끝나지 않는다 — 그 자리를 누르면 위에 있는 FAB 이 눌려
+   «뒤로» 가 버린다. 즉 오작동이다.
+   어떻게 고쳤나 — FAB 이 뜨는 화면(= 홈이 아닌 모든 화면)의 본문 아래에 FAB 높이만큼
+   여백을 준다. FAB 은 그 빈자리 위에 떠서, 아래에 아무 글자도 없게 된다.
+   ⚠ 홈은 뺀다 — 홈에서는 FAB 이 hidden 이라(app.js _updateNavButtons) 여백만 남는다.
+   ⚠ --fab-h 는 «실측» 이다(13px 여백 ×2 + 16px 글자 × 1.4 ≈ 48px, 반올림 여유 2px).
+     FAB 의 padding·font-size 를 고치면 이 값도 «함께» 고칠 것.
+   ⛔ FAB 을 탭바 위로 더 올려서 푸는 방법은 쓰지 않았다 — 그러면 엄지가 닿는 자리에서
+     멀어져 FAB 을 둔 이유(엄지 위치)가 사라진다. */
+:root { --fab-h: 50px; }
+#app > .view:not(#view-home) { padding-bottom: calc(var(--fab-h) + var(--sp-4)); }
 /* 상세 화면 폭 — 타일이 3열까지 서려면 컨테이너가 940px 은 되어야 한다(타일 최소 300px × 3 + 간격).
    ⚠ 위 @768 의 `#view-detail { max-width: 720px }`(폼·읽기 화면 공통 규칙)을 여기서만 되돌린다.
       상세는 «읽는 화면»이지만 타일 격자라 한 줄 길이가 타일 폭으로 이미 제한된다 —
@@ -2737,11 +2759,29 @@ body { padding-bottom: calc(var(--tabbar-h) + var(--sp-4)); }
      그 2px 이 「받는 방법」이 붙은 카드만 2px 크게 만들었다(실측).
      min-height 로 바닥을 같이 깔고 위아래 여백은 그 안에서 가운데 정렬로 흡수한다.
    ⚠ +10px 은 «여백»이지 «높이»가 아니다 — 글자 몫(1em)이 따로 있어 확대에도 안 뚫린다. */
-.c-card .card-meta .team,
 .c-card .card-meta .note-flag {
   display: inline-flex; align-items: center;
   min-height: calc(var(--lh-body) * 1em + 10px);
   padding-top: 0; padding-bottom: 0;
+}
+/* ⚠⚠ 담당팀 배지는 «inline-flex 가 아니다» — 2026-08-25 B-02 결함.
+   ────────────────────────────────────────────────────────────────────────
+   예전에는 위 .note-flag 와 «한 선택자»로 묶여 display:inline-flex 였다. 그런데
+   text-overflow:ellipsis 는 «블록 컨테이너의 글줄»에만 듣는다 — flex 컨테이너가 되면
+   글자가 익명 flex 항목으로 감싸져 …이 붙지 못하고 «그냥 잘린다».
+   그래서 「인구정책실 일자리청년팀」이 「…일자리청년」이 아니라 «팀» 글자가 반쯤
+   썰린 모습으로 보였다(카드 밖으로 넘쳐 잘린 것처럼).
+   → inline-block 으로 되돌려 …이 살아나게 한다. 온전한 팀명은 title 툴팁에 있다.
+   ⚠ 높이는 «min-height» 가 아니라 «line-height» 로 맞춘다. inline-block 은 세로
+     가운데정렬 수단이 없어서, 줄높이 자체를 배지 높이로 삼아야 글자가 가운데 온다.
+     값은 .note-flag 의 min-height 와 «같은 식»이라 두 배지 높이가 정확히 같다
+     (box-sizing:border-box 라 표식의 테두리 1.5px 도 그 안에 들어간다).
+   ⛔ 다시 inline-flex 로 묶지 말 것 — 묶는 순간 말줄임이 죽고 글자가 썰린다. */
+.c-card .card-meta .team {
+  display: inline-block;
+  line-height: calc(var(--lh-body) * 1em + 10px);
+  padding-top: 0; padding-bottom: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* ── 정책제안 목록 카드(.pp-card)도 «같은 규약» ─────────────────────────────

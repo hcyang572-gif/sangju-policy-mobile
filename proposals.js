@@ -1437,6 +1437,15 @@
     const reason = $("reportReason").value + ($("reportMemo").value.trim() ? (" - " + $("reportMemo").value.trim()) : "");
     const client = getClient();
     if (!client || !reportTarget) { appAlert("신고할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
+    /* ★ C-07 (2026-08-25) — 이중 제출 빗장. 위 sendComment 와 «같은 규약».
+       느린 회선에서 응답이 늦으면 시민은 안 눌린 줄 알고 한 번 더 누른다. 그러면
+       같은 신고가 두 건 쌓이고, 신고 5건이면 자동으로 숨겨지는 규칙 때문에 «혼자서»
+       남의 글을 절반 가까이 지울 수 있게 된다(제안·의견 모두 해당).
+       ⚠ 어떻게 끝나든 반드시 빗장을 푼다 — finally 를 지우면 실패했을 때 영영 못 누른다. */
+    const btn = $("reportSend");
+    if (btn && btn.disabled) return;          // 이미 보내는 중
+    const origText = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "보내는 중..."; }
     try {
       /* 두 RPC 는 인자 이름·차례가 «같다» — report_proposal(p_id,p_reason,p_reporter) ·
          report_comment(p_id,p_reason,p_reporter). 이름만 갈아 끼운다.
@@ -1455,6 +1464,8 @@
     } catch (e) {
       console.warn("[정책참여] 신고 실패:", e);
       appAlert(actionErrMsg(e, "신고"));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
     }
   }
 
@@ -1574,16 +1585,218 @@
     scheduleDetailRefresh();
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     🔌 실시간 «끊김 대비» — app.js 의 규약을 그대로 옮겨 왔다   (2026-08-25)
+     ──────────────────────────────────────────────────────────────────────────
+     무엇이 문제였나 — 예전 subscribeRealtime 은 이랬다:
+
+         if (!client || realtimeSub) return;
+         realtimeSub = client.channel("proposals-citizen")…​.subscribe();   // 콜백 없음
+
+     ① 상태 콜백이 «없어서» 끊긴 것을 아무도 모른다.
+     ② 그 `realtimeSub` 검사가 «죽은 채널»도 «있다»로 세어, 다시 붙는 길을 영영 막는다.
+     ③ 폴백 폴링도 없어, 끊긴 동안에는 새 제안·새 의견이 «하나도» 안 온다.
+     결과: 시연장 와이파이가 한 번 흔들리면 그 뒤로 정책참여 실시간이 «영영» 죽는다.
+     화면은 멀쩡해 보이므로 아무도 눈치채지 못한다 — 가장 나쁜 종류의 고장이다.
+
+     어떻게 고쳤나 — 새로 설계하지 않았다. app.js 가 사업정보 구독에서 이미 쓰고 있는
+     네 가지를 «그대로» 옮겼다(_rtSetOk / _rtStartPoll / _rtScheduleRejoin / _rtWakeUp).
+       ① 상태 콜백으로 살았는지 죽었는지 «안다»
+       ② 죽으면 2·4·8·15·30초(±30% 지터)로 다시 붙는다
+       ③ 붙기 전까지는 «보고 있는 동안만» 20초마다 직접 조회해 메운다
+       ④ 화면이 다시 보이거나 인터넷이 돌아오면 기다리지 않고 즉시 다시 붙는다
+     ⛔ 여기에 «다른» 재연결 방식을 새로 만들지 말 것 — 두 규약이 생기면 서로 싸운다.
+     ⛔ removeAllChannels()·realtime.disconnect() 는 여전히 금지(이 파일 머리말) —
+        사업정보 구독까지 함께 끊긴다. 자기 채널만 removeChannel 한다.
+     ⚠ 제안 구독과 의견 구독은 «한 소켓» 위에 있다. 그래서 폴백·재접속 예약은 하나로
+        묶어 굴리고, «무엇을 다시 열지»만 각자 판단한다(_ppRtOk / _cmtOk).
+     ══════════════════════════════════════════════════════════════════════════ */
+  const PP_RT_POLL_MS = 20000;                            // app.js RT_POLL_MS 와 같은 값
+  const PP_RT_BACKOFF = [2000, 4000, 8000, 15000, 30000]; // app.js RT_BACKOFF 와 같은 값
+  let _ppRtOk = false;          // 제안 구독이 살아 있는가
+  let _ppConnecting = false;    // 지금 붙는 중인가(첫 SUBSCRIBED 를 기다리는 동안)
+  let _ppEverOk = false;        // 한 번이라도 붙은 적이 있는가(첫 연결과 재연결 구분)
+  let _ppRtTry = 0;             // 연속 실패 횟수(백오프 단계)
+  let _ppRtTag = null;          // 지금 «유효한» 채널의 신분증(늦게 온 옛 상태 무시용)
+  let _ppRejoinTimer = null, _ppPollTimer = null;
+  let _ppSig = null;            // 마지막으로 확인한 목록 서명(폴백이 변화를 알아채는 수단)
+  let _cmtOk = true;            // 의견 구독이 «원하는 대로»인가(닫혀 있어야 해서 닫힌 것도 true)
+  let _cmtTag = null;
+  let _ppWakeBound = false;
+
+  function _ppJitter(ms) {
+    // app.js 의 _jitter 를 함께 쓴다. 옛 캐시로 app.js 가 낡았을 때만 여기 폴백이 쓰인다.
+    if (typeof window._jitter === "function") return window._jitter(ms);
+    return Math.round(ms * (0.7 + Math.random() * 0.6));
+  }
+
+  /* 목록의 «지금 상태» 서명 — 실시간이 죽었을 때 변화를 알아채는 유일한 수단.
+     ⚠ 첫 쪽(최신 20건)만 본다. 시민이 실제로 보는 것이 그것이고, 전체를 훑으면
+        폴백 한 번이 목록 조회만큼 무거워진다.
+     ⚠ 첫 호출은 «기준»만 잡고 false 를 준다(들어오자마자 헛배너가 뜨지 않게). */
+  async function _ppSigChanged() {
+    const client = getClient();
+    if (!client) return false;
+    try {
+      const { data, error } = await client.from("proposals")
+        .select("id,status,like_count,comment_count")
+        .eq("is_hidden", false)
+        .order("created_at", { ascending: false })
+        .limit(PAGE);
+      if (error) throw error;
+      const sig = (data || []).map((r) =>
+        [r.id, r.status, r.like_count, r.comment_count].join(":")).join("|");
+      if (_ppSig === null) { _ppSig = sig; return false; }
+      if (sig === _ppSig) return false;
+      _ppSig = sig;
+      return true;
+    } catch (e) {
+      return false;                 // 폴백이 실패해도 화면은 멀쩡해야 한다(조용히)
+    }
+  }
+
+  /* 의견의 서명 — 기준은 «마지막으로 그려 놓은» cmtRows 다(따로 보관할 상태가 없다).
+     ⚠ body 는 길이만 센다. 폴백은 «달라졌는가»만 알면 되고, 본문 전체를 비교하면
+        긴 의견이 많은 제안에서 쓸데없이 무겁다.
+     ⚠ 본문 «수정»은 comment_count 를 바꾸지 않으므로 위 목록 서명에는 안 잡힌다 —
+        그래서 이 서명이 따로 필요하다(구독 ②가 하던 일을 폴백에서 대신한다). */
+  function _cmtSigOf(rows) {
+    return (rows || []).map((r) => [r.id,
+      String(r.body == null ? "" : r.body).length,
+      r.is_hidden ? 1 : 0, r.is_deleted ? 1 : 0].join(":")).join("|");
+  }
+  async function _ppCommentsChanged() {
+    const client = getClient();
+    if (!client || !cmtP) return false;
+    try {
+      const { data, error } = await client.from("proposal_comments").select("*")
+        .eq("proposal_id", cmtP.id).order("created_at", { ascending: true });
+      if (error) throw error;
+      return _cmtSigOf(data || []) !== _cmtSigOf(cmtRows);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 정책참여를 «지금 보고 있는가» — 폴백은 보고 있을 때만 돈다(배터리·데이터 아끼기).
+  function _ppWatching() {
+    if (document.hidden) return false;
+    return !$("view-propose").hidden || !$("view-pdetail").hidden;
+  }
+
+  /* 폴백 폴링 — 실시간이 죽어 있는 «동안만» 돈다.
+     ⚠ setInterval 이 아니라 «스스로 다시 예약하는 setTimeout» 이다(app.js 와 같은 이유) —
+        고정 간격이면 같은 자리의 시민 30명이 영원히 나란히 조회한다. */
+  function _ppStartPoll() {
+    if (_ppPollTimer !== null) return;
+    const tick = async () => {
+      _ppPollTimer = null;
+      if (_ppRtOk && _cmtOk) return;        // 실시간이 살아났다 → 폴백은 여기서 끝
+      if (_ppWatching()) {
+        try {
+          if (await _ppSigChanged()) onProposalsChanged();
+          else if (!$("view-pdetail").hidden && await _ppCommentsChanged()) scheduleDetailRefresh();
+        } catch (e) { /* 조용히 — 폴백 실패가 화면을 깨뜨리지 않는다 */ }
+      }
+      _ppPollTimer = setTimeout(tick, _ppJitter(PP_RT_POLL_MS));
+    };
+    _ppPollTimer = setTimeout(tick, _ppJitter(PP_RT_POLL_MS));
+  }
+  function _ppStopPoll() {
+    if (_ppPollTimer === null) return;
+    clearTimeout(_ppPollTimer);
+    _ppPollTimer = null;
+  }
+
+  // 다시 붙기 예약 — 제안·의견 중 «죽은 것만» 다시 연다.
+  function _ppScheduleRejoin() {
+    if (_ppRejoinTimer !== null) return;
+    const wait = _ppJitter(PP_RT_BACKOFF[Math.min(_ppRtTry, PP_RT_BACKOFF.length - 1)]);
+    _ppRtTry += 1;
+    _ppRejoinTimer = setTimeout(() => {
+      _ppRejoinTimer = null;
+      if (!_ppRtOk) subscribeRealtime();
+      if (!_cmtOk) { try { syncCommentSub(); } catch (e) { /* 무시 */ } }
+      if (!_ppRtOk || !_cmtOk) _ppScheduleRejoin();   // 아직 못 붙었으면 다음 단계로
+    }, wait);
+  }
+
+  // 구독이 죽었을 때 «항상 함께» 하는 두 가지(폴백 켜기 + 다시 붙기 예약).
+  function _ppDegrade() { _ppStartPoll(); _ppScheduleRejoin(); }
+
+  // 끊겨 있던 동안 놓친 것을 메운다(다시 붙은 «직후»에만 부른다).
+  async function _ppCatchUp() {
+    if (!_ppWatching()) return;
+    try {
+      if (await _ppSigChanged()) onProposalsChanged();
+      if (!$("view-pdetail").hidden) scheduleDetailRefresh();   // 의견도 놓쳤을 수 있다
+    } catch (e) { /* 무시 */ }
+  }
+
+  function _ppSetOk(ok) {
+    const was = _ppRtOk;
+    _ppRtOk = !!ok;
+    _ppConnecting = false;
+    if (_ppRtOk) {
+      _ppRtTry = 0;
+      if (_cmtOk) _ppStopPoll();
+      // 끊겼다가 «다시» 붙은 경우에만 그 사이의 변경을 확인한다(첫 연결에서는 reload 가 방금 읽었다).
+      if (!was && _ppEverOk) _ppCatchUp();
+      _ppEverOk = true;
+    } else {
+      _ppDegrade();
+    }
+  }
+
+  // 화면이 다시 보이거나 인터넷이 돌아오면 «기다리지 않고» 즉시 다시 붙는다.
+  function _ppWakeUp() {
+    if (_ppRtOk && _cmtOk) return;
+    clearTimeout(_ppRejoinTimer); _ppRejoinTimer = null;
+    _ppRtTry = 0;
+    if (!_ppRtOk) subscribeRealtime();
+    try { syncCommentSub(); } catch (e) { /* 무시 */ }
+    _ppCatchUp();
+  }
+  /* ⚠ 이 리스너는 정책참여를 «한 번이라도 연 뒤»에만 걸린다(subscribeRealtime 에서 호출).
+     정책참여를 안 쓰는 시민에게는 아무 일도 일어나지 않는다 — 기존 동작 그대로다. */
+  function _ppBindWake() {
+    if (_ppWakeBound) return;
+    _ppWakeBound = true;
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) _ppWakeUp(); });
+    window.addEventListener("online", _ppWakeUp);
+    window.addEventListener("offline", () => _ppSetOk(false));
+  }
+
   function subscribeRealtime() {
     const client = getClient();
-    if (!client || realtimeSub) return;
+    if (!client || !client.channel) return;
+    /* ⛔ 예전의 `if (realtimeSub) return;` 이 바로 그 결함이었다 — «죽은 채널»도
+       «있다»로 세어 재구독을 영영 막았다. 이제는 «살아 있거나 붙는 중»일 때만 건너뛴다.
+       (open() 이 정책참여에 들어올 때마다 부르므로 이 멱등성 자체는 필요하다) */
+    if (realtimeSub && (_ppRtOk || _ppConnecting)) return;
+    _ppBindWake();
     try {
+      // ★ 신분증을 «떼어 내기 전에» 갈아 끼운다(app.js initBenefitsRealtime 과 같은 이유) —
+      //   옛 채널이 removeChannel 때 즉시 CLOSED 를 알려도 새 채널 상태를 뒤집지 못한다.
+      const mine = {};
+      _ppRtTag = mine;
+      if (realtimeSub) {
+        try { client.removeChannel(realtimeSub); } catch (e) { /* 무시 */ }
+        realtimeSub = null;
+      }
+      _ppConnecting = true;
       realtimeSub = client
         .channel("proposals-citizen")
         .on("postgres_changes", { event: "*", schema: "public", table: "proposals" }, onProposalsChanged)
-        .subscribe();
+        .subscribe((status) => {
+          if (_ppRtTag !== mine) return;        // 떼어 낸 옛 채널의 뒤늦은 보고는 무시
+          // SUBSCRIBED 외(CHANNEL_ERROR·TIMED_OUT·CLOSED)는 «지금 안 온다»는 뜻이다.
+          _ppSetOk(status === "SUBSCRIBED");
+        });
     } catch (e) {
-      console.warn("[정책참여] 실시간 구독 실패(무시):", e);
+      console.warn("[정책참여] 실시간 구독 실패 — 폴백 조회로 동작합니다:", e);
+      realtimeSub = null;
+      _ppSetOk(false);
     }
   }
 
@@ -1617,18 +1830,43 @@
       cmtSub = null;
       cmtSubPid = "";
     }
-    if (!wantPid) return;                   // 상세를 떠났다 → 닫은 채로 끝
+    if (!wantPid) {
+      // 닫혀 있어야 해서 닫힌 것 — 이것도 «원하는 대로»이므로 건강한 상태다.
+      _cmtOk = true;
+      if (_ppRtOk) _ppStopPoll();           // 제안 구독이 살아 있으면 폴백은 필요 없다
+      return;
+    }
     try {
+      /* ★ 2026-08-25 — 여기에도 «상태 콜백»을 붙였다.
+         예전에는 .subscribe() 를 인자 없이 불러, 이 채널이 죽어도 아무도 몰랐다.
+         게다가 위의 `wantPid === cmtSubPid` 멱등 검사가 «죽은 채널»을 «열려 있다»로
+         세어, 상세에 머무는 한 다시 열릴 길이 없었다(제안 구독과 똑같은 결함).
+         → 죽으면 cmtSubPid 를 비워 «다음 호출이 다시 열 수 있게» 만들고,
+           _ppDegrade() 로 폴백·재접속을 켠다(제안 구독과 한 몸으로 굴린다). */
+      const mine = {};
+      _cmtTag = mine;
       cmtSub = client
         .channel("pcomments-citizen-" + wantPid)
         .on("postgres_changes",
             { event: "*", schema: "public", table: "proposal_comments", filter: "proposal_id=eq." + wantPid },
             onCommentsChanged)
-        .subscribe();
+        .subscribe((status) => {
+          if (_cmtTag !== mine) return;     // 떼어 낸 옛 채널의 뒤늦은 보고는 무시
+          if (status === "SUBSCRIBED") {
+            _cmtOk = true;
+            if (_ppRtOk) _ppStopPoll();
+            return;
+          }
+          _cmtOk = false;
+          cmtSubPid = "";                   // ⚠ 이 한 줄이 «다시 열 수 있는 문»이다
+          _ppDegrade();
+        });
       cmtSubPid = wantPid;
+      _cmtOk = true;                        // 붙는 중 — SUBSCRIBED 가 오면 그대로 유지된다
     } catch (e) {
-      cmtSub = null; cmtSubPid = "";
-      console.warn("[정책참여] 의견 실시간 구독 실패(무시):", e);
+      cmtSub = null; cmtSubPid = ""; _cmtOk = false;
+      console.warn("[정책참여] 의견 실시간 구독 실패 — 폴백 조회로 동작합니다:", e);
+      _ppDegrade();
     }
   }
 

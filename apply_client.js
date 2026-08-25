@@ -89,7 +89,8 @@ window.SangjuApply = (function () {
   //       lpad(((floor(random()*90))::int + 10)::text, 2, '0')      → NN 은 10~99
   //     자릿수(18자)가 예전과 같으므로 화면·엑셀·검색·PC 대장이 그대로 동작한다.
   //  ⚠ 그래도 «같은 초 + 같은 NN» 이 90분의 1 확률로 나올 수 있다 →
-  //     submitApplication 이 23505 를 만나면 번호만 새로 뽑아 «딱 한 번» 다시 보낸다.
+  //     submitApplication 이 23505 를 만나면 번호만 새로 뽑아 «최대 3번» 다시 보낸다
+  //     (2026-08-25 부하 실측으로 1회 → 3회 + 지터. 아래 submitApplication 머리말 참조).
   //  ⚠ idx 인자는 부르는 곳을 안 고쳐도 되게 «남겨 둘 뿐» 쓰지 않는다.
   //     한 제출에서 여러 건을 넣어도 난수라 서로 겹치지 않는다.
   function genReceiptNo(idx) {                       // eslint-disable-line no-unused-vars
@@ -200,22 +201,52 @@ window.SangjuApply = (function () {
   //     receipt_no·lookup_code 는 클라가 만들어 보내는 값이라 서버 왕복 없이도 확정이다.
   //     (receipt_no 를 비워 보내면 서버 트리거가 채우지만, 이 앱은 항상 채워 보낸다.)
   //  성공 판정: «반환된 행이 있는가»가 아니라 «throw 없이 끝났는가»로 본다.
-  //  ⭐ 접수번호가 겹치면(23505) «번호만» 새로 뽑아 딱 한 번 다시 보낸다 (2026-08-20)
+  //  ⭐ 접수번호가 겹치면(23505) «번호만» 새로 뽑아 다시 보낸다 (2026-08-20 도입)
   //     23505 는 «그 행이 저장되지 않았다»는 뜻이므로 재시도해도 중복 접수가 되지 않는다.
-  //     ⛔ 상한은 «1회». 그 이상 돌리면 「저장은 됐는데 응답만 오류로 보이는」 상황에서
-  //        같은 신청이 두 건 쌓인다 — 되돌릴 수 없는 사고다.
+  //
+  //  ★★ 2026-08-25 부하 실측 반영 — 재시도 1회 → 3회 + 지터
+  //     ────────────────────────────────────────────────────────────────────
+  //     실제로 요청을 보내 잰 값:
+  //       · 동시 30건 → 120/120 성공. 다만 «첫 시도»에서 15건(12.5%)이 충돌했고
+  //         재시도 1회로 전부 구조됐다(= 여유가 한 칸도 없었다).
+  //       · 동시 50건 → 1건이 «재시도까지 또 겹쳐» 영구 실패했다. 그 신청은 어디에도
+  //         남지 않는다. 2026-08-24 이후 신청 메일이 없어져 이 통로가 «유일한» 접수
+  //         경로이므로, 여기서 놓치면 시민의 신청이 그냥 사라진다.
+  //     왜 1회로는 모자랐나 — 난수 공간이 90개뿐이라 같은 초에 N명이 몰리면 충돌
+  //     확률이 급히 오른다. 게다가 «겹친 둘이 동시에» 재시도하면 두 번째도 같은
+  //     순간에 부딪힌다. → ① 횟수를 3회로 늘리고 ② 재시도 사이에 «무작위 지터»를 둬
+  //     둘의 재시도 시각을 흩뜨린다. 지터가 없으면 횟수만 늘려도 잘 안 풀린다.
+  //     ※ 서버 트리거 쪽(난수 공간 확대·재추첨)은 🩷자물쇠가 함께 고친다.
+  //
+  //     ⚠ 상한을 올려도 «안전하다» — 근거를 분명히 적어 둔다.
+  //       23505 는 서버가 «받지 않았다»고 확실히 대답한 것이다. 「저장은 됐는데 응답만
+  //       오류」인 상황(네트워크 끊김·타임아웃)에서는 23505 가 «오지 않는다» — 그때는
+  //       _isDupReceipt 가 false 라 곧바로 throw 되고 재시도가 아예 돌지 않는다.
+  //       ⛔ 그러므로 재시도의 안전은 «횟수»가 아니라 _isDupReceipt 의 엄격함이 지킨다.
+  //          그 함수를 느슨하게 고치는 순간 이 상한도 함께 위험해진다 — 같이 볼 것.
+  var RECEIPT_RETRY_MAX = 3;        // 번호를 새로 뽑아 다시 보내는 «최대» 횟수
+  var RETRY_JITTER_MIN_MS = 50;     // 재시도 사이 무작위 대기(하한)
+  var RETRY_JITTER_MAX_MS = 150;    // 〃 (상한)
+
+  function _retryDelay() {
+    return new Promise(function (r) {
+      setTimeout(r, RETRY_JITTER_MIN_MS + Math.random() * (RETRY_JITTER_MAX_MS - RETRY_JITTER_MIN_MS));
+    });
+  }
+
   async function submitApplication(payload) {
     var sb = client();
     if (!sb) throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
     var row = _clean(payload || {});
     var res = await sb.from(TABLE).insert(row);   // ⛔ .select()/.single() 금지 — 위 주석 참조
-    if (res.error) {
+    for (var i = 0; i < RECEIPT_RETRY_MAX && res.error; i++) {
+      // ⚠ «접수번호 충돌»이 아닌 오류는 여기서 곧바로 던진다 — 재시도가 절대 돌지 않는다.
       if (!_isDupReceipt(res.error)) throw res.error;
-      // 같은 초에 다른 시민이 같은 번호를 먼저 넣었다 → 번호만 갈아 끼워 한 번 더.
-      row.receipt_no = genReceiptNo();
+      await _retryDelay();                        // 겹친 둘이 «또» 같이 부딪히지 않게 흩뜨린다
+      row.receipt_no = genReceiptNo();            // 번호만 갈아 끼운다(내용은 그대로)
       res = await sb.from(TABLE).insert(row);
-      if (res.error) throw res.error;
     }
+    if (res.error) throw res.error;               // 3번 다 겹쳤다 → 시민에게 실패를 알린다
     return row;                                   // ★ 재시도했으면 «새 접수번호»가 들어 있다
   }
 
@@ -225,13 +256,29 @@ window.SangjuApply = (function () {
   //      · uq_applications_attach_ticket  ← 첨부 통행증. 번호를 바꿔도 안 풀린다.
   //    그래서 23505 라는 것만 보고 재시도하면 안 되고, «어느 제약인지»를 가려야 한다.
   //    가리지 못하면(제약 이름이 안 실려 오면) 재시도하지 않는다 — 모르면 안 하는 쪽이 안전하다.
+  //
+  //  ★★ 이 함수가 submitApplication 재시도의 «유일한 안전장치»다 (2026-08-25 재점검).
+  //     재시도 상한을 1 → 3 으로 올렸으므로, 여기가 느슨해지면 같은 신청이 여러 건
+  //     쌓이는 «되돌릴 수 없는 사고»가 된다. 세 겹으로 잠근다:
+  //       ① 23505(또는 409) 라는 «저장되지 않았다»는 확답이 있어야 한다.
+  //          → 네트워크 끊김·타임아웃·5xx 는 여기서 전부 걸러진다. 그때가 진짜 위험한
+  //            경우다 — 서버는 저장했는데 응답만 못 받았을 수 있으므로 재시도 금지.
+  //       ② 이름을 대는 제약이 «접수번호»여야 한다.
+  //       ③ «다른» unique 제약 이름이 보이면 무조건 아니다(첨부 통행증).
+  //     ⛔ 세 겹 중 하나라도 빼지 말 것. 특히 ②를 지우고 「23505 면 재시도」로 만들지 말 것.
   function _isDupReceipt(e) {
     if (!e) return false;
     var code = String((e && (e.code || e.status || e.statusCode)) || "");
     var blob = [e.message, e.details, e.hint, e.constraint].map(function (x) {
       return String(x == null ? "" : x);
     }).join(" ");
-    if (code !== "23505" && code !== "409" && !/23505/.test(blob)) return false;
+    // ① «저장되지 않았다»는 확답이 있는가 (없으면 재시도하지 않는다)
+    if (code !== "23505" && code !== "409" && !/23505/.test(blob)) return false;
+    /* ③ 첨부 통행증(uq_applications_attach_ticket) 충돌은 «번호를 바꿔도 안 풀린다».
+       재시도해 봐야 같은 통행증으로 계속 부딪히기만 한다. 이름이 보이면 곧바로 아니라고 답한다.
+       ⚠ 한 오류가 대는 제약 이름은 «하나»뿐이라, 진짜 접수번호 충돌이 여기 걸릴 일은 없다. */
+    if (/attach_ticket/i.test(blob)) return false;
+    // ② 접수번호 제약인가 (제약 이름이 안 실려 오면 false — 모르면 안 하는 쪽이 안전하다)
     return /uq_applications_receipt|receipt_no/i.test(blob);
   }
 

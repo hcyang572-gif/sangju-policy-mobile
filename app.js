@@ -186,8 +186,15 @@ function showView(name, push = true) {
   const _appEl = $("app");
   if (_appEl) _appEl.classList.toggle("nav-back", _navDir === "back");
   _navDir = "fwd";
-  VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
-  $("topSub").hidden = name !== "home";   // 부제는 홈에서만 제목 옆에 표시
+  /* ⚠ «없을 수도 있다»고 보고 다룬다 (2026-08-25 A-01).
+     showInitError() 가 오류 화면을 그리면 13개 <section class="view"> 가 화면에서
+     빠질 수 있다. 그때 el 을 확인하지 않으면 여기서
+     「TypeError: Cannot set properties of null」 로 앱 전체가 멈춘다
+     (data.json·data.js·클라우드가 동시에 막히는 행정망 경로에서 실제로 재현됨).
+     ⛔ if (el) 를 지우지 말 것 — 이 한 줄이 «오류 화면에서 탭을 눌렀을 때»의 유일한 방어다. */
+  VIEWS.forEach((v) => { const el = $("view-" + v); if (el) el.hidden = v !== name; });
+  const subEl = $("topSub");
+  if (subEl) subEl.hidden = name !== "home";   // 부제는 홈에서만 제목 옆에 표시
   /* ★ C-01 (2026-08-24 양호창님 지시) — 푸터(톱니바퀴 · 개인정보 처리방침 · 버전 정보 ·
      앱 아이콘 설치)는 «홈 첫 화면에서만» 보인다.
      왜: 목록·상세·신청처럼 «일하는 화면»에서는 화면 맨 아래가 신청 버튼이어야 한다.
@@ -229,8 +236,8 @@ function showView(name, push = true) {
 
 function _updateNavButtons() {
   const canBack = state.navStack.length > 1;
-  $("backBtn").hidden = !canBack;
-  $("fabBack").hidden = !canBack;
+  const b = $("backBtn"); if (b) b.hidden = !canBack;
+  const f = $("fabBack"); if (f) f.hidden = !canBack;
 }
 
 // 화면 안의 «뒤로»(상단 ‹ · 하단 «‹ 뒤로» · 오른쪽 스와이프)도 브라우저 뒤로가기를 부른다.
@@ -328,6 +335,24 @@ function _isDirtyView() {
   return false;
 }
 
+/* 「쓰던 글이 사라집니다」를 «한 곳»에서 묻는다 — 2026-08-25 A-02.
+   ────────────────────────────────────────────────────────────────────────
+   예전에는 물어보는 곳이 popstate «한 군데»뿐이었다. 그래서 신청서·불편신고·
+   정책제안을 쓰는 중에 하단 탭바 「홈」(ui.js goHome)이나 「처음으로」
+   (#doneHome·#privacyHome)를 누르면 «말없이» 홈으로 가고 쓰던 글이 날아갔다.
+   → 나가는 길이 몇 개든 이 함수 하나를 거치게 해서 문구·단추를 같게 만든다.
+   반환값: 나가도 되면 true(작성 중이 아니면 묻지 않고 곧바로 true).
+   ⛔ window.confirm 으로 되돌리지 말 것 — 주소가 앞에 붙고 화면이 굳는다. */
+function confirmLeaveDirty() {
+  if (!_isDirtyView()) return Promise.resolve(true);
+  // 제목이 이미 「나가시겠습니까?」이므로 본문에서는 그 물음을 뺀다(같은 말을 두 번 하지 않게)
+  return appConfirm(DIRTY_MSG.replace(/\s*나가시겠습니까\?$/, ""),
+    { title: "나가시겠습니까?", okText: "나가기", cancelText: "계속 쓰기" });
+}
+// ui.js(하단 탭바 「홈」)·proposals.js 가 쓴다 — 파일이 달라 window 로 내보낸다.
+window._isDirtyView = _isDirtyView;
+window.confirmLeaveDirty = confirmLeaveDirty;
+
 function _armBackTrap() {
   try {
     if (history.state && history.state[_TRAP]) return;   // 이미 덫 위에 있다
@@ -360,9 +385,8 @@ function _onPopState() {
   //       군더더기로 붙고, 자바스크립트가 멈춰 화면 상태가 굳는다. appConfirm 을 쓴다.
   if (_isDirtyView() && !_skipDirtyOnce) {
     _armBackTrap();                       // 먼저 제자리를 지켜 둔다(대답을 기다리는 동안)
-    // 제목이 이미 「나가시겠습니까?」이므로 본문에서는 그 물음을 뺀다(같은 말을 두 번 하지 않게)
-    appConfirm(DIRTY_MSG.replace(/\s*나가시겠습니까\?$/, ""),
-      { title: "나가시겠습니까?", okText: "나가기", cancelText: "계속 쓰기" })
+    // ★ 문구·단추는 confirmLeaveDirty() 한 곳에서 온다(탭바 「홈」·「처음으로」와 같은 창)
+    confirmLeaveDirty()
       .then((ok) => {
         if (!ok) return;                  // 계속 쓰기 — 있던 자리 그대로
         _skipDirtyOnce = true;
@@ -446,10 +470,20 @@ const RECHECK_MIN_MS = 30000;    // 재확인 최소 간격(과도한 조회 방
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// data.json 을 읽지 못한 «드문» 경우에만 쓰는 기본값.
-// ⚠ build_data.py 의 ALWAYS_SHOW / situation_map 과 «동일하게» 유지할 것.
+/* data.json 을 읽지 못한 «드문» 경우에만 쓰는 기본값.
+   ⛔⛔ 손으로 고치지 말 것 — 아래 두 값은 `py -3 build_data.py` 가 «자동으로» 써 넣는다.
+        (2026-08-25 C-03) 예전에는 손으로 맞추게 두었더니 실제로 어긋났다:
+        data.json 은 19개인데 여기는 17개였고(「💍 결혼·신혼부부」·「🚚 전입·정착」 누락),
+        「여성」의 설명도 「경력단절 등」으로 옛 문구가 남아 있었다.
+        data.json 이 막힌 행정망에서는 «이 표»가 맞춤 찾기의 전부라, 어긋난 만큼
+        시민이 자기 상황을 못 고르고 돌아간다.
+   고치는 법 : build_data.py 의 situation_map / config.ALWAYS_SHOW_CATEGORIES 를 고치고
+              `py -3 build_data.py` 를 다시 돌린다(아래 두 줄이 함께 갱신된다).
+   ⚠ 아래 «⟦…⟧» 표시 두 개는 build_data.py 가 찾는 «자리표»다 — 지우거나 바꾸지 말 것. */
+// ⟦AUTO:FALLBACK 시작⟧ build_data.py 가 생성 — 손으로 고치지 마세요
 const FALLBACK_ALWAYS_SHOW = ["🏡 귀농·귀촌"];
 const FALLBACK_SITUATION_MAP = [
+  ["결혼 예정이거나 신혼(혼인 7년 이내)", "💍 결혼·신혼부부"],
   ["임신 중이거나 출산 예정", "👶 임신·출산"],
   ["영유아·미취학 아동 자녀가 있음", "🧸 영유아·보육"],
   ["초·중·고 학생 자녀가 있음", "📚 청소년·교육"],
@@ -464,10 +498,12 @@ const FALLBACK_SITUATION_MAP = [
   ["소상공인·창업 준비 중", "🏪 소상공인·기업"],
   ["구직 중·취업 준비 중", "💼 일자리·구직"],
   ["무주택·주거 지원이 필요", "🏠 주거·부동산"],
+  ["상주시로 이사 왔거나 이사 예정", "🚚 전입·정착"],
   ["국가유공자·보훈 대상", "🎖️ 보훈·유공자"],
-  ["여성(경력단절 등)", "👩 여성"],
+  ["여성(여성 건강·임신·출산 등)", "👩 여성"],
   ["건강·의료 지원이 필요", "🏥 건강·의료"],
 ];
+// ⟦AUTO:FALLBACK 끝⟧
 
 // ── 공용 Supabase 클라이언트 ────────────────────────────────────────────
 // forms.js·apply_client.js 가 각자 만들던 클라이언트를 하나로 모아 쓴다
@@ -681,6 +717,15 @@ function adaptCloudRow(r) {
     "연락처": txt(r.contact),
     "담당자이메일": txt(r.manager_email),
     "종료일": txt(r.end_date),          // 컬럼 미생성 시 "" (화면에서 생략)
+    /* 신청기간 — 상세의 「신청 기간」 타일(openDetail 의 whenTile)이 읽는 값.
+       ⚠ benefits 표에는 아직 이 컬럼이 «없다»(supabase 어디에도 apply_period 가 없고
+          cloud_sync.py 도 올리지 않는다). 그래서 지금은 언제나 "" 이고, 화면은 그 줄을
+          통째로 생략한다 — 위 org_name·end_date 와 «똑같은» 안전한 폴백이다.
+       ⚠ 클라우드가 살아 있으면 목록은 클라우드 행으로만 그려지므로, 컬럼이 생기기
+          전까지는 data.json 의 31건도 이 경로에서는 안 보인다(내장 데이터로 뜰 때만 보인다).
+          컬럼이 생기는 순간 «이 한 줄» 덕분에 화면 코드를 고치지 않고 살아난다.
+       ⛔ 값을 지어내지 말 것 — 컬럼이 없으면 빈 값이 정답이다. */
+    "신청기간": txt(r.apply_period),    // 컬럼 미생성 시 "" (화면에서 생략)
     // ⚠ «※[내부]» 줄은 담당자 메모라 시민앱에서 지운다(stripInternalNotes 주석 참조)
     "비고": stripInternalNotes(tidyText(txt(r.note))),
     "categories": Array.isArray(r.categories) ? r.categories.filter(Boolean) : [],
@@ -806,8 +851,42 @@ async function loadCloudData() {
   }
 }
 
+/* 📅 「신청기간」 메우기 — benefits 표에 아직 그 «칸»이 없어서 생기는 구멍을 막는다.
+   ────────────────────────────────────────────────────────────────────────────
+   ★ C-02 (2026-08-25). 상세의 「신청 기간」 타일을 살렸는데, 클라우드가 살아 있으면
+     목록이 통째로 benefits 행으로 그려지므로 «31건 모두» 다시 빈칸이 되었다
+     (헤드리스로 실제 확인 — 「결혼장려금」·「산전·산후 의료비 지원」에 타일이 안 떴다).
+   왜 «내장 data.json 에서 가져와도 되는가»
+     둘은 서로 다른 출처가 아니다. cloud_sync.py 도, build_data.py 도 «같은 엑셀 한 장»을
+     읽는다. 다만 benefits 에 apply_period 컬럼이 없어 클라우드가 그 칸을 실어 나르지
+     못할 뿐이다. 즉 «옛 값 vs 새 값»이 아니라 «같은 값 vs 빈 값»이다.
+   ⚠ 클라우드 값이 «있으면» 언제나 그쪽이 이긴다. 컬럼이 생기는 날 이 함수는 저절로
+     아무 일도 하지 않게 된다(지워도 되는 날이 오면 그때 지운다).
+   ⚠ 사업명이 «정확히 같을 때»만 옮긴다 — 비슷한 이름에 남의 기간을 붙이면 안 된다.
+   ⛔ 다른 칸(기관명·종료일 등)까지 이 방식으로 메우지 말 것. 그 둘은 컬럼이 이미 있어서
+      «비어 있음»이 곧 «담당자가 안 적었음»이라는 뜻이다 — 지어내면 거짓말이 된다. */
+function fillApplyPeriodFromLocal(local, programs) {
+  const src = (local && Array.isArray(local.programs)) ? local.programs : null;
+  if (!src || !src.length) return programs;
+  const byName = new Map();
+  src.forEach((p) => {
+    const nm = String(p.사업명 || "").trim();
+    const v = String(p.신청기간 || "").trim();
+    if (nm && v) byName.set(nm, v);
+  });
+  if (!byName.size) return programs;
+  programs.forEach((p) => {
+    if (String(p.신청기간 || "").trim()) return;      // 클라우드 값이 있으면 손대지 않는다
+    const v = byName.get(String(p.사업명 || "").trim());
+    if (v) p.신청기간 = v;
+  });
+  return programs;
+}
+
 // 클라우드 사업목록 + 내장 데이터의 정적 설정(항상 보일 분야·상황 목록)을 합친다.
 function buildCloudData(local, programs) {
+  // 📅 클라우드에 아직 없는 「신청기간」만 내장 데이터에서 메운다(위 함수 머리말 참조).
+  programs = fillApplyPeriodFromLocal(local, programs);
   const always = (local && local.always_show && local.always_show.length)
     ? local.always_show : FALLBACK_ALWAYS_SHOW;
   const situations = (local && Array.isArray(local.situation_map) && local.situation_map.length)
@@ -831,13 +910,35 @@ function buildCloudData(local, programs) {
   };
 }
 
+/* 오류 배너 «전용» 칸을 얻는다(없으면 만든다).
+   ⛔⛔ #app 의 innerHTML 을 갈아 끼우지 말 것 (2026-08-25 A-01 결함).
+      예전에는 $("app").innerHTML = … 로 통째로 덮었다. 그러면 13개
+      <section class="view"> 가 «사라지는데» 탭바·헤더 「안내」·푸터는 그대로 남아,
+        ① 남은 단추를 눌러도 아무 일이 없고
+        ② showView() 가 없는 화면에 hidden 을 넣다가 TypeError 로 앱이 멈췄다.
+      (data.json·data.js·클라우드가 «동시에» 막히는 행정망 경로에서 재현됨)
+      → 화면(뷰)들은 «감추기만» 하고, 오류 글은 이 전용 칸에만 그린다.
+        나중에 되살릴 일이 생기면 hidden 만 되돌리면 된다. */
+function _initErrorBox() {
+  let box = $("initErrorBox");
+  if (box) return box;
+  box = document.createElement("div");
+  box.id = "initErrorBox";
+  box.className = "init-error";
+  const app = $("app");
+  if (app) app.appendChild(box);
+  else (document.body || document.documentElement).appendChild(box);
+  return box;
+}
+
 function showInitError(e) {
   // 원인 구분: 오프라인·서버 미응답이면 «일시적 응답 없음» 안내, 그 밖은 데이터 파일 문제로 안내.
   // (무료 플랜 일시정지로 서비스가 멈췄을 때 "불러오기 실패"만 떠서 원인 파악이 안 됐던 사고 반영)
   const offline = (typeof navigator !== "undefined" && navigator.onLine === false);
   const netMsg = /failed to fetch|networkerror|network error|load failed|timeout|fetch/i.test(String(e && e.message));
   const conn = offline || netMsg;
-  $("app").innerHTML = conn
+  const box = _initErrorBox();
+  box.innerHTML = conn
     ? '<div class="empty err-box" role="alert">' +
       // 규격서 10절 — 화면 코드가 만들어 내는 이모지는 인라인 SVG 로 바꾼다(분야 칩만 예외).
       '<div class="err-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10.2 9v6M13.8 9v6"/></svg> 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
@@ -847,6 +948,14 @@ function showInitError(e) {
       '<div class="err-title">' + '<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 6.6a3.6 3.6 0 0 1 4.9-3.3l-2.7 2.7 1.4 1.4 2.7-2.7a3.6 3.6 0 0 1-4.6 4.7L6.8 18.9a2 2 0 1 1-2.8-2.8z"/></svg>' + ' 사업 정보를 준비 중입니다.</div>' +
       '<div class="err-desc">데이터 파일(data.json)을 읽지 못했습니다.<br>잠시 후 다시 시도해 주세요.</div>' +
       '<div class="err-actions"><button id="initRetry" class="err-retry" type="button"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 다시 시도</button></div></div>';
+  box.hidden = false;
+  /* «죽은 단추»를 남기지 않는다 — 데이터가 없으면 화면·탭바·푸터·「안내」는 눌러도
+     보여 줄 것이 없다. 남겨 두면 눌리기만 하고 아무 일도 일어나지 않아 고장으로 보인다.
+     ⚠ 지우는 것이 아니라 «감추는 것»이다(hidden). 「다시 시도」는 location.reload() 라
+        새로 켜진 앱이 처음부터 다시 그린다. */
+  VIEWS.forEach((v) => { const el = $("view-" + v); if (el) el.hidden = true; });
+  [$("tabBar"), document.querySelector(".foot"), $("helpBtn"), $("topSub"),
+   $("backBtn"), $("fabBack")].forEach((el) => { if (el) el.hidden = true; });
   const rb = $("initRetry");
   if (rb) rb.addEventListener("click", () => location.reload());
 }
@@ -930,6 +1039,26 @@ async function recheckCloud(force) {
 const RT_QUIET_VIEWS = ["home", "list", "recommend", "detail"];
 const RT_POLL_MS = 20000;          // 실시간이 죽어 있는 «동안만» 도는 폴백 조회 간격
 const RT_BACKOFF = [2000, 4000, 8000, 15000, 30000];   // 재연결 간격(마지막 값에서 고정)
+
+/* ⏱ 지터(무작위 흔들기) — «다 같이 동시에» 를 막는 한 줄  (2026-08-25 부하 실측 반영)
+   ────────────────────────────────────────────────────────────────────────────
+   무엇이 문제였나 — 이 앱의 기다림은 모두 «고정 숫자»였다. 그런데 시민 30명이 같은
+   시연장에서 같은 화면을 보고 있으면, 그들을 깨우는 사건도 «같은 순간»에 온다.
+     · 공무원이 사업 1건을 고침 → 30명이 «정확히 1.5초 뒤 동시에» 클라우드를 재조회
+     · 와이파이가 한 번 끊김   → 30명이 «2초·4초·8초에 동시에» 재접속 시도
+   서버에서 보면 평평한 부하가 아니라 «못이 박히듯» 뾰족한 봉우리가 선다. 무료 요금제의
+   동시 연결·요청 한도에 그 봉우리가 먼저 닿아, 정작 아무 일도 없던 평시에 장애가 난다.
+   (같은 종류의 사고가 접수번호에서 이미 났다 — apply_client.js 의 재시도 지터 참조)
+   어떻게 고치나 — 기다리는 «시간»에 사람마다 다른 무작위를 섞는다. 30명의 재조회가
+   1.5~3초 사이에 «흩어져» 들어오므로 봉우리가 평평해진다. 총 요청 수는 그대로다.
+   ⚠ 지터는 «늦추기»가 아니다 — 평균은 거의 그대로이고 «시각»만 흩뜨린다.
+   ⛔ 고정 숫자로 되돌리지 말 것. 되돌리면 사람이 늘수록 뾰족해진다. */
+function _jitter(ms, ratio) {
+  const r = (ratio == null) ? 0.3 : ratio;          // 기본 ±30%
+  return Math.round(ms * (1 - r + Math.random() * r * 2));
+}
+// proposals.js 도 «같은 지터»를 쓴다(파일이 달라 window 로 내보낸다).
+window._jitter = _jitter;
 let _rtTimer = null, _rtReloading = false;
 let _rtChan = null;                // 지금 붙어 있는 채널(다시 붙기 전에 반드시 떼어 낸다)
 let _rtOk = false;                 // 구독이 살아 있는가
@@ -976,16 +1105,25 @@ async function _onBenefitsChanged() {
 }
 
 // 실시간이 죽어 있는 동안만 도는 폴백 조회. «보고 있을 때»만 돈다(숨어 있으면 건너뜀).
+/* ⚠ setInterval 이 아니라 «스스로 다시 예약하는 setTimeout» 이다 (2026-08-25).
+   왜 바꿨나 — 와이파이가 끊기는 순간 그 자리의 30명이 «동시에» 폴백을 켠다.
+   setInterval 은 간격이 딱 20초로 고정이라, 그 30명이 20·40·60초에 «영원히 나란히»
+   조회한다. 한 번 생긴 봉우리가 스스로 풀리지 않는다.
+   매번 새로 예약하면 tick 마다 지터가 다시 붙어 몇 바퀴 안에 저절로 흩어진다.
+   ⚠ _rtStopPoll 은 clearTimeout 이다 — clearInterval 로 되돌리지 말 것(안 멈춘다). */
 function _rtStartPoll() {
   if (_rtPollTimer !== null) return;      // ⚠ !_rtPollTimer 로 쓰면 타이머 id 0 을 «없음»으로 오인한다
-  _rtPollTimer = setInterval(() => {
-    if (document.hidden || _rtOk || _rtReloading) return;
-    _onBenefitsChanged();
-  }, RT_POLL_MS);
+  const tick = () => {
+    _rtPollTimer = null;
+    if (_rtOk) return;                    // 실시간이 살아났다 → 폴백은 여기서 끝난다
+    if (!document.hidden && !_rtReloading) _onBenefitsChanged();
+    _rtPollTimer = setTimeout(tick, _jitter(RT_POLL_MS));   // 다음 바퀴를 «새 지터»로 예약
+  };
+  _rtPollTimer = setTimeout(tick, _jitter(RT_POLL_MS));
 }
 function _rtStopPoll() {
   if (_rtPollTimer === null) return;
-  clearInterval(_rtPollTimer);
+  clearTimeout(_rtPollTimer);
   _rtPollTimer = null;
 }
 
@@ -1008,7 +1146,11 @@ function _rtSetOk(ok) {
 
 function _rtScheduleRejoin() {
   if (_rtRejoinTimer !== null) return;
-  const wait = RT_BACKOFF[Math.min(_rtTry, RT_BACKOFF.length - 1)];
+  /* ⏱ ±30% 지터 — 와이파이가 한 번 흔들리면 «그 자리의 모두»가 동시에 끊긴다.
+     지터가 없으면 30명이 2초·4초·8초에 «똑같이» 다시 붙으려 달려들어, 서버가 그
+     봉우리에서 거절하고 → 다 같이 다음 단계로 밀리고 → 봉우리가 더 커진다.
+     흩뜨리면 같은 횟수로도 훨씬 잘 붙는다. */
+  const wait = _jitter(RT_BACKOFF[Math.min(_rtTry, RT_BACKOFF.length - 1)]);
   _rtTry += 1;
   _rtRejoinTimer = setTimeout(() => {
     _rtRejoinTimer = null;
@@ -1032,7 +1174,11 @@ function initBenefitsRealtime() {
     const ch = sb.channel("benefits-rt-citizen")
       .on("postgres_changes", { event: "*", schema: "public", table: "benefits" }, () => {
         clearTimeout(_rtTimer);
-        _rtTimer = setTimeout(_onBenefitsChanged, 1500);   // 몰아치는 이벤트를 한 번으로
+        /* 몰아치는 이벤트를 한 번으로 «묶고», 그 한 번을 사람마다 다른 시각에 보낸다.
+           1500~3000ms — 사업 1건이 바뀌면 그 방의 모든 시민에게 «같은 순간» 신호가
+           오므로, 고정 1.5초면 30명의 재조회가 한 점에 모인다(2026-08-25 실측 지적).
+           ⚠ 아래 proposals.js 의 RT_QUIET_MS 와 «같은 규약»이다 — 한쪽만 고치지 말 것. */
+        _rtTimer = setTimeout(_onBenefitsChanged, 1500 + Math.random() * 1500);
       })
       .subscribe((status) => {
         // 떼어 낸 옛 채널이 뒤늦게 CLOSED 를 알려도 새 채널 상태를 뒤집지 않게 한다.
@@ -1405,7 +1551,11 @@ function renderCategoryChips() {
   box.innerHTML = `<button class="chip chip-all" type="button">전체</button>` +
     DATA.categories.map((c) => {
       const f = splitFieldLabel(c);
-      return `<button class="chip chip-2" data-cat="${esc(c)}" aria-label="${esc(f.name)}">`
+      /* ⚠ 2026-08-25 — 클래스 목록에서 «chip-2» 를 뺐다. 세로 2단 시안의 흔적인데
+         style.css 에 그 이름의 규칙이 한 줄도 없어(2026-08-24 한 줄 배치로 되돌릴 때 함께
+         지워졌다) 아무 일도 하지 않으면서 «2단인가?» 하는 오해만 남겼다.
+         ⛔ 되살리지 말 것 — 세로 2단은 칩 높이를 44→66px 로 키워 폐기된 시안이다. */
+      return `<button class="chip" data-cat="${esc(c)}" aria-label="${esc(f.name)}">`
         + (f.icon ? `<span class="chip-ic">${esc(f.icon)}</span>` : "")
         + `<span class="chip-nm">${esc(f.name)}</span></button>`;
     }).join("");
@@ -1577,11 +1727,18 @@ function compareByTeam(a, b) {
   return ka.localeCompare(kb, "ko");
 }
 
-function syncListToolbar() {
+/* 정렬 줄을 지금 화면에 맞춘다.
+   ⚠ 인자 hasResults 를 «주지 않으면» 지금까지처럼 보인다(openList 처럼 아직 그리기 전에
+      부르는 자리가 있어서, 모르는 상태에서 함부로 감추지 않는다).
+   ★ D-06 (2026-08-25) — 검색 결과가 «0건»이면 정렬 줄을 감춘다. 아무것도 없는 화면에서
+      「팀별순/최신순」을 고르게 두면 눌러도 아무 일이 안 일어나 «고장»으로 읽힌다.
+      그 자리에서 시민이 할 일은 정렬이 아니라 «검색어를 바꾸는 것»이다
+      (빈 화면이 이미 「전체 사업 보기」 단추 하나로 다음 행동을 가리키고 있다). */
+function syncListToolbar(hasResults) {
   const bar = $("listToolbar");
   if (!bar) return;
-  // 「팀별순」은 언제나 쓸 수 있으므로 정렬 줄 자체는 «항상» 보인다.
-  bar.hidden = false;
+  // 「팀별순」은 언제나 쓸 수 있으므로, 결과가 «있는» 동안에는 정렬 줄이 늘 보인다.
+  bar.hidden = (hasResults === false);
   const sel = $("listSort");
   if (!sel) return;
   // 「최신순」만 조건부 — 등록일이 하나도 없는 환경에서는 아무 일도 못 하므로 목록에서 뺀다.
@@ -1654,6 +1811,8 @@ function renderList() {
     results = results.slice().sort(compareByTeam);
   }
   $("listMeta").textContent = `${results.length}개 사업`;
+  // ★ D-06 — 결과가 0건이면 정렬 줄을 감춘다(위 syncListToolbar 머리말 참조).
+  syncListToolbar(results.length > 0);
   const box = $("listResults");
   if (results.length === 0) {
     const isAlways = cats && [...cats].some((c) => (DATA.always_show || []).includes(c));
@@ -1811,10 +1970,23 @@ function openDetail(idx) {
   /* 「지급 시기」 — 아직 자료에 그 칸이 없다(🟢곳간 C-05·C-12 에서 새 필드가 생긴다).
      ⚠ 필드가 생기면 «이 한 줄»만 살아난다 — 화면 코드를 다시 고칠 필요가 없게 미리 읽어 둔다.
      그때까지는 지금 있는 「종료일」을 «신청 마감»으로 보여 준다(없는 말을 지어내지 않는다). */
+  /* ★ C-02 (2026-08-25) — 「신청 기간」이 «한 곳도» 안 보이던 결함을 고쳤다.
+     data.json 124건 중 31건에 「신청기간」이 들어 있는데(예: 「임신 확인 후부터
+     출산 후 6개월 이내」) 모바일 상세는 그 칸을 읽지도 않았다. 시민이 «언제까지
+     신청하면 되는지»를 못 보고 지나치는 것은 이 앱의 존재 이유에 직결된다.
+     PC앱은 webui/app.js 의 «핵심 정보 상자»에서 상시 보여 준다 — 이제 같아졌다.
+     ⚠ 세 칸 중 «있는 것 하나»만 보여 준다. 뜻이 서로 달라 함께 놓으면 헷갈린다:
+        ① 지급 시기 — 돈·물품을 «언제 받는지»  (아직 자료에 칸이 없다)
+        ② 신청 기간 — «언제까지 내면 되는지»   ← 지금 31건이 여기에 해당
+        ③ 신청 마감 — 종료일(YYYY-MM-DD) 하나  (4건)
+     ⛔ 없는 값을 지어내지 않는다. 셋 다 비면 타일 자체가 생기지 않는다(blockText 가 "" 반환). */
   const payWhen = String(p.지급시기 || "").trim();
+  const applyWhen = String(p.신청기간 || "").trim();
   const whenTile = payWhen
     ? blockText(IC_CAL, "지급 시기", payWhen)
-    : blockText(IC_CAL, "신청 마감", p.종료일);
+    : (applyWhen
+      ? blockText(IC_CAL, "신청 기간", applyWhen)
+      : blockText(IC_CAL, "신청 마감", p.종료일));
   $("detailContent").innerHTML = `
     <div class="detail-head c-card"${fg.group ? ` data-fg="${fg.group}"` : ""}>
       <div class="card-band"><span class="card-band-t">${esc(fg.label)}</span></div>
@@ -3950,8 +4122,11 @@ function bindEvents() {
   document.querySelectorAll("[data-go]").forEach((el) => {
     el.addEventListener("click", () => {
       const go = el.dataset.go;
-      if (go === "all") { state.selectedCats = new Set(); openList({ title: "전체 사업" }); }
-      else if (go === "recommend") { $("topTitle").textContent = "맞춤 찾기"; showView("recommend"); }
+      /* ⚠ 2026-08-25 — 「go === "all"」 가지를 뺐다. index.html 어디에도 data-go="all" 이
+         없어 «한 번도 불리지 않는» 코드였다(「전체 사업 보기」는 분야 줄 맨 앞의
+         .chip-all 이 맡고, 그것은 renderCategoryChips 가 따로 이어 준다).
+         ⛔ 되살리려면 data-go="all" 을 «먼저» 두어야 한다 — 여기만 되살리면 또 죽은 코드다. */
+      if (go === "recommend") { $("topTitle").textContent = "맞춤 찾기"; showView("recommend"); }
       else if (go === "mystatus") { openMyStatus(); }
       else if (go === "propose") { if (window.Proposals) window.Proposals.open(); }
     });
@@ -4072,19 +4247,22 @@ function bindEvents() {
     if (regionEl.value) setFieldError("applyRegion", "applyRegionErr", "");
     saveApplyDraft();
   });
-  $("privacyHome").addEventListener("click", () => {
+  /* 「처음으로」 두 개와 하단 탭바 「홈」(ui.js goHome)은 «완전히 같은 일»을 한다.
+     ⛔ 아래 세 곳의 순서를 따로 손보지 말 것 — 어긋나면 어느 길로 갔느냐에 따라
+        홈 화면 상태가 달라진다. 고칠 때는 ui.js goHome() 과 «함께» 고친다. */
+  const goHomeReset = () => {
     state.selectedCats = new Set();
     state.navStack = [{ v: "home", t: HOME_TITLE }];
     state.fwdStack = [];
     $("topTitle").textContent = HOME_TITLE;
     showView("home", false);
+  };
+  // ★ A-02 — 쓰던 글이 있으면 먼저 묻는다(popstate·탭바 「홈」과 같은 문구·같은 단추)
+  $("privacyHome").addEventListener("click", () => {
+    confirmLeaveDirty().then((ok) => { if (ok) goHomeReset(); });
   });
   $("doneHome").addEventListener("click", () => {
-    state.selectedCats = new Set();
-    state.navStack = [{ v: "home", t: HOME_TITLE }];
-    state.fwdStack = [];
-    $("topTitle").textContent = HOME_TITLE;
-    showView("home", false);
+    confirmLeaveDirty().then((ok) => { if (ok) goHomeReset(); });
   });
   // ── 🧾 내 신청 현황 ────────────────────────────────────────────────
   const doneStatusBtn = $("doneStatus");

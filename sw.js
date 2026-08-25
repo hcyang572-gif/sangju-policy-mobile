@@ -22,9 +22,18 @@
 // 배포 버전 — 버전정보.json 의 "version" 및 version.js 의 APP_VERSION 과 항상 같은 값.
 // ⚠ 손으로 고치지 말고 루트의 `py -3 자원버전_동기화.py` 를 돌리면
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
-const ASSET_V = "0.7.5";
+const ASSET_V = "0.7.6";
 
-const CACHE = "sangju-v58";   // v58: 앱 아이콘 ②안 교체 — 로고 334px 등배, icon-*-v4.png(2026-08-25, 🔵손길).
+const CACHE = "sangju-v60";   // v60: 부하 실측 후속 — 접수번호 재시도 1→3회+지터(apply_client.js)·
+                              //      재조회/재접속 지터(app.js)·정책참여 실시간 재접속·폴백 폴링
+                              //      (proposals.js. 예전에는 한 번 끊기면 영영 안 살아났다).
+                              //      (2026-08-25, 📱모바일)
+// ⚠ 이름을 올려야 옛 캐시에 쌓인 것(data.js?nc=… 사본 등)이 함께 비워진다.
+// ── 지난 이름들 ──────────────────────────────────────────────────────────────
+// v59: 전수검사 결함 수정 — 오류화면 파괴(A-01)·작성중 이탈경고(A-02)·한글 줄바꿈(B-01)·
+//      담당팀 배지 말줄임(B-02)·FAB 겹침(B-03)·신청기간 표시(C-02)·닫기 44px(C-05)·
+//      처리방침(C-06)·data.js?nc= 캐시 무한증식 차단(D-01)·qr.png 프리캐시 제거(D-02).
+// v58: 앱 아이콘 ②안 교체 — 로고 334px 등배, icon-*-v4.png(2026-08-25, 🔵손길).
                                // v57: 정책제안 상세의 「본인 글 수정/삭제 (PIN)」를 «이 기기에서 내가 쓴 글»에만
                                //   큰 버튼으로 두고, 그 밖의 글에는 작은 글씨 링크만 남김(2026-08-25, 🔵손길).
                                //   ⚠ ASSET_V(=0.7.4)는 그대로다 — 앱 버전을 올리는 일이 아니라 화면 표시만 바뀌었다.
@@ -157,7 +166,12 @@ const OPTIONAL = [
   "icon-192-v4.png",
   "icon-512-v4.png",
   "icon-maskable-512-v4.png",
-  "qr.png",
+  /* ⛔ qr.png 를 다시 넣지 말 것 (2026-08-25 D-02에서 뺐다).
+     index.html·manifest.json·app.js 어디에서도 참조하지 않는 «쓰이지 않는 그림»이다.
+     (QR 은 인쇄물·카톡 초대에만 쓰고 앱 화면에는 나오지 않는다.)
+     프리캐시에 있으면 설치 때마다 아무도 안 보는 4.5KB 를 내려받고, 무엇보다
+     «이 목록에 있는 것 = 화면에 나오는 것» 이라는 읽는 사람의 기대를 깬다.
+     앱 화면에 QR 을 실제로 넣게 되면 그때 다시 넣을 것. */
   "assets/sangsang1.png",
   "assets/gotgam.png",
   // 2026 시정구호(홈 첫 화면) — 오프라인에서도 깨지지 않게 미리 담는다.
@@ -321,14 +335,29 @@ async function documentFirst(req) {
 }
 
 // network-first: 네트워크 성공 시 캐시 갱신 후 반환, 실패 시 캐시 폴백
+//
+// ⚠ 캐시에 담고 찾는 «키»는 쿼리를 뗀 주소다 (2026-08-25 D-01).
+//    app.js 의 data.js 폴백은 `data.js?nc=<지금 시각>` 으로 부른다(HTTP 캐시 우회용).
+//    그 주소를 그대로 키로 쓰면 «부를 때마다 새 항목»이 되어 캐시에 사본이 끝없이 쌓인다
+//    (행정망처럼 폴백을 자주 타는 곳일수록 빨리 쌓이고, 브라우저 저장 한도를 넘기면
+//     저장소가 통째로 비워져 오프라인 캐시가 함께 날아간다).
+//    폴백에 필요한 것은 «가장 최근에 성공한 한 벌» 하나뿐이므로 정식 주소 하나로 덮어쓴다.
+//    ⚠ 담는 키와 찾는 키가 «같아야» 폴백이 실제로 걸린다 — 한쪽만 고치지 말 것.
+function _bareKey(url) {
+  try { const u2 = new URL(url); return u2.origin + u2.pathname; }
+  catch (e) { return url; }
+}
+
 async function networkFirst(req) {
   const cache = await caches.open(CACHE);
+  const key = _bareKey(req.url);
   try {
     const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
+    if (res && res.ok) cache.put(key, res.clone());
     return res;
   } catch (e) {
-    const cached = await cache.match(req);
+    // 쿼리를 뗀 키로 먼저 찾고, 옛 버전이 쿼리째 담아 둔 것이 남아 있으면 그것도 본다.
+    const cached = (await cache.match(key)) || (await cache.match(req));
     if (cached) return cached;
     throw e;
   }

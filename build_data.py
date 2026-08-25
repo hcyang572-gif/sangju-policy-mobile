@@ -53,6 +53,62 @@ def _write_json_pair(json_path, data):
     return json_path, js_path
 
 
+#: app.js 안에서 «자동 생성 구역»을 감싸는 자리표. 양쪽 다 있어야만 갈아 끼운다.
+_FB_BEGIN = "// ⟦AUTO:FALLBACK 시작⟧"
+_FB_END = "// ⟦AUTO:FALLBACK 끝⟧"
+
+
+def _sync_app_fallback(always_show, situation_map):
+    """app.js 의 FALLBACK_ALWAYS_SHOW / FALLBACK_SITUATION_MAP 을 여기 값으로 맞춘다.
+
+    왜 필요한가 (2026-08-25 C-03)
+      data.json 도 data.js 도 못 읽는 환경(행정망 프록시가 둘 다 막는 경우)에서는
+      «맞춤 찾기»의 상황 목록이 app.js 안의 이 두 값으로만 그려진다. 그런데 손으로
+      맞추게 두었더니 실제로 어긋났다 — data.json 19개 / app.js 17개, 게다가
+      「여성」 설명은 옛 문구(「경력단절 등」)가 남아 있었다. 어긋난 만큼 시민이
+      자기 상황을 못 고르고 돌아간다.
+      → 데이터를 만드는 «이 자리»에서 함께 써 둔다. 출처는 언제나 하나다.
+
+    ⚠ 자리표(⟦AUTO:FALLBACK …⟧) 두 개 사이만 갈아 끼운다. 자리표가 없으면
+       «아무것도 하지 않고» 알려만 준다 — 남의 코드를 함부로 덮지 않기 위해서다.
+    ⚠ 내용이 이미 같으면 파일을 건드리지 않는다(쓸데없는 변경 기록을 만들지 않게).
+    """
+    app_js = os.path.join(HERE, "app.js")
+    try:
+        with open(app_js, encoding="utf-8") as f:
+            src = f.read()
+    except OSError as e:
+        print(f"[경고] app.js 를 읽지 못해 폴백 표를 맞추지 못했습니다: {e}")
+        return
+
+    i, j = src.find(_FB_BEGIN), src.find(_FB_END)
+    if i < 0 or j < 0 or j < i:
+        print("[경고] app.js 에서 ⟦AUTO:FALLBACK⟧ 자리표를 찾지 못했습니다 — "
+              "폴백 표(FALLBACK_SITUATION_MAP)를 손으로 맞춰 주세요.")
+        return
+
+    def js_str(s):
+        # JSON 문자열 리터럴은 JS 문자열 리터럴과 호환된다(따옴표·역슬래시·제어문자 처리 동일).
+        return json.dumps(s, ensure_ascii=False)
+
+    rows = "".join(f"  [{js_str(a)}, {js_str(b)}],\n" for a, b in situation_map)
+    block = (
+        _FB_BEGIN + " build_data.py 가 생성 — 손으로 고치지 마세요\n"
+        "const FALLBACK_ALWAYS_SHOW = ["
+        + ", ".join(js_str(c) for c in always_show) + "];\n"
+        "const FALLBACK_SITUATION_MAP = [\n" + rows + "];\n"
+        + _FB_END
+    )
+    new = src[:i] + block + src[j + len(_FB_END):]
+    if new == src:
+        print(f"[확인] app.js 폴백 표는 이미 최신입니다 (상황 {len(situation_map)}개).")
+        return
+    # ⚠ newline="\n" — 이 저장소의 웹 파일은 모두 LF 다. 빼면 윈도에서 CRLF 로 뒤바뀐다.
+    with open(app_js, "w", encoding="utf-8", newline="\n") as f:
+        f.write(new)
+    print(f"[갱신] app.js 폴백 표를 맞췄습니다 (상황 {len(situation_map)}개).")
+
+
 def _excel_path():
     """빌드에 쓸 엑셀 경로.
     순서 ① PC 앱이 마지막으로 연동한 DB(last_excel_path.txt)
@@ -418,6 +474,10 @@ def main():
 
     _, out_js = _write_json_pair(OUT, out)
     print(f"[완료] 행정망 대비 사본 → {out_js}")
+
+    # ★ C-03 (2026-08-25) — app.js 의 «데이터를 못 읽었을 때» 폴백 표를 여기서 함께 맞춘다.
+    #    (data.json 과 app.js 가 어긋나 있던 결함. 자세한 근거는 _sync_app_fallback 머리말)
+    _sync_app_fallback(out["always_show"], situation_map)
 
     # ── 공무원앱(cloudui)에도 «같은 파일»을 둔다 (2026-08-20) ──────────────────────
     #   왜: 공무원앱의 「읍·면·동별 신청 현황」 차트도 regions / region_groups / region_etc

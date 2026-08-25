@@ -45,7 +45,7 @@
   <meta property="og:image" content="https://hcyang572-gif.github.io/sangju-policy-mobile/share.png" />
   <meta property="og:url" content="https://hcyang572-gif.github.io/sangju-policy-mobile/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="style.css?v=0.7.5" />
+  <link rel="stylesheet" href="style.css?v=0.7.6" />
 </head>
 <body>
   <!-- 반복 영역 건너뛰기(KWCAG 2.2): 키보드 첫 Tab에서만 노출, 본문(main#app)으로 즉시 이동 -->
@@ -351,8 +351,12 @@
     <section id="view-inquiry" class="view" hidden>
       <h2 class="apply-title">불편신고</h2>
       <p class="apply-hint">쓰시다가 불편한 점이 있으면 알려 주세요. 담당자에게 전달됩니다.</p>
-      <label class="field-label" for="inquiryMemo">어떤 점이 불편하셨나요</label>
-      <textarea id="inquiryMemo" class="text-input" rows="6" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
+      <label class="field-label" for="inquiryMemo">어떤 점이 불편하셨나요 <span class="req">(필수)</span></label>
+      <!-- ★ C-04 (2026-08-25) — app.js sendInquiry() 가 «비면 보내지 않는다». 그런데 라벨에도
+           속성에도 필수 표시가 없어, 낭독기 이용자는 «왜 안 보내지는지» 알 길이 없었다.
+           ⚠ 이 화면은 <form> 이 아니라 required 로 브라우저 말풍선이 뜨지 않는다 —
+              화면 안 안내(#inquiryErr)는 지금까지 그대로다. -->
+      <textarea id="inquiryMemo" class="text-input" rows="6" required aria-required="true" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
       <label class="field-label" for="inquiryContact">연락처 (선택)</label>
       <input id="inquiryContact" class="text-input" type="text" placeholder="회신받을 연락처나 이메일" />
 
@@ -521,8 +525,10 @@
         <p class="apply-hint">신청을 마칠 때 받으신 <b>확인 번호</b>를 넣으시면 이 휴대폰에서도 보입니다.</p>
         <form id="msForm" novalidate>
           <label class="field-label" for="msCode">확인 번호 <span class="req">(필수)</span></label>
+          <!-- ★ C-04 — 라벨의 (필수) 와 «속성»을 맞춘다. 폼은 novalidate 라 브라우저 말풍선은 안 뜬다. -->
           <input id="msCode" class="text-input" type="text" autocomplete="off" autocapitalize="characters"
                  spellcheck="false" maxlength="20" placeholder="예: A7KQ3M9XTB"
+                 required aria-required="true"
                  aria-describedby="msCodeHelp msCodeErr" />
           <p id="msCodeHelp" class="field-help">영문 대문자와 숫자 10자리입니다. 헷갈리는 글자(O·I·0·1)는 쓰지 않습니다.</p>
           <p id="msCodeErr" class="field-err" role="alert" hidden></p>
@@ -555,12 +561,14 @@
               <label class="field-label" for="msRecName">이름 <span class="req">(필수)</span></label>
               <input id="msRecName" class="text-input" type="text" autocomplete="name"
                      maxlength="40" spellcheck="false" placeholder="예: 홍길동"
+                     required aria-required="true"
                      aria-describedby="msRecNameHelp msRecErr" />
               <p id="msRecNameHelp" class="field-help">신청서에 적으신 이름과 똑같이 넣어 주세요. 띄어쓰기는 달라도 괜찮습니다.</p>
 
               <label class="field-label" for="msRecPhone4">연락처 뒷 4자리 <span class="req">(필수)</span></label>
               <input id="msRecPhone4" class="text-input" type="text" inputmode="numeric"
                      maxlength="4" autocomplete="off" spellcheck="false" placeholder="예: 1234"
+                     required aria-required="true"
                      aria-describedby="msRecPhone4Help msRecErr" />
               <p id="msRecPhone4Help" class="field-help">신청서에 적으신 휴대전화 번호의 마지막 네 자리 숫자입니다.</p>
               <p id="msRecErr" class="field-err" role="alert" hidden></p>
@@ -781,9 +789,12 @@
         <p class="consent-more">자세한 내용은 <button type="button" id="pwPrivacyLink" class="link-btn">개인정보 처리방침</button>에서 확인하실 수 있습니다.</p>
       </fieldset>
 
+      <!-- ★ C-04 (2026-08-25) — proposals.js 가 «체크하지 않으면» 제안을 보내지 않는다.
+           그런데 (필수) 표시도 aria-required 도 없어 낭독기에서는 선택 항목으로 읽혔다.
+           ⚠ 이 화면은 <form> 이 아니므로 required 로 브라우저 말풍선이 뜨지 않는다. -->
       <label class="pp-agree">
-        <input id="pwAgree" type="checkbox" />
-        <span>허위·욕설·개인정보(실명·전화·주민번호)를 포함하지 않음에 동의합니다.</span>
+        <input id="pwAgree" type="checkbox" required aria-required="true" />
+        <span>(필수) 허위·욕설·개인정보(실명·전화·주민번호)를 포함하지 않음에 동의합니다.</span>
       </label>
 
       <button id="pwSubmit" class="big-btn primary full">제안 보내기</button>
@@ -807,7 +818,12 @@
       <div class="privacy-doc">
         <h3 class="privacy-h">1. 수집하는 개인정보 항목</h3>
         <ul class="privacy-ul">
-          <li><b>지원사업 신청 시</b> — 이름, 연락처(휴대전화), (작성 시) 문의사항, 신청한 사업명, (첨부 시) 증빙서류 파일<br>
+          <!-- ★ C-06 (2026-08-25) — 「읍·면·동」이 빠져 있던 것을 바로잡았다.
+     신청 폼의 동의상자(이 파일 위쪽 «수집 항목(필수)»)에는 «성명, 연락처(휴대전화), 읍·면·동»
+     이라 적혀 있는데, 정작 처리방침에는 읍·면·동이 없었다. 실제로 받는 항목을 빠뜨린
+     처리방침은 «틀린 고지»가 된다(개인정보 보호법 §30).
+     ⛔ 동의상자와 이 줄은 «언제나 같아야» 한다 — 한쪽만 고치지 말 것. -->
+          <li><b>지원사업 신청 시</b> — 이름, 연락처(휴대전화), 읍·면·동, (작성 시) 문의사항, 신청한 사업명, (첨부 시) 증빙서류 파일<br>
             <span class="privacy-sub">※ 접수 과정에서 <b>접수번호</b>가 자동 생성되며, 담당 부서가 <b>처리상태·처리메모</b>를 함께 기록합니다.<br>
             ※ 신청 시 이용자 휴대폰에서 <b>확인 번호</b>(무작위 영문·숫자 10자리, 개인정보 아님)가 만들어져 함께 저장되고 이 기기에도 보관됩니다. 「내 신청 현황」에서 <b>본인 신청의 진행 상태·담당 부서 안내문</b>을 확인하는 데만 쓰이며, 이 번호로는 이름·연락처를 조회할 수 없습니다.<br>
             ※ 확인 번호는 본인 확인을 대신하는 값입니다. 번호를 알고 있는 사람은 누구나 해당 신청의 진행 상태와 담당 부서 안내문을 볼 수 있으므로, 비밀번호처럼 본인만 보관해 주세요. 이 기기에 보관된 번호는 「내 신청 현황」 화면의 「이 기기에서 지우기」로 언제든 지울 수 있으며, 마지막 확인일로부터 180일이 지나면 자동으로 지워집니다.<br>
@@ -815,7 +831,10 @@
             ※ <b>신청자의 이메일 주소는 수집하지 않습니다.</b> 결과 안내는 위 연락처로 담당자가 연락드립니다.<br>
             ※ 신청 시 <b>증빙서류를 첨부</b>하실 수 있습니다(선택). 첨부하신 파일은 최대 5개·1개당 10MB 까지이며, 담당 부서가 신청 내용을 확인하는 목적으로만 이용합니다. 첨부파일은 <b>비공개 저장소</b>에 보관되어 <b>로그인한 담당 공무원만</b> 열람할 수 있고, 인터넷 주소만으로는 누구도 열 수 없습니다. 파일 이름은 접수대장의 「첨부서류」 칸에 함께 기록되며, 신청 건이 파기될 때 첨부파일도 함께 파기합니다.<br>
             ※ 첨부는 <b>선택 사항</b>입니다. 첨부하지 않으셔도 신청은 정상 접수됩니다.</span></li>
-          <li><b>정책참여(시민 제안)</b> — 닉네임, (선택) 동네, 제안 내용 / 공감 시 기기식별값(localStorage) / 본인확인용 PIN(임의 숫자, 개인정보 아님)</li>
+          <!-- ★ C-06 (2026-08-25) — 「(선택) 동네」는 옛 표기다. 2026-08-20 부터 정책제안의
+     읍·면·동은 «필수»(#pwRegion 이 required 이고 proposals.js 가 비면 막는다).
+     제안 작성 화면의 동의상자도 «닉네임, 수정용 PIN, 읍·면·동»으로 적고 있다 — 그것과 맞춘다. -->
+          <li><b>정책참여(시민 제안)</b> — 닉네임, 읍·면·동, 제안 내용 / 공감 시 기기식별값(localStorage) / 본인확인용 PIN(임의 숫자, 개인정보 아님)</li>
           <li><b>오류·문의</b> — 문의 내용, (선택) 연락처</li>
         </ul>
 
@@ -825,6 +844,10 @@
           <li>확인 번호를 잊으신 경우 <b>본인확인</b> — 입력하신 이름·연락처 뒷 4자리를 접수된 신청 내역과 대조하여 확인 번호를 다시 안내</li>
           <li>시민 정책제안 검토·반영</li>
           <li>이용 중 오류·문의에 대한 응대</li>
+          <!-- ★ C-06 딸림 (2026-08-25) — 신청 폼·제안 폼의 동의상자가 «이용 목적»으로
+               「지역별 정책 수요 분석」을 함께 적고 있는데 여기에만 없었다. 읍·면·동을
+               받는 «이유»가 바로 이것이라, 빠지면 «왜 받는지 안 밝힌 항목»이 된다. -->
+          <li>읍·면·동 단위의 <b>지역별 정책 수요 분석</b>(개인을 식별하지 않는 집계 형태)</li>
         </ul>
 
         <h3 class="privacy-h">3. 개인정보의 보유·이용 기간</h3>
@@ -901,7 +924,7 @@
     <div class="foot-privacy"><button id="privacyLink" class="foot-link-btn" type="button">개인정보 처리방침</button> · <!-- ※ 실제 값은 version.js 를 읽어 app.js initVersion() 이 갈아 끼운다.
          여기 적힌 것은 «그 전 한 순간» 보이는 값이므로 현재 버전과 맞춰 둔다
          (v0.0.2 로 굳어 있어 version.js 로드가 늦거나 막히면 두 해 전 버전이 보였다). -->
-    <button id="versionBtn" class="foot-link-btn" type="button" aria-label="v0.4.6 — 버전 정보 및 이용 안내 보기">v0.4.6</button></div>
+    <button id="versionBtn" class="foot-link-btn" type="button" aria-label="v0.7.6 — 버전 정보 및 이용 안내 보기">v0.7.6</button></div>
   </footer>
 
   <!-- 팀원 소개 모달 -->
@@ -1132,11 +1155,11 @@
        ⛔ 2026-08-20 양호창님 지시로 «물방울 파동»(ripple)만 제거했다.
           파일은 그대로 둔다 — 진동·눌림 되먹임이라는 «할 일이 남아 있기» 때문이다.
           이 두 가지가 없으면 누를 수 있는 것을 눌러도 아무 반응이 없는 앱이 된다. -->
-  <script src="tap.js?v=0.7.5" defer></script>
+  <script src="tap.js?v=0.7.6" defer></script>
   <!-- 시각 레이어: 분야 칩 아이콘·접기 · 하단 탭바 · 동적 이모지 → SVG. 앱 로직에 관여하지 않는다 -->
-  <script src="ui.js?v=0.7.5" defer></script>
-  <script src="version.js?v=0.7.5"></script>
-  <script src="config.js?v=0.7.5"></script>
+  <script src="ui.js?v=0.7.6" defer></script>
+  <script src="version.js?v=0.7.6"></script>
+  <script src="config.js?v=0.7.6"></script>
   <!-- Supabase 클라이언트 (사업목록 하이브리드 조회·정책참여·서식·신청접수)
        ※ 세 앱(모바일웹·cloudui·webui) 모두 «같은 버전·같은 해시»를 쓴다. 하나만 바꾸지 말 것.
        · 버전 고정: @2 (뜬 범위)는 CDN이 언제든 다른 코드를 내려줄 수 있어 2.112.0 으로 못박음.
@@ -1150,14 +1173,14 @@
           integrity="sha384-De+l/Df7qym5QBDVocD3+gW1S7IjR3epf+6KbRDjB3FCCzM/LqVTwqckT6FhFar8"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- 서식 스토리지 공용 헬퍼(세 앱 공통). app.js 보다 먼저 로드 -->
-  <script src="forms.js?v=0.7.5"></script>
+  <script src="forms.js?v=0.7.6"></script>
   <!-- 신청 접수 공용 헬퍼(세 앱 공통·byte-identical). app.js 보다 먼저 로드 -->
-  <script src="apply_client.js?v=0.7.5"></script>
-  <script src="app.js?v=0.7.5"></script>
-  <script src="proposals.js?v=0.7.5"></script>
+  <script src="apply_client.js?v=0.7.6"></script>
+  <script src="app.js?v=0.7.6"></script>
+  <script src="proposals.js?v=0.7.6"></script>
   <!-- 「홈 화면에 추가」 — 설치가 «실제로 가능할 때»만 원터치 버튼을 켠다.
        app.js 의 안내 띠(#a2hsTip)·인앱 배너(#inappBanner)와 겹치지 않게 스스로 판단한다.
        app.js 보다 «뒤»에 두어, app.js initA2HS() 가 띠를 정한 뒤 그 위에 얹는다. -->
-  <script src="a2hs.js?v=0.7.5" defer></script>
+  <script src="a2hs.js?v=0.7.6" defer></script>
 </body>
 </html>
