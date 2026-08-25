@@ -22,9 +22,10 @@
 // 배포 버전 — 버전정보.json 의 "version" 및 version.js 의 APP_VERSION 과 항상 같은 값.
 // ⚠ 손으로 고치지 말고 루트의 `py -3 자원버전_동기화.py` 를 돌리면
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
-const ASSET_V = "0.7.1";
+const ASSET_V = "0.7.2";
 
-const CACHE = "sangju-v53";   // v53: 0.7.1 — 정책제안 ⓘ 안내 문단 제거.
+const CACHE = "sangju-v54";   // v54: 0.7.2 — 접기 단추 터치·마우스 일치.
+                               // v53: 0.7.1 — 정책제안 ⓘ 안내 문단 제거.
                                // v52: 0.7.0 — 정책제안 검색 접수번호 추가, 접기 화살표(⌄↔⌃) 통일,
                                //   버튼 디자인 전면 정리, 터치 표적 44px 복구, 접근성(명도대비·SVG 아이콘) 개선
                                //   (app.js·proposals.js·style.css·index.html 변경, 2026-08-25 배포).
