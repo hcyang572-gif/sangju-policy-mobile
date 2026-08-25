@@ -1035,6 +1035,25 @@ main { width: 100%; margin: 0 auto; padding: 16px; }
 .pd-reply-title { font-size: var(--fs-body); font-weight: var(--fw-heavy); color: #2E7D32; margin-bottom: 6px; } /* 연초록 배경 4.70:1 */
 .pd-reply-body { font-size: var(--fs-body); line-height: var(--lh-body); white-space: pre-wrap; }
 .pd-actions { display: grid; gap: 10px; margin-top: 18px; }
+/* ⭐ 2026-08-25 — 「내가 쓴 글인가요? PIN으로 수정·삭제」 작은 글씨 길.
+   · 큰 버튼(.big-btn)은 «이 기기에서 내가 쓴 글»에만 둔다. 남의 글에까지 큰 버튼이 붙으면
+     마치 내가 고칠 수 있는 글처럼 보인다.
+   · 그렇다고 없애지는 않는다 — 기기를 바꾸거나 기록을 지운 «진짜 본인»이 들어올 길이다.
+   · 생김새(주황 밑줄 작은 글씨)는 의견 아래 조작 .cmt-act 를 그대로 물려받는다 — 새로 만들지 않는다.
+     다만 여기서는 높이 44px 를 «실제로» 확보하고, .cmt-act 가 쓰는 겹치는 터치판(::after)은 끈다.
+     ⛔ ::after 를 그대로 두면 위아래로 13px 씩 삐져나온 투명 판이 바로 위 «신고» 버튼의
+        아래 가장자리를 덮어 그 부분이 안 눌린다(.pd-actions 의 칸 사이가 10px 뿐이다).
+   · 글자 #A8431A(--accent-text) on #FFFFFF = 6.03:1 · 크림 #FDF4EC = 5.55:1 (AA 4.5 충족)
+   · 터치 표적 44×44px 이상(KWCAG 2.2) — 글씨는 13px 이라도 누르는 판은 줄이지 않는다.
+   ⚠ 선택자를 «.pd-actions .pd-mine-link» 로 적은 이유: .cmt-act 규칙이 이 파일에서 «뒤»에 있어
+      한 칸짜리 선택자(.pd-mine-link)로는 padding:0 · content:"" 에 도로 덮인다. */
+.pd-actions .pd-mine-link {
+  justify-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 var(--sp-2);
+  text-align: center;
+}
+.pd-actions .pd-mine-link::after { content: none; }
 .pp-ghost { color: var(--muted); } /* 흰 6.50:1 */
 .pp-danger { color: #fff; background: #B5483A; border-color: #B5483A; } /* 흰글자 5.31:1 */
 

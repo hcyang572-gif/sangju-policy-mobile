@@ -106,6 +106,18 @@
       localStorage.setItem(MINE_LS, JSON.stringify(list));
     } catch (e) { /* 무시 */ }
   }
+  /* ⭐ 2026-08-25 — 「이 기기에서 내가 쓴 글인가」 판정(상세 화면이 쓴다).
+     ⚠ id 는 반드시 String 으로 견준다 — 서버는 숫자, localStorage 는 문자로 돌아오므로
+        그냥 === 로 견주면 «내 글인데 못 알아보는» 사고가 난다.
+        위 saveMine·forgetMine 이 String 비교를 쓰는 것과 같은 이유다.
+     ⛔ 이것은 «무엇을 보여 줄까»의 판단일 뿐 권한 검사가 아니다.
+        localStorage 는 이용자가 마음대로 고칠 수 있다. 수정·삭제의 진짜 관문은
+        PIN(edit_proposal·delete_proposal)이고 서버가 지킨다 — 여기에 기대지 말 것. */
+  function isMineProposal(id) {
+    if (id == null) return false;
+    const key = String(id);
+    return loadMine().some((e) => String(e.id) === key);
+  }
 
   // ---------- 상태 ----------
   const PAGE = 20;
@@ -645,6 +657,21 @@
     }).join("");
 
     const reply = (p.admin_reply || "").trim();
+    /* ⭐ 2026-08-25 — 「본인 글 수정/삭제」를 «내 글»에만 큰 버튼으로 둔다.
+       · 예전에는 모든 글에 큰 버튼이 붙어, 남이 쓴 글에서도 마치 내가 고칠 수 있는 것처럼 보였다.
+       · 그렇다고 아주 감추면 «기기를 바꾸거나 브라우저 기록을 지운 진짜 본인»이 길을 잃는다.
+         → 내 글 목록에 없는 글에서는 «작은 글씨 링크»로 남긴다.
+           눌렀을 때 열리는 창은 똑같다(openPinModal) — 길은 그대로 살아 있고 무게만 줄인다.
+       ⚠ 아래 이벤트 연결부는 갈래에 따라 id 가 달라지므로 반드시 «있는지 보고» 묶는다.
+          없는 id 에 addEventListener 를 걸면 그 줄에서 멈춰 renderComments(p) 까지 안 돌아
+          「의견이 통째로 사라지는」 회귀가 난다. */
+    const mine = isMineProposal(p.id);
+    const editHtml = mine
+      ? `<button id="pdEditDel" type="button" class="big-btn full">본인 글 수정/삭제 (PIN)</button>`
+      : "";
+    const editLinkHtml = mine
+      ? ""
+      : `<button id="pdEditDelLink" type="button" class="cmt-act pd-mine-link">내가 쓴 글인가요? PIN으로 수정·삭제</button>`;
     $("pdetailContent").innerHTML = `
       <div class="pd-head">
         <span class="pp-badge ${b.cls}">${esc(b.label)}</span>
@@ -670,15 +697,20 @@
       ${reply ? `<div class="pd-reply"><div class="pd-reply-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg> 담당부서 답변</div><div class="pd-reply-body">${esc(reply)}</div></div>` : ""}
 
       <div class="pd-actions">
-        <button id="pdEditDel" class="big-btn full">본인 글 수정/삭제 (PIN)</button>
+        ${editHtml}
         <button id="pdReport" class="big-btn full pp-ghost" aria-label="이 제안 신고하기"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4"/><path d="M6 5h11l-2 3.6 2 3.6H6"/></svg> 신고</button>
+        ${editLinkHtml}
       </div>
       <div id="pdComments" class="cmt-wrap"></div>
 
       <p class="apply-note">※ 본 제안은 참고용 의견수렴이며 법적 효력이 없습니다.</p>
     `;
     $("pdLikeBtn").addEventListener("click", () => toggleLike(p));
-    $("pdEditDel").addEventListener("click", () => openPinModal(p));
+    /* 큰 버튼(내 글)이든 작은 링크(그 밖의 글)든 «누르면 같은 창»이 열린다.
+       ⛔ $("pdEditDel") 을 무조건 부르지 말 것 — 갈래에 따라 그 id 가 없어
+          TypeError 로 아래 renderComments(p) 까지 통째로 멈춘다. */
+    const editEl = $("pdEditDel") || $("pdEditDelLink");
+    if (editEl) editEl.addEventListener("click", () => openPinModal(p));
     $("pdReport").addEventListener("click", () => openReportModal(p));
     // 💬 의견(댓글·답글) — 비동기로 채운다. 실패해도 상세 화면은 그대로 살아 있어야 한다.
     renderComments(p);
