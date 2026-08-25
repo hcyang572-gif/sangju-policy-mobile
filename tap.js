@@ -23,9 +23,18 @@
   "use strict";
 
   // 누를 수 있다고 보는 것들 — 실제로 손가락이 닿는 대상
+  /* ⛔ 2026-08-25 — 목록에서 «.propose-card» 하나만 걷어냈다.
+       이 앱의 .js·.html 어디에도 class="propose-card" 를 붙이는 곳이 없다(전수 확인).
+       정책제안으로 들어가는 자리는 지금 .card / .big-btn 이 맡고 있어, 그 둘이
+       이미 이 목록에 들어 있다 — 손이 닿는 자리는 한 곳도 줄지 않았다.
+     ⚠ 다른 이름은 하나도 건드리지 않았다. 목록에서 이름이 빠지면 그 자리는
+       «눌러도 아무 반응이 없는» 자리가 된다(진동·눌림 표시가 사라진다).
+     ⚠ style.css 의 .propose-card 계열 규칙은 «그대로 두었다» — 그것은 .card·
+       .status-card 와 «한 선택자 줄»에 섞여 있어, 이름만 뽑아내다 살아 있는
+       카드 모양을 무너뜨릴 위험이 실제로 있었다(2026-08-25 시정구호 사고와 같은 결). */
   var HIT =
     'button, [role="button"], a[href], summary, label[for], ' +
-    ".card, .propose-card, .status-card, .big-btn, .chip, .situation";
+    ".card, .status-card, .big-btn, .chip, .situation";
 
   var reduceMotion = false;
   try {
