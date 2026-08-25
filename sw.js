@@ -24,7 +24,11 @@
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
 const ASSET_V = "0.7.6";
 
-const CACHE = "sangju-v60";   // v60: 부하 실측 후속 — 접수번호 재시도 1→3회+지터(apply_client.js)·
+const CACHE = "sangju-v61";   // v61: version.js 의 changelog v0.7.6 date 를 8/25→8/26 로
+                              //      바로잡음(문서 표지 정합) — ESSENTIAL 프리캐시 대상이라
+                              //      이름을 안 올리면 옛 날짜가 「개선사항」 화면에 계속 뜬다.
+                              //      (2026-08-26, 🟣나루)
+                              // v60: 부하 실측 후속 — 접수번호 재시도 1→3회+지터(apply_client.js)·
                               //      재조회/재접속 지터(app.js)·정책참여 실시간 재접속·폴백 폴링
                               //      (proposals.js. 예전에는 한 번 끊기면 영영 안 살아났다).
                               //      (2026-08-25, 📱모바일)
