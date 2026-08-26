@@ -599,6 +599,16 @@
       try {
         const { data, error } = await client.from("proposals").select(COLS_DETAIL).eq("id", id).single();
         if (!error && data) p = data;
+        /* ⚠ 2026-08-26 — 서버가 «그런 글은 없다»(0행)고 분명히 답했을 때는, 손에 든
+           목록 캐시가 있어도 그것으로 열지 않는다. 원글이 «진짜로» 지워지게 된 뒤로는
+           이 캐시가 «이미 없는 글»일 수 있고, 그대로 열면 의견 하나 없는 껍데기 상세가
+           떠서 시민이 「글이 깨졌다」고 여긴다. 통신 실패(0행이 아님)는 지금까지처럼
+           캐시로 열어 준다 — 지하철에서도 읽히게 하려던 원래 뜻 그대로다. */
+        if (_isGoneErr(error)) {
+          appAlert("이 제안은 글쓴이가 지웠거나 더 이상 볼 수 없습니다.", { title: "볼 수 없는 제안" });
+          reload();
+          return;
+        }
       } catch (e) {}
     }
     if (!p) { appAlert("제안을 찾을 수 없습니다."); return; }
@@ -915,13 +925,30 @@
   async function doPinDelete() {
     const pin = $("pinInput").value.trim();
     if (!/^\d{4}$/.test(pin)) { appAlert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
-    if (!(await appConfirm("정말 이 제안을 삭제할까요?\n되돌릴 수 없습니다.",
+    /* ⚠ 2026-08-26 — 서버의 delete_proposal 이 «진짜 삭제»로 바뀌었다(그전에는 숨김만 켰다).
+       그래서 이 글에 달린 공감·의견·담당 부서 답변이 함께 지워진다. 시민이 그 사실을
+       모른 채 누르는 일이 없도록 «되돌릴 수 없다»와 «함께 사라진다» 두 가지를 반드시
+       확인창에 적는다. 문구를 줄이더라도 이 두 사실은 빼지 말 것. */
+    if (!(await appConfirm(
+      "정말 이 제안을 삭제할까요?\n되돌릴 수 없습니다.\n\n" +
+      "지금까지 받은 공감과 시민들이 남긴 의견, 담당 부서의 답변도 함께 사라집니다.",
       { title: "제안을 지울까요?", okText: "삭제" }))) return;
     const client = getClient();
     if (!client || !pinTarget) { appAlert("삭제할 수 없습니다.\n(DB 설정 적용 후 가능)"); return; }
     try {
-      const { error } = await client.rpc("delete_proposal", { p_id: pinTarget.id, p_pin: pin });
-      if (error) throw error;
+      const { data, error } = await client.rpc("delete_proposal", { p_id: pinTarget.id, p_pin: pin });
+      /* 🔐 실패는 «예외»가 아니라 «값»으로 온다(readPin 머리말). error 만 보고 넘기면
+         틀린 PIN 으로도 「삭제되었습니다」가 뜬다. ⛔ 이 세 줄을 지우지 마세요. */
+      const res = readPin(data, error);
+      if (!res) throw error;                       // 검증 오류 → 아래 catch 로
+      if (res.pin_result !== "OK") {
+        const msg = (res.pin_result === "GONE") ? await goneMsg(client, pinTarget.id)
+                                                : pinResultMsg(res, "글");
+        await appAlert(msg, { title: "삭제하지 못했습니다" });
+        const inp0 = $("pinInput");
+        if (inp0 && !$("pinModal").hidden) { inp0.value = ""; try { inp0.focus(); } catch (e2) {} }
+        return;
+      }
       forgetMine(pinTarget.id);   // 「내 신청 › 제안한 정책」에서도 함께 지운다
       // ⛔ 차례를 바꾸지 말 것 — PIN 모달을 먼저 닫고, 알림을 닫은 «뒤»에 화면을 옮긴다.
       //    goBack() 의 popstate 가 «맨 위 모달»(알림창)을 대신 닫아 버리기 때문이다.
@@ -936,10 +963,182 @@
     }
   }
 
-  function doPinEdit() {
+  /* ══════════════════════════════════════════════════════════════════════
+     🔐 PIN 결과 «봉투» 해석기                                    2026-08-26
+     ----------------------------------------------------------------------
+     ⭐ 왜 필요한가 — 다섯 함수(edit_proposal·edit_proposal_v2·delete_proposal·
+       edit_comment·delete_comment)가 «실패를 예외 대신 값»으로 돌려주게 바뀐다.
+         { "pin_result":"OK", "id":"<uuid>" }         성공
+         { "pin_result":"BAD_PIN" }                    PIN 틀림
+         { "pin_result":"LOCKED", "lock_minutes":10 }  잠김
+         { "pin_result":"GONE" }                       없는 글/의견
+       예외가 안 나므로, 옛 코드처럼 `if (error) throw` 만 보고 있으면
+       «틀린 PIN 을 「수정되었습니다」로» 알리게 된다 — 그래서 앱을 «서버보다 먼저» 고친다.
+     ⚠ 봉투 키가 status 가 «아닌» 까닭 — proposals 에 status 칸이 실재해서
+       (「접수」·「검토중」…) 오독된다. 어느 표에도 없는 pin_result 를 골랐다.
+     ⚠ 성공해도 «행»은 오지 않고 id 하나만 온다 — 옛 edit_proposal 이 성공할 때
+       pin_hash 와 admin_memo(공무원 내부 처리메모)를 익명 시민에게 그대로 돌려주던
+       «실제 누출»을 막은 것이다.
+       ⛔ 반환행을 쓰는 코드를 새로 넣지 마세요. 지금처럼 reload() 로 다시 읽습니다.
+     ⚠ 검증 오류(제목·글자수·개인정보)는 «여전히 예외»다 → null 을 돌려 기존 catch 로 보낸다.
+     ⚠ verify_proposal_pin 은 이 봉투를 쓰지 «않는다» — 문자열("OK"…)이 온다.
+       그쪽의 data === "OK" 비교를 이 해석기로 바꾸지 마세요.
+     ⭐ 옛 서버(예외를 던지는 판)에서도 그대로 돈다 — 예외 문구를 같은 갈래로 옮긴다.
+       그래서 «새 앱 + 옛 서버» 조합이 안전하고, 서버를 고치기 «전»에 시험할 수 있다.
+     ══════════════════════════════════════════════════════════════════════ */
+  function readPin(data, error) {
+    if (error) {                       // 옛 서버(예외) — 또는 새 서버의 «검증 오류»
+      const m = String((error && error.message) || error || "");
+      if (m.indexOf("PIN이 일치하지 않습니다") >= 0) return { pin_result: "BAD_PIN" };
+      if (m.indexOf("잠겼") >= 0)                     return { pin_result: "LOCKED", lock_minutes: 10 };
+      if (m.indexOf("수정할 수 없는") >= 0
+       || m.indexOf("삭제할 수 없는") >= 0)           return { pin_result: "GONE" };
+      return null;                     // ← 검증 오류. 지금처럼 문구를 그대로 보여준다
+    }
+    if (data && typeof data === "object" && "pin_result" in data) return data;  // 새 서버
+    return { pin_result: "OK" };       // 옛 서버 성공(행 객체 또는 true)
+  }
+
+  /* 갈래별 안내문. kind 는 「글」(제안) 또는 「의견」(댓글).
+     ⭐ LOCKED 의 «주어는 이 글/이 의견»이다 — 잠금 판정이 PIN 대조보다 «앞서» 오므로
+       잠긴 동안에는 «맞는 PIN 을 넣은 진짜 본인»도 LOCKED 를 받는다(남이 그 글을 두들겨
+       잠갔을 수도 있다). 「여러 번 잘못 입력하셔서」는 억울한 안내가 된다.
+     ⛔ «남은 시도 횟수»를 미리 알리지 마세요 — 두들기는 쪽에 계기판을 주는 셈입니다. */
+  function pinResultMsg(r, kind) {
+    const v = r && r.pin_result;
+    if (v === "LOCKED") {
+      const mins = Number(r && r.lock_minutes) || 10;
+      return "이 " + kind + "은 PIN이 여러 번 맞지 않아 잠시(약 " + mins + "분) 잠겼습니다.\n\n"
+           + "잠시 뒤 다시 시도해 주세요. 계속 안 되면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.";
+    }
+    if (v === "GONE") return "이미 삭제되었거나 담당자가 가린 " + kind + "입니다.";
+    // BAD_PIN 과 «모르는 값»은 같은 안내로 모은다(모르는 값이 통과처럼 보이면 안 된다)
+    return "PIN이 맞지 않습니다.\n\n"
+         + "본인 " + kind + "이 아닐 수 있고, 본인인데 PIN을 잊으셨을 수도 있습니다.\n"
+         + "화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.";
+  }
+
+  /* 의견 패널은 «한 줄»짜리 알림 자리라 줄바꿈 없이 짧게 말한다(minePanelErr). */
+  function pinResultShort(r, kind) {
+    const v = r && r.pin_result;
+    if (v === "LOCKED") {
+      const mins = Number(r && r.lock_minutes) || 10;
+      return "이 " + kind + "은 PIN이 여러 번 맞지 않아 잠시(약 " + mins + "분) 잠겼습니다. 잠시 뒤 다시 시도해 주세요.";
+    }
+    if (v === "GONE") return "이미 삭제되었거나 가려진 " + kind + "입니다.";
+    return "PIN이 맞지 않습니다. 본인 " + kind + "이 아니거나 PIN을 잘못 넣으셨을 수 있습니다.";
+  }
+
+  /* ⭐⭐ PIN 확인 결과별 안내문 — «뜻»은 정해져 있고 말만 여기서 다듬는다 (2026-08-26)
+     ⛔ 「권한이 없습니다」라고 쓰지 마세요 — 시민을 의심하는 말투이고, 정작 본인인데
+        PIN 을 잊은 분에게는 막막한 말입니다. 위 삭제 실패 안내(941행)와 같은 결로 갑니다.
+     ⛔ 「남은 시도 N회」를 «미리» 알리지 마세요 — 무차별로 두들기는 쪽에 계기판을 주는 셈입니다.
+        잠긴 «뒤에» 알리는 것(LOCKED)은 괜찮습니다. */
+  function pinVerdictMsg(v) {
+    /* ⚠ 문구는 «저장 실패»(pinResultMsg) 와 «한 곳»에서 나온다 —
+       들어갈 때와 저장할 때 다른 말을 들으면 같은 일이 다른 일처럼 보인다. */
+    return pinResultMsg({ pin_result: v }, "글");
+  }
+
+  /* ⭐⭐ 'GONE' 은 «두 가지»를 한 값으로 합쳐 돌려준다 (2026-08-26 실측에서 드러남)
+       ① 그 글이 정말 없어졌다(삭제·블라인드)
+       ② 글은 멀쩡한데 «수정용 PIN 이 아예 등록돼 있지 않다»(pin_hash 가 비었다)
+     서버 함수는 둘을 구분해 주지 않는데(둘 다 pin_hash 가 null 로 읽힌다),
+     ②를 「이미 삭제된 글입니다」라고 알리면 «멀쩡히 보이는 글»을 두고 거짓말이 된다.
+     → 목록 표는 익명도 읽을 수 있으므로, 그 자리에서 «아직 보이는 글인지»만 한 번 더 확인해
+       ②이면 사실대로 말한다. 서버를 고치지 않고 화면에서 바로잡을 수 있는 대목이다.
+     ⚠ 실측(2026-08-26) — 최근 제안 8건 중 2건이 PIN 없이 올라간 글이었다. 드문 일이 아니다.
+     ⛔ 여기서 pin_hash 를 읽으려 하지 마세요 — 익명에게 권한이 없고, 있어서도 안 됩니다. */
+  async function goneMsg(client, id) {
+    try {
+      const { data, error } = await client
+        .from("proposals").select("id,is_hidden").eq("id", id).maybeSingle();
+      if (!error && data && data.is_hidden === false) {
+        return "이 제안에는 «수정용 PIN»이 등록되어 있지 않습니다.\n\n"
+             + "PIN 없이 올라간 글은 화면에서 고치거나 지울 수 없습니다.\n"
+             + "화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.";
+      }
+    } catch (e) { /* 확인에 실패하면 아래 «있는 그대로»의 안내로 떨어진다 */ }
+    return "이미 삭제되었거나 담당자가 감춘 글입니다.";
+  }
+
+  /* 의견도 «PIN 이 선택»이라 같은 일이 일어난다 — PIN 없이 남긴 의견은 GONE 이 온다.
+     proposal_comments 는 익명도 읽을 수 있으므로, 그 자리에서 «아직 있는 의견인지»만
+     확인해 사실대로 말한다.
+     ⭐ 이 갈래가 목록의 「수정·삭제」 단추가 막다른 길이 되는 것을 그나마 덜어 준다 —
+       단추를 감추려면 서버가 «PIN 유무»를 알려 줘야 하는데(proposal_comment_pins 는
+       어떤 역할에도 권한이 없다), 그 전까지는 «왜 안 되는지»라도 정확히 알린다.
+     ⛔ 여기서 PIN 해시를 읽으려 하지 마세요 — 권한이 없고, 있어서도 안 됩니다. */
+  async function goneCmtMsg(client, id) {
+    try {
+      const { data, error } = await client
+        .from("proposal_comments").select("id,is_hidden,is_deleted").eq("id", id).maybeSingle();
+      if (!error && data && !data.is_hidden && !data.is_deleted) {
+        return "이 의견에는 수정용 PIN이 등록되어 있지 않아 고치거나 지울 수 없습니다. "
+             + "화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.";
+      }
+    } catch (e) { /* 확인에 실패하면 아래 «있는 그대로»의 안내로 떨어진다 */ }
+    return "이미 삭제되었거나 가려진 의견입니다.";
+  }
+
+  /* ⭐⭐ 2026-08-26 양호창님 신고 —
+       「아무 PIN 을 넣어도 수정 화면까지 들어가고, 저장할 때야 PIN 이 다르다고 나온다」
+     예전에는 «형식(4자리)»만 보고 곧장 수정 화면을 열어, «남의 글 내용»이 편집칸에
+     채워진 채로 열렸다. 저장은 서버가 막아 주었지만, 막다른 길인 데다 남의 글이
+     보이는 것 자체가 문제였다.
+     → 이제 그 자리에서 서버에 물어보고 «OK 일 때만» 화면을 연다.
+     ⚠ 판정은 error 가 아니라 «반환값»으로 한다 — verify_proposal_pin 은 예외를 던지지
+       않는다(던지면 트랜잭션이 되돌아가 실패 횟수까지 지워져 영영 안 잠긴다).
+       OK / BAD_PIN / LOCKED / GONE 넷 중 하나가 «값»으로 온다.
+     ⚠ 확인 중에는 단추·입력칸을 잠근다 — PIN 이 틀리면 서버가 «2초» 쉰다(무차별 방어).
+       그동안 연타되면 헛 왕복이 쌓이고 잠금 카운터만 올라간다.
+     ⚠ editing.pin 을 저장할 때 다시 보내는 방식은 «그대로 둔다» — 서버가 저장 때 PIN 을
+       다시 검증하는 이중 방어다. 화면이 통과시켰다고 서버가 믿지 않는다.
+     ⛔ PIN 을 localStorage 에 넣지 마세요 — 메모리 변수(editing)에만 두고, 수정 화면을
+        떠날 때 editing = null 로 지웁니다(아래 submitEdit·취소 갈래). */
+  async function doPinEdit() {
     const pin = $("pinInput").value.trim();
     if (!/^\d{4}$/.test(pin)) { appAlert("PIN 4자리를 입력해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다."); return; }
     if (!pinTarget) return;
+
+    const client = getClient();
+    if (!client) { appAlert("지금은 확인할 수 없습니다.\n잠시 후 다시 시도해 주세요."); return; }
+
+    const eBtn = $("pinEdit"), dBtn = $("pinDelete"), inp = $("pinInput");
+    // ⚠ 단추 안에 아이콘(svg)이 들어 있어 textContent 로 되돌리면 아이콘이 사라진다 → innerHTML 로 갈무리.
+    const eHtml = eBtn ? eBtn.innerHTML : "";
+    let verdict = "";
+    try {
+      /* ⚠ 예전에는 여기서 「확인 중…」으로 글자를 바꿨다. 서버가 틀린 PIN 에 2초를 쉬던 때의
+         조치인데(pg_sleep), 2026-08-26 개정으로 그 대기가 없어져 0.15초면 끝난다.
+         0.15초짜리 «확인 중…»은 깜빡임으로만 보이므로 글자는 그대로 두고,
+         단추 잠그기(연타·이중 제출 방어)만 남긴다. */
+      if (eBtn) eBtn.disabled = true;
+      if (dBtn) dBtn.disabled = true;
+      if (inp) inp.disabled = true;
+      const { data, error } = await client.rpc("verify_proposal_pin", { p_id: pinTarget.id, p_pin: pin });
+      if (error) throw error;          // 연결·권한 같은 «진짜» 오류만 여기로 온다
+      verdict = String(data == null ? "" : data).trim();
+    } catch (e) {
+      console.warn("[정책참여] PIN 확인 실패:", e);
+      appAlert(actionErrMsg(e, "PIN 확인"));
+      return;
+    } finally {
+      if (eBtn) { eBtn.disabled = false; eBtn.innerHTML = eHtml; }   // 글자를 안 바꿔도 원복은 그대로 둔다(안전)
+      if (dBtn) dBtn.disabled = false;
+      if (inp) inp.disabled = false;
+    }
+
+    if (verdict !== "OK") {
+      const msg = (verdict === "GONE") ? await goneMsg(client, pinTarget && pinTarget.id)
+                                       : pinVerdictMsg(verdict);
+      // ⚠ PIN 모달에 «머무른다» — 다시 넣어 볼 수 있어야 한다. 입력칸만 비우고 초점을 돌려준다.
+      await appAlert(msg, { title: "확인하지 못했습니다" });
+      if (inp && !$("pinModal").hidden) { inp.value = ""; try { inp.focus(); } catch (e2) {} }
+      return;
+    }
+
+    // ── 여기서부터는 «본인 확인을 마친» 글이다 ────────────────────────────
     // 수정 화면 재사용: 작성 폼에 기존 내용 채우고 '수정 모드'로 전환
     fillCategorySelects();
     editing = { id: pinTarget.id, pin: pin };
@@ -1025,7 +1224,7 @@
            edit_proposal   (p_id, p_pin, p_title, p_body, p_category)
            edit_proposal_v2(p_id, p_pin, p_title, p_problem, p_idea, p_effect, p_category)
          ⛔ 옛 글에 _v2 를 쓰지 말 것 — 세 칸이 빈 채로 저장되어 본문이 통째로 사라진다. */
-      const { error } = legacyMode
+      const { data, error } = legacyMode
         ? await client.rpc("edit_proposal", {
           p_id: editing.id, p_pin: editing.pin,
           p_title: title, p_body: body, p_category: cat,
@@ -1034,7 +1233,17 @@
           p_id: editing.id, p_pin: editing.pin,
           p_title: title, p_problem: problem, p_idea: idea, p_effect: effect, p_category: cat,
         });
-      if (error) throw error;
+      /* 🔐 실패는 «값»으로 온다 — 여기서 안 가르면 틀린 PIN 으로도 「수정되었습니다」가 뜬다.
+         ⚠ 성공 봉투에는 «행»이 없고 id 하나뿐이다. 반환행을 쓰지 말 것(readPin 머리말). */
+      const res = readPin(data, error);
+      if (!res) throw error;                       // 검증 오류(제목·글자수·개인정보) → 아래 catch
+      if (res.pin_result !== "OK") {
+        btn.disabled = false; btn.textContent = orig;
+        const msg = (res.pin_result === "GONE") ? await goneMsg(client, editing.id)
+                                                : pinResultMsg(res, "글");
+        await appAlert(msg, { title: "수정하지 못했습니다" });
+        return;                                    // 수정 화면에 «머무른다» — 쓰던 글을 지키기 위해
+      }
       // 등록과 «같은 차례»로 마무리한다 — 버튼 원복 → 칸 비우기 → 곶감 톡 → 알림 → 이동.
       // (칸을 안 비우면 뒤로 갈 때 「작성 중인 내용이 사라집니다」가 떠 버린다)
       // ⛔ 알림과 goBack() 의 차례를 바꾸지 말 것 — submitWrite 의 주석 참조.
@@ -1048,8 +1257,12 @@
       reload();
     } catch (e) {
       console.warn("[정책참여] 수정 실패:", e);
-      appAlert(errKind(e) === "conn" ? actionErrMsg(e, "수정")
-        : "수정에 실패했습니다. PIN이 맞는지 확인해 주세요.\n\nPIN이 기억나지 않으면 화면 아래 «오류 문의»로 연락 주시면 확인 후 도와드립니다.");
+      /* ⚠ 2026-08-26 — 여기 남는 것은 «검증 오류»(제목·글자수·개인정보)뿐이다.
+         PIN 갈래(BAD_PIN·LOCKED·GONE)는 위에서 이미 갈라져 나갔다.
+         예전 문구 「PIN이 맞는지 확인해 주세요」를 그대로 두면, 제목이 짧아서 막힌 분에게
+         엉뚱하게 PIN 을 의심하게 만든다 → 서버가 알려 준 «그 이유»를 그대로 보여 준다
+         (의견 쪽 cmtRpcMsg 와 «같은 규약»). */
+      appAlert(cmtRpcMsg(e, "수정"));
     } finally {
       // 등록과 «같은 규칙» — 성공 경로는 이미 되살렸으므로 바쁜 상태일 때만 되돌린다
       if (btn.disabled) { btn.disabled = false; btn.textContent = orig; }
@@ -1331,8 +1544,8 @@
          ⚠ 모달을 새로 만들지 않고 «그 의견 자리»에 편다. 어느 의견을 고치는지가
             화면에서 보이므로 엉뚱한 글을 지우는 사고가 줄어든다. */
       panel.innerHTML = `<div class="cmt-mine">
-          <label class="sr-only">PIN 4자리</label>
-          <input class="text-input cmt-mine-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" autocomplete="off" />
+          <label class="sr-only" for="cmtMinePin-${esc(id)}">PIN 4자리</label>
+          <input id="cmtMinePin-${esc(id)}" class="text-input cmt-mine-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="PIN 4자리" autocomplete="off" />
           <textarea class="text-input cmt-mine-body" rows="3" maxlength="${CMT_MAX}"></textarea>
           <p class="field-err cmt-mine-err" role="alert" hidden></p>
           <div class="cmt-mine-acts">
@@ -1371,8 +1584,15 @@
     const btn = panel.querySelector(".cmt-mine-save");
     btn.disabled = true;
     try {
-      const { error } = await client.rpc("edit_comment", { p_id: row.id, p_pin: pin, p_body: body });
-      if (error) throw error;
+      const { data, error } = await client.rpc("edit_comment", { p_id: row.id, p_pin: pin, p_body: body });
+      const res = readPin(data, error);            // 🔐 실패는 «값»으로 온다(readPin 머리말)
+      if (!res) throw error;                       // 검증 오류 → 아래 catch(서버 문구 그대로)
+      if (res.pin_result !== "OK") {
+        btn.disabled = false;
+        minePanelErr(panel, (res.pin_result === "GONE")
+          ? await goneCmtMsg(client, row.id) : pinResultShort(res, "의견"));
+        return;                                    // 패널을 열어 둔다 — 다시 넣어 볼 수 있어야 한다
+      }
       await renderComments(cmtP);
     } catch (e) {
       console.warn("[정책참여] 의견 수정 실패:", e);
@@ -1393,8 +1613,15 @@
     const btn = panel.querySelector(".cmt-mine-del");
     btn.disabled = true;
     try {
-      const { error } = await client.rpc("delete_comment", { p_id: row.id, p_pin: pin });
-      if (error) throw error;
+      const { data, error } = await client.rpc("delete_comment", { p_id: row.id, p_pin: pin });
+      const res = readPin(data, error);            // 🔐 실패는 «값»으로 온다(readPin 머리말)
+      if (!res) throw error;                       // 검증 오류 → 아래 catch(서버 문구 그대로)
+      if (res.pin_result !== "OK") {
+        btn.disabled = false;
+        minePanelErr(panel, (res.pin_result === "GONE")
+          ? await goneCmtMsg(client, row.id) : pinResultShort(res, "의견"));
+        return;
+      }
       if (cmtP) cmtP.comment_count = Math.max(0, cmtCountOf(cmtP) - 1);
       await renderComments(cmtP);
     } catch (e) {
@@ -1877,6 +2104,22 @@
        ③ 제안 본문을 못 읽어 왔더라도 «의견만이라도» 맞춘다(이 기능의 목적이 의견이다).
      ⚠ renderDetail() 이 끝에서 renderComments() 를 부른다 — 여기서 또 부르면 두 번 읽는다.
         그래서 ③의 «못 읽었을 때»에만 따로 부른다. */
+  /* «지금 보던 제안이 사라졌다»고 단정해도 되는 실패인가.
+     ⚠ 여기서 «인터넷이 잠깐 끊긴 것»을 사라진 것으로 오해하면, 지하철에서 글을 읽던
+        시민이 아무 이유 없이 목록으로 쫓겨난다. 그래서 «0행이 왔다»고 서버가 분명히
+        말해 준 경우(PostgREST PGRST116)만 사라진 것으로 본다. 통신 실패·시간초과 등
+        나머지는 전부 «못 읽었다»로 두어 화면을 그대로 지킨다.
+     · 원글 삭제(본인 PIN 삭제·공무원 삭제) → 행이 없다
+     · 공무원이 감춤(is_hidden=true)·신고 5명 자동숨김 → anon RLS 가 걸러 0행
+     두 경우 모두 «시민은 더 볼 수 없다»는 뜻이라 같은 처리로 묶는다. */
+  function _isGoneErr(error) {
+    if (!error) return false;
+    if (error.code === "PGRST116") return true;
+    const s = String(error.details || "") + " " + String(error.message || "");
+    return /0 rows/i.test(s);
+  }
+  let _goneHandled = false;      // 안내창이 겹쳐 두 번 뜨지 않게 하는 빗장
+
   async function refreshDetailQuietly() {
     const client = getClient();
     if (!client || !currentP) return;
@@ -1884,6 +2127,21 @@
     try {
       const { data, error } = await client.from("proposals").select(COLS_DETAIL).eq("id", currentP.id).single();
       if ($("view-pdetail").hidden) return;                        // 그 사이 화면을 떠났다
+      /* ④ 보던 원글이 사라졌다 — 빈 화면이나 오류를 남기지 말고 한 줄 알린 뒤 목록으로.
+         ⛔ 차례를 바꾸지 말 것(doPinDelete 와 같은 이유) — goBack() 의 popstate 가
+            «맨 위 모달»인 이 안내창을 대신 닫아 버려, 시민이 글을 읽기도 전에 사라진다.
+            반드시 «안내를 닫은 뒤»에 화면을 옮긴다. */
+      if (_isGoneErr(error) && !data) {
+        if (_goneHandled) return;
+        _goneHandled = true;
+        try {
+          await appAlert("이 제안은 글쓴이가 지웠거나 더 이상 볼 수 없습니다.\n목록으로 돌아갑니다.",
+            { title: "볼 수 없는 제안" });
+          if (!$("view-pdetail").hidden) goBack();
+          reload();
+        } finally { _goneHandled = false; }
+        return;
+      }
       if (!error && data) {
         currentP = data;
         renderDetail(data);            // ← 이 안에서 renderComments(data) 가 불린다
@@ -2018,5 +2276,17 @@
   // 상세·작성 화면에 있는 동안 도착한 알림은 띠가 숨겨진 채 카운트만 쌓이므로,
   // 목록으로 돌아왔을 때 다시 계산해 주지 않으면 알림이 영영 안 뜬다.
   // renderMine: 「내 신청 › 제안한 정책」 목록을 그린다(app.js msLoadMyProposals 가 부른다).
-  window.Proposals = { open, openWrite, resetWriteForm, syncNotice: syncRtBanner, renderMine };
+  /* 🔒 수정 화면을 «떠나면» 손에 쥔 PIN 을 놓는다 (2026-08-26)
+     editing = { id, pin } 은 «메모리 변수»다(⛔ localStorage 에 넣지 말 것).
+     그래도 화면을 떠난 뒤까지 들고 있을 까닭이 없다 — 저장 성공(submitEdit)과
+     새 제안 열기(openWrite→resetWriteForm) 두 길에서는 이미 비우지만,
+     「뒤로가기로 그냥 나가는」 세 번째 길이 비어 있었다.
+     ⚠ app.js showView() 가 화면을 갈아끼울 때마다 불러 준다 — 나가는 길이 하나로 모인다.
+     ⚠ 지우는 것은 «PIN 을 쥔 손»뿐이다. 쓰던 글(입력칸)은 건드리지 않는다 —
+       그것까지 지우면 잠깐 다른 화면을 봤다 온 시민의 글이 날아간다. */
+  function onView(name) {
+    if (name !== "pwrite" && editing) editing = null;
+  }
+
+  window.Proposals = { open, openWrite, resetWriteForm, syncNotice: syncRtBanner, renderMine, onView };
 })();

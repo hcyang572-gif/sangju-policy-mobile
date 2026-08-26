@@ -222,6 +222,11 @@ function showView(name, push = true) {
   if (window.Proposals && window.Proposals.syncNotice) {
     try { window.Proposals.syncNotice(); } catch (e) { /* 무시 */ }
   }
+  /* 🔒 화면이 바뀌었음을 정책참여 쪽에 알린다 — 수정 화면을 떠나면 손에 쥔 PIN 을 놓는다
+     (2026-08-26 · proposals.js onView 머리말 참조). 없으면 그냥 넘어간다. */
+  if (window.Proposals && window.Proposals.onView) {
+    try { window.Proposals.onView(name); } catch (e) { /* 무시 */ }
+  }
   // 사업 정보 갱신 알림 띠도 화면(작성 중 여부)에 따라 다시 계산한다.
   try { syncUpdateBanner(); } catch (e) { /* 무시 */ }
   window.scrollTo(0, 0);
