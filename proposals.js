@@ -2166,7 +2166,7 @@
     const mine = loadMine();
     if (!mine.length) {
       box.innerHTML = `<div class="ms-empty"><p>이 휴대폰에서 올리신 정책제안이 없습니다.</p>
-        <p>「정책 제안」에서 제안을 올리시면 이곳에서 검토 진행 상태를 보실 수 있습니다.</p></div>`;
+        <p>「정책제안」에서 제안을 올리시면 이곳에서 검토 진행 상태를 보실 수 있습니다.</p></div>`;
       return;
     }
     const client = getClient();

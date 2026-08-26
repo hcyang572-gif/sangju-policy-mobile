@@ -24,7 +24,8 @@
 //    이 값과 index.html 의 ?v= 쿼리가 한 번에 맞춰진다.
 const ASSET_V = "0.7.6";
 
-const CACHE = "sangju-v62";   // v62: 제안 수정 «진입 전» PIN 확인(verify_proposal_pin) — proposals.js·app.js 동시 변경
+const CACHE = "sangju-v63";   // v63: 갈래 이름 통일(「정책 제안」→「정책제안」) + 개선사항 기록 정정 — index.html/proposals.js/version.js 동시 변경
+// v62: 제안 수정 «진입 전» PIN 확인(verify_proposal_pin) — proposals.js·app.js 동시 변경
                               //      + PIN 결과 «봉투»(pin_result) 해석기 — 다섯 RPC 가 실패를 값으로 돌려주는 개정에 대비.
                               //        ⚠ v62 는 아직 «배포 전»이라 두 변경이 함께 실린다(버전을 또 올리지 않는다).
                               //      바로잡음(문서 표지 정합) — ESSENTIAL 프리캐시 대상이라
