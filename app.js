@@ -818,6 +818,8 @@ async function loadLocalData() {
       const j2 = await _loadDataScript();
       if (j2 && Array.isArray(j2.programs) && j2.programs.length) {
         console.warn("[사업정보] data.js 사본으로 대신 읽었습니다.");
+        // 연결 안내(netguard.js) — «.json 만 막힘»을 작은 띠로 알린다(이용 지장 없음).
+        try { if (window.NetGuard) window.NetGuard.noteJsonFallback(); } catch (e3) { /* 무시 */ }
         return j2;
       }
     } catch (e2) {
@@ -952,7 +954,9 @@ function showInitError(e) {
       // 규격서 10절 — 화면 코드가 만들어 내는 이모지는 인라인 SVG 로 바꾼다(분야 칩만 예외).
       '<div class="err-title"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10.2 9v6M13.8 9v6"/></svg> 클라우드 서비스가 일시적으로 응답하지 않습니다.</div>' +
       '<div class="err-desc">잠시 후 다시 시도해 주세요.<br>계속되면 인터넷 연결 상태를 확인해 주세요.</div>' +
-      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 다시 시도</button></div></div>'
+      '<div class="err-actions"><button id="initRetry" class="err-retry" type="button"><svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11a8.5 8.5 0 1 0-.7 4.3"/><path d="M20.5 4.6v6.2h-6.2"/></svg> 다시 시도</button>' +
+      // 연결 안내(netguard.js) 펼치기 — 행정망 차단·오프라인 원인과 할 일을 보여 준다(NetGuard 가 없으면 안 그림).
+      (window.NetGuard ? '<button type="button" class="ng-more" data-ng-open>자세히</button>' : '') + '</div></div>'
     : '<div class="empty err-box" role="alert">' +
       '<div class="err-title">' + '<svg class="ic ic-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 6.6a3.6 3.6 0 0 1 4.9-3.3l-2.7 2.7 1.4 1.4 2.7-2.7a3.6 3.6 0 0 1-4.6 4.7L6.8 18.9a2 2 0 1 1-2.8-2.8z"/></svg>' + ' 사업 정보를 준비 중입니다.</div>' +
       '<div class="err-desc">데이터 파일(data.json)을 읽지 못했습니다.<br>잠시 후 다시 시도해 주세요.</div>' +
@@ -2675,6 +2679,15 @@ async function sendApply() {
       "신청이 접수되지 않았습니다. 적어 주신 내용은 그대로 남아 있으니, "
       + "인터넷 연결을 확인하신 뒤 아래 「신청서 보내기」를 다시 눌러 주세요. "
       + "계속 안 되시면 담당 부서(" + SUPPORT_EMAIL + ")로 알려 주세요.");
+    /* 닿지 못한 실패(conn)면 «자세히»를 붙여 연결 안내(netguard.js)를 열 수 있게 한다.
+       ⚠ 입력값·임시저장은 위에서 그대로 두었다 — 안내를 보고 와도 다시 쓸 필요가 없다. */
+    try {
+      const k = (window.SangjuApply && SangjuApply.errKind) ? SangjuApply.errKind(supaErr) : "";
+      const fe = $("applyFormErr");
+      if (fe && window.NetGuard && (k === "conn" || !window.supabase)) {
+        fe.insertAdjacentHTML("beforeend", ' <button type="button" class="ng-more" data-ng-open>자세히</button>');
+      }
+    } catch (e) { /* 무시 */ }
     // 오류 안내로 초점을 옮긴다 — 화면 아래쪽이라 못 보고 지나칠 수 있다(가장 위험한 지점).
     const errEl = $("applyFormErr");
     if (errEl) {
