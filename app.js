@@ -740,6 +740,10 @@ function adaptCloudRow(r) {
     //    · 앞머리 «_» 는 «화면 데이터가 아니라 정렬용 부속값»이라는 표시다.
     //      ⛔ dataSignature 에 넣지 말 것 — 내용이 그대로여도 갱신 띠가 뜨는 오탐이 된다.
     "_date": txt(r.created_at) || txt(r.updated_at),
+    // 🔔 «새 사업» 알림(checkNewPrograms, N-09)용 — 등록 시각과 행 id. 이름이 바뀌어도 둘은 그대로다.
+    //    ⛔ dataSignature 에 넣지 말 것(위 _date 와 같은 이유).
+    "_created": txt(r.created_at),
+    "_id": r.id != null ? String(r.id) : "",
   };
 }
 
@@ -1409,128 +1413,101 @@ async function copyLookupCode() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   🔔 신규 사업 알림 배너 — N-08 (★ 2026-08-24, 양호창님이 실제로 쓰시다 발견)
+   🔔 신규 사업 알림 배너 — N-08 → ★ N-09 (2026-10-15, 등록 시각 기준으로 다시 짰다)
    ───────────────────────────────────────────────────────────────────────
-   지시 — 「«새로 추가된 지원사업 11건이 있어요!» 를 한번 확인하거나 X 를 누르면
-           다음부터는 안 뜨도록 해줘. 지금은 주기적으로 뜨는 것 같아.」
+   신고(2026-10-15 양호창님) — 「새 사업을 추가하지 않았는데도 «새로 추가된 지원사업
+     N건이 있어요!» 배너가 자꾸 뜬다.」
+   확인한 사실 — 클라우드 benefits 124건과 내장 data.json 124건의 사업명 집합이 같고,
+     created_at 최종이 2026-08-04 다. 즉 그 뒤로 «진짜 새 사업»은 하나도 없었다.
 
-   ⛔ 무엇이 잘못이었나 (헤드리스로 재현해 확인함)
-     ① «본 것» 저장이 «사용자 확인»이 아니라 «페이지 로드»에 묶여 있었다.
-        배너를 띄우자마자 현재 목록을 저장해 버려서 —
-          · 확인하지 않고 새로고침해도 배너가 사라졌고(알림이 그냥 증발),
-          · 정작 «다시 뜨는 것»은 못 막았다.
-     ② 이 앱의 사업 목록 «출처는 둘»이다 — 내장 data.json 과 클라우드 benefits.
-        그런데 init() 은 Promise.race(cloudP, FIRST_PAINT_MS) 로 «먼저 오는 쪽»을 쓴다.
-        즉 «같은 기기·같은 자료»라도 회선 사정에 따라 로드마다 출처가 달라진다.
-        두 출처의 사업명이 한 글자라도 다르면(이름 변경·갱신 시차) 출처가 오갈 때마다
-        «없던 이름»이 생겨 새 사업으로 오인된다. → 이것이 「주기적으로 뜬다」의 정체다.
-        실측: 옛 이름판 ↔ 새 이름판을 오가게 하니 «11건» 배너가 매 방문 다시 떴다
-        (양호창님이 보신 숫자와 일치. 2026-08-24 사업명 11건이 실제로 바뀌었다).
+   ⛔ 옛 방식(N-08, 2026-08-24)의 뿌리 — «기기에 저장된 사업명 목록»과 견줬다.
+     이름은 «새 사업»의 증거가 아니다. 사업명 변경(8/24 11건)·옛 키 넘겨받기·출처
+     (cloud/local) 전환으로 저장 목록이 낡으면 «없던 이름»이 생기고, 사용자가 X/보기를
+     누르기 전까지 매 방문 배너가 떴다. 덧댄 세 겹(누를 때 저장·묶음 서명·출처별 기록)도
+     «이름 비교»를 그대로 둔 채라 오탐을 줄였을 뿐 뿌리를 뽑지 못했다.
 
-   ✅ 어떻게 고쳤나 — 세 겹
-     1) 저장을 «보기 / X 를 누른 그때»로 옮겼다(markNewSeen). 누르기 전에는 계속 뜬다 —
-        확인하지 않았으니 알림이 남아 있는 것이 맞다.
-     2) 닫은 «묶음»의 서명을 따로 기억한다(NEW_DISMISS_KEY). 출처가 오가 계산이 달라져도
-        «같은 사업 묶음»이면 다시 띄우지 않는다.
-     3) «출처별로 따로» 기억한다(seen.cloud / seen.local). 같은 출처끼리만 견주므로
-        출처가 오간 것만으로는 새 사업이 생기지 않는다. 견줄 기록이 없는 출처는
-        «첫 방문»으로 보고 조용히 기록만 한다 — 처음 온 분께 126건을 새 사업이라 알릴 수 없다.
+   ✅ 새 규칙 — 「새 사업」 = 아래 셋을 «모두» 만족하는 사업
+     ① 클라우드 행의 등록 시각(created_at)이 있다.
+        · 내장 data.json 에는 등록 시각이 없다 → local 출처에서는 «언제나 조용하다».
+        · 이름을 바꿔도 created_at 은 그대로다(cloud_sync 가 id 로 upsert) → 새 사업이 아니다.
+     ② 그 시각이 최근 NEW_WINDOW_DAYS(14일) 안이고, 이 기기에서 «처음 알림 기록을 시작한
+        시각(since)» 보다 뒤다. 앱을 처음 연 분께 이미 있던 사업을 새 사업이라 하지 않는다.
+     ③ 이 기기에서 아직 «확인(보기 / X)»하지 않은 사업이다 — 사업 id 로 기억한다(이름 아님).
 
-   ⚠ localStorage 를 못 쓰는 환경(사생활 보호 모드·저장소 차단)
-     읽기가 실패하면 seen 이 비어 «첫 방문»이 되어 배너를 띄우지 않는다.
-     즉 «못 쓰면 조용하다» — 매번 뜨는 일은 구조적으로 생기지 않는다.
-     한 세션 안에서는 memStore 가 기억하므로 화면 안에서의 동작은 정상이다.
-   ⛔ 알림 자체를 없애지 말 것. 새 사업을 알리는 것은 이 앱의 쓸모다. 고친 것은 «반복»뿐이다.
+   · 기록이 없으면(첫 방문·이번 개편 직후·저장소 차단) 배너 없이 since=지금 만 적는다.
+     → 옛 이름 목록(sangju_seen_programs·_v2)이 아무리 낡아도 영향이 없다(읽지 않는다).
+   · 저장은 «보기 / X 를 누른 그때»만(markNewSeen) — 누르기 전에는 계속 뜨는 것이 맞다(N-08 유지).
+   ⚠ localStorage 를 못 쓰는 환경 — 매번 «첫 방문»이라 언제나 조용하다. 한 세션 안에서는
+     memSeen 이 기억한다.
+   ⛔ 알림 자체를 없애지 말 것. 새 사업을 알리는 것은 이 앱의 쓸모다. 고친 것은 «판정 기준»뿐이다.
+   ⛔ 다시 사업명으로 견주지 말 것 — 이름은 바뀐다. 등록 시각과 id 는 바뀌지 않는다.
    ═══════════════════════════════════════════════════════════════════════ */
-const SEEN_KEY = "sangju_seen_programs";          // 옛 키(단순 배열) — 넘겨받기용으로만 읽는다
-const SEEN_KEY_V2 = "sangju_seen_programs_v2";    // {cloud:[이름…], local:[이름…]}
-const NEW_DISMISS_KEY = "sangju_new_dismissed";   // {sig:"…"} — 마지막으로 «됐다»고 한 묶음
-const SEEN_MAX = 1000;                            // 이름이 바뀔 때마다 쌓이므로 상한을 둔다
-let newProgramNames = [];
-let newBatchSig = "";
+const NEW_SEEN_KEY = "sangju_new_seen_v3";        // {since: ms, ids: ["123", …]}
+// 옛 이름 기반 기록 — 더는 읽지 않는다. 남아 있으면 치워 준다(오탐의 재료라 둘 이유가 없다).
+const OLD_NEW_KEYS = ["sangju_seen_programs", "sangju_seen_programs_v2", "sangju_new_dismissed"];
+const NEW_WINDOW_DAYS = 14;                       // «새 사업»으로 알리는 기간
+const SEEN_MAX = 500;                             // 확인한 id 기록 상한(오래된 것부터 버린다)
+let newProgramNames = [];                         // 「보기」 목록 필터용(openList onlyNames)
+let newProgramIds = [];
 // 저장소를 못 쓸 때 한 세션만 버티는 대체 기억. localStorage 가 되면 쓰이지 않는다.
-let memStore = null, memDismiss = null;
+let memSeen = null;
 
-function _newSrc() { return DATA && DATA.source === "cloud" ? "cloud" : "local"; }
-
-function _readSeenStore() {
+function _readNewSeen() {
   try {
-    const raw = localStorage.getItem(SEEN_KEY_V2);
-    if (raw) {
-      const o = JSON.parse(raw);
-      if (o && typeof o === "object") {
-        return { cloud: Array.isArray(o.cloud) ? o.cloud : [],
-                 local: Array.isArray(o.local) ? o.local : [] };
-      }
+    const o = JSON.parse(localStorage.getItem(NEW_SEEN_KEY) || "null");
+    if (o && typeof o === "object" && Number.isFinite(o.since)) {
+      return { since: o.since, ids: Array.isArray(o.ids) ? o.ids.map(String) : [] };
     }
-    // 넘겨받기 — 옛 키(배열 하나)가 있으면 «두 출처 모두»의 기록으로 삼는다.
-    // 한쪽만 채우면 업그레이드 직후 반대쪽 출처에서 126건이 통째로 «새 사업»이 된다.
-    const old = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]");
-    if (Array.isArray(old) && old.length) return { cloud: old.slice(), local: old.slice() };
-  } catch (e) { /* 저장소를 못 읽는다 — 아래 memStore 로 */ }
-  return memStore ? { cloud: memStore.cloud.slice(), local: memStore.local.slice() } : null;
+  } catch (e) { /* 저장소를 못 읽는다 — 아래 memSeen 으로 */ }
+  return memSeen ? { since: memSeen.since, ids: memSeen.ids.slice() } : null;
 }
 
-function _writeSeenStore(store) {
-  memStore = { cloud: store.cloud.slice(), local: store.local.slice() };   // 세션 대비는 항상
-  try { localStorage.setItem(SEEN_KEY_V2, JSON.stringify(store)); } catch (e) {}
-}
-
-function _readDismissSig() {
+function _writeNewSeen(rec) {
+  memSeen = { since: rec.since, ids: rec.ids.slice(-SEEN_MAX) };   // 세션 대비는 항상
   try {
-    const o = JSON.parse(localStorage.getItem(NEW_DISMISS_KEY) || "null");
-    if (o && typeof o.sig === "string") return o.sig;
+    localStorage.setItem(NEW_SEEN_KEY, JSON.stringify(memSeen));
+    OLD_NEW_KEYS.forEach((k) => localStorage.removeItem(k));
   } catch (e) {}
-  return memDismiss;
 }
 
-function _writeDismissSig(sig) {
-  memDismiss = sig;
-  try { localStorage.setItem(NEW_DISMISS_KEY, JSON.stringify({ sig: sig, at: Date.now() })); } catch (e) {}
+// 등록 시각(ms). 없거나 못 읽으면 NaN — «새 사업 아님»으로 친다.
+function _createdMs(p) {
+  const s = (p && p._created) || "";
+  return s ? Date.parse(s) : NaN;
 }
-
-// 새로 나온 이름 묶음의 서명 — 순서가 달라도 같은 묶음이면 같은 값이 나와야 한다.
-function _batchSig(names) { return names.slice().sort().join(""); }
 
 function checkNewPrograms() {
-  const names = (DATA.programs || []).map((p) => p.사업명);
-  const src = _newSrc();
-  const store = _readSeenStore();
+  newProgramNames = []; newProgramIds = [];
+  const now = Date.now();
+  const rec = _readNewSeen();
 
-  // ① 이 출처로 처음 온 경우 — 배너 없이 «지금 목록»만 기록한다(첫 방문 규칙 유지).
-  if (!store || !store[src] || !store[src].length) {
-    const base = store || { cloud: [], local: [] };
-    base[src] = names.slice(-SEEN_MAX);
-    _writeSeenStore(base);
-    return;
-  }
+  // ① 기록이 없다(첫 방문·개편 직후·저장소 차단) — 배너 없이 «지금부터» 만 적는다.
+  if (!rec) { _writeNewSeen({ since: now, ids: [] }); return; }
 
-  const seenSet = new Set(store[src]);
-  newProgramNames = names.filter((n) => !seenSet.has(n));
-  if (!newProgramNames.length) return;                 // 새 것이 없다 — 저장할 일도 없다
+  // ② 내장 데이터에는 등록 시각이 없다 — 판정할 근거가 없으니 조용히 끝낸다.
+  if (!DATA || DATA.source !== "cloud") return;
 
-  // ② 이미 «됐다»고 한 묶음이면 다시 띄우지 않는다(출처가 오가 계산이 달라져도 같은 묶음이면 같은 서명).
-  newBatchSig = _batchSig(newProgramNames);
-  if (newBatchSig && newBatchSig === _readDismissSig()) {
-    markNewSeen(false);                                // 조용히 기록만 하고 끝낸다
-    return;
-  }
+  const seen = new Set(rec.ids);
+  const from = Math.max(rec.since, now - NEW_WINDOW_DAYS * 86400000);
+  const fresh = (DATA.programs || []).filter((p) => {
+    const t = _createdMs(p);
+    return p._id && Number.isFinite(t) && t > from && !seen.has(p._id);
+  });
+  if (!fresh.length) return;
 
+  newProgramIds = fresh.map((p) => p._id);
+  newProgramNames = fresh.map((p) => p.사업명);
   // ③ 띄운다. ⛔ 여기서 저장하지 않는다 — 저장은 «보기 / X 를 누른 그때»(markNewSeen).
-  $("newBannerText").textContent = `새로 추가된 지원사업 ${newProgramNames.length}건이 있어요!`;
+  $("newBannerText").textContent = `새로 추가된 지원사업 ${fresh.length}건이 있어요!`;
   $("newBanner").hidden = false;
 }
 
 /* 사용자가 «확인»한 순간에만 기록한다. 「보기」로 목록을 열어도 본 것으로 친다
-   (양호창님 「한번 확인하거나 X 를 누르면」).
-   hideBanner=false 는 ②의 «조용한 기록» 경로 — 배너가 애초에 떠 있지 않다. */
+   (2026-08-24 양호창님 「한번 확인하거나 X 를 누르면」). */
 function markNewSeen(hideBanner) {
-  const src = _newSrc();
-  const store = _readSeenStore() || { cloud: [], local: [] };
-  const merged = store[src].concat(newProgramNames.filter((n) => store[src].indexOf(n) < 0));
-  store[src] = merged.slice(-SEEN_MAX);               // 상한을 넘으면 오래된 것부터 버린다
-  _writeSeenStore(store);
-  if (newBatchSig) _writeDismissSig(newBatchSig);
+  const rec = _readNewSeen() || { since: Date.now(), ids: [] };
+  newProgramIds.forEach((id) => { if (rec.ids.indexOf(id) < 0) rec.ids.push(id); });
+  _writeNewSeen(rec);
   if (hideBanner !== false) $("newBanner").hidden = true;
 }
 
