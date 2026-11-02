@@ -769,12 +769,17 @@ function _hash(s) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
   return h.toString(36);
 }
+/* ⚠ «순서»는 서명에 넣지 않는다 (2026-11-03 S8-1, 양호창님 신고 «새로고침 안 했는데 갱신 안내가 가끔 뜬다»).
+   내장 data.json 은 엑셀 순서, 클라우드는 seq→id 순서라 124건 내용이 한 글자도 다르지 않아도
+   순서만 달라 서명이 늘 달랐다. 회선이 느려(클라우드 응답 1.2초 초과) 첫 화면을 내장본으로 그린
+   때에만 늦게 온 클라우드와 비교되어 띠가 떴다 — 그래서 «가끔»이었다(헤드리스 재현 확인).
+   → 사업별 문자열을 정렬한 뒤 해시한다. 사업 추가·삭제·내용 수정은 그대로 잡힌다. */
 function dataSignature(programs) {
   const list = programs || [];
   const body = list.map((p) => [
     p.사업명, p.내용, p.대상자상세기준, p.이용방법, p.필요서류,
     p.팀명, p.연락처, p.담당자이메일, p.비고, (p.categories || []).join(","),
-  ].join("")).join("");
+  ].join("")).sort().join("");   // ⛔ .sort() 빼지 말 것 — 위 머리말(S8-1) 참조
   return list.length + ":" + _hash(body);
 }
 
