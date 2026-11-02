@@ -471,3 +471,38 @@ window.SangjuApply = (function () {
     errKind: errKind
   };
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+//  📄 sbFetchAll — 1,000행 상한을 넘겨 «전부» 읽는 공통 헬퍼 (2026-11-03, S6-5 🔵손길)
+//  ────────────────────────────────────────────────────────────────────
+//  ⚠ Supabase(PostgREST)는 한 번 조회에 최대 1,000행(max_rows)만 준다. 넘치면 오류 없이
+//    «조용히» 잘린다. 2026-11-03 라이브 실측: proposal_comments 1,161행 → 한 번 조회 1,000,
+//    proposal_likes 9,986행 → 1,000. 목록 조회는 이 헬퍼로 쪽(range)을 넘기며 끝까지 읽는다.
+//
+//  쓰는 법: await sbFetchAll(function () {
+//             return sb.from("표").select("*").order("created_at", {ascending:false}).order("id");
+//           });
+//    · 인자는 «쿼리를 새로 만드는 함수»다(쿼리 객체는 한 번 await 하면 다시 못 쓴다).
+//      ⛔ .range()/.limit() 는 붙이지 말 것 — 헬퍼가 붙인다.
+//    · ⭐ 정렬 끝에 고유 칸(.order("id"))을 반드시 붙인다. 정렬값이 같은 행이 쪽 경계에 걸리면
+//      쪽마다 순서가 달라져 같은 행이 두 번 오거나 빠진다.
+//    · 오류는 그대로 throw(호출부의 기존 처리 유지). 무한 반복 방지로 최대 50쪽(5만 행)에서 멈춘다.
+//    · 받은 행이 1,000 미만이면 마지막 쪽으로 보고 멈춘다(서버 max_rows 가 1,000 이라는 전제 —
+//      서버 설정을 1,000 «아래»로 낮추면 PAGE_SIZE 도 함께 낮춰야 한다).
+//  ⚠ cloudui/apply_client.js · 모바일웹/apply_client.js 두 사본에 «같은 글자»로 둔다.
+// ════════════════════════════════════════════════════════════════════════
+window.sbFetchAll = async function sbFetchAll(makeQuery, opts) {
+  var size = (opts && opts.pageSize) || 1000;
+  var maxPages = (opts && opts.maxPages) || 50;
+  var out = [];
+  for (var p = 0; p < maxPages; p++) {
+    var from = p * size;
+    var res = await makeQuery().range(from, from + size - 1);
+    if (res && res.error) throw res.error;
+    var rows = (res && res.data) || [];
+    for (var i = 0; i < rows.length; i++) out.push(rows[i]);
+    if (rows.length < size) return out;
+  }
+  console.warn("[sbFetchAll] " + maxPages + "쪽 상한에 닿아 멈췄습니다(" + out.length + "행). 나머지는 잘렸을 수 있습니다.");
+  return out;
+};

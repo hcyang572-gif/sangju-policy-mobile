@@ -1346,13 +1346,13 @@
     try {
       /* ✅ select("*") 를 «일부러» 쓴다 — 위 머리말 참조. 이 표에는 비밀 칸이 없고,
          칸을 나열하면 칸이 늘 때마다 세 앱이 함께 낡는다(🩷자물쇠 설계). */
-      const { data, error } = await client
+      // 📄 1,000행 상한 대비 쪽 넘김(apply_client.js 의 sbFetchAll) + 동률 대비 id 보조 정렬. 오류는 throw.
+      rows = (await window.sbFetchAll(() => client
         .from("proposal_comments")
         .select("*")
         .eq("proposal_id", p.id)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      rows = data || [];
+        .order("created_at", { ascending: true })
+        .order("id"))) || [];
     } catch (e) {
       console.warn("[정책참여] 의견 조회 실패:", e);
       // 상세 화면 전체를 깨뜨리지 않는다 — 의견만 «못 불러왔다»고 알리고 쓰기는 열어 둔다.
@@ -1896,9 +1896,9 @@
     const client = getClient();
     if (!client || !cmtP) return false;
     try {
-      const { data, error } = await client.from("proposal_comments").select("*")
-        .eq("proposal_id", cmtP.id).order("created_at", { ascending: true });
-      if (error) throw error;
+      // 📄 위 의견 조회와 «같은» 쪽 넘김·정렬이어야 서명이 맞는다(sbFetchAll + id 보조 정렬).
+      const data = await window.sbFetchAll(() => client.from("proposal_comments").select("*")
+        .eq("proposal_id", cmtP.id).order("created_at", { ascending: true }).order("id"));
       return _cmtSigOf(data || []) !== _cmtSigOf(cmtRows);
     } catch (e) {
       return false;

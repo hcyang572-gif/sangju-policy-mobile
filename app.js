@@ -841,16 +841,22 @@ async function loadCloudData() {
   if (!sb) return null;
   let ctrl = null;
   try {
-    let q = sb.from("benefits").select("*").order("seq", { nullsFirst: false }).order("id");
-    if (typeof AbortController !== "undefined" && typeof q.abortSignal === "function") {
-      ctrl = new AbortController();
-      q = q.abortSignal(ctrl.signal);
-    }
+    /* 📄 1,000행 상한 대비 쪽 넘김(apply_client.js 의 sbFetchAll, 2026-11-03 S6-5).
+       ⚠ 타임아웃은 «쪽마다»가 아니라 «전체»에 건다. 쪽마다 같은 abortSignal 을 붙여
+          시간이 지나면 진행 중인 쪽 요청도 끊긴다. 오류는 throw → 아래 catch 가 폴백. */
+    if (typeof AbortController !== "undefined") ctrl = new AbortController();
+    const makeQ = () => {
+      let q = sb.from("benefits").select("*").order("seq", { nullsFirst: false }).order("id");
+      if (ctrl && typeof q.abortSignal === "function") q = q.abortSignal(ctrl.signal);
+      return q;
+    };
+    const all = window.sbFetchAll(makeQ).then((data) => ({ data: data, error: null }));
     const timeout = delay(CLOUD_TIMEOUT_MS).then(() => {
       try { if (ctrl) ctrl.abort(); } catch (e) {}
       return { __timeout: true };
     });
-    const res = await Promise.race([Promise.resolve(q), timeout]);
+    const res = await Promise.race([all, timeout]);
+    all.catch(() => {});                       // 타임아웃이 이긴 뒤 abort 로 생기는 거절을 삼킨다
     if (!res || res.__timeout) {
       console.warn("[사업정보] 클라우드 응답 지연 — 내장 데이터로 표시합니다.");
       return null;
